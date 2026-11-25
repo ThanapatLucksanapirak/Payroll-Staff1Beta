@@ -43,7 +43,8 @@ type Screen =
   | { k: "home" }
   | { k: "pin"; employee?: RosterEmployee; error?: string; shake?: number }
   | { k: "actions"; who: Identified; pin: string; offline: boolean; error?: string; busy?: boolean }
-  | { k: "done"; title: string; line: string; note?: string; tone: "ok" | "queued" };
+  | { k: "done"; title: string; line: string; note?: string; tone: "ok" | "queued" }
+  | { k: "manager"; next: "settings" | "exit"; error?: string; shake?: number };
 
 // ── App ───────────────────────────────────────────────────────────────────────
 export function KioskApp() {
@@ -54,6 +55,9 @@ export function KioskApp() {
   const [notice, setNotice] = useState<string | null>(null);
   const [screen, setScreen] = useState<Screen>({ k: "home" });
   const [showInfo, setShowInfo] = useState(false);
+  /** The manager PIN entered to open settings (needed to unpair); cleared when settings close. */
+  const [managerPin, setManagerPin] = useState<string | null>(null);
+  const exitFullscreen = useRef<(() => void) | null>(null);
 
   // Pairing link: /kiosk#pair=<token>
   useEffect(() => {
@@ -181,16 +185,44 @@ export function KioskApp() {
     }
   };
 
+  const guarded = !!state.site.managerPinSet;
+  // Device settings: behind the manager PIN when one is set (it needs a connection to check).
+  const openSettings = () => {
+    if (guarded && online) setScreen({ k: "manager", next: "settings" });
+    else { setManagerPin(null); setShowInfo(true); }
+  };
+  const requestExitFullscreen = (exit: () => void) => {
+    if (!guarded) return exit();
+    exitFullscreen.current = exit;
+    setScreen({ k: "manager", next: "exit" });
+  };
+  const submitManager = async (pin: string) => {
+    if (screen.k !== "manager") return;
+    try {
+      await request("POST", "/api/kiosk/manager-unlock", { pin });
+      if (screen.next === "settings") { setManagerPin(pin); setShowInfo(true); }
+      else { exitFullscreen.current?.(); exitFullscreen.current = null; }
+      home();
+    } catch (err) {
+      const e = err as KioskError;
+      if (e.code === "device") return unpair("This time clock was removed from the admin app.");
+      setScreen({ ...screen, error: e.offline ? "No connection. The manager PIN can't be checked right now." : e.message, shake: Date.now() });
+    }
+  };
+  const closeInfo = () => { setShowInfo(false); setManagerPin(null); };
+
   return (
     <div className="flex h-full flex-col bg-white">
-      <TopBar state={state} online={online} pending={pending} onInfo={() => setShowInfo(true)} />
+      <TopBar state={state} online={online} pending={pending} onInfo={openSettings} onExitFullscreen={requestExitFullscreen} />
       {notice && (
         <button className="mx-auto mt-2 flex max-w-xl items-center gap-2 rounded-2xl bg-amber-50 px-4 py-2 text-left text-sm text-amber-900 ring-1 ring-amber-200" onClick={() => setNotice(null)}>
           <span className="flex-1">{notice}</span><X className="h-4 w-4 shrink-0" />
         </button>
       )}
       <main className="flex min-h-0 flex-1 flex-col">
-        {!state.site.enabled ? (
+        {screen.k === "manager" ? (
+          <PinScreen tz={tz} key={`manager-${screen.next}`} heading={{ title: "Manager PIN", sub: screen.next === "settings" ? "Enter the manager PIN to open device settings" : "Enter the manager PIN to leave full screen" }} maxLength={8} error={screen.error} shake={screen.shake} onSubmit={submitManager} onBack={home} />
+        ) : !state.site.enabled ? (
           <Centered>
             <BigClock tz={tz} />
             <p className="mt-10 text-xl text-neutral-500">The time clock is turned off for this location.</p>
@@ -210,7 +242,18 @@ export function KioskApp() {
           <DoneScreen {...screen} onDone={home} />
         )}
       </main>
-      {showInfo && <InfoSheet state={state} pending={pending} online={online} onClose={() => setShowInfo(false)} onSync={sync} onUnpair={() => { setShowInfo(false); unpair(); }} />}
+      {showInfo && (
+        <InfoSheet
+          state={state} pending={pending} online={online} canUnpair={!guarded || !!managerPin} guarded={guarded}
+          onClose={closeInfo} onSync={sync}
+          onUnpair={async () => {
+            // Revoke on the server as well, so the old pairing can't be reused.
+            if (managerPin) await request("POST", "/api/kiosk/unpair", { pin: managerPin }).catch(() => undefined);
+            closeInfo();
+            unpair();
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -242,7 +285,7 @@ function BigClock({ tz, compact }: { tz: string; compact?: boolean }) {
   );
 }
 
-function TopBar({ state, online, pending, onInfo }: { state: KioskState; online: boolean; pending: number; onInfo: () => void }) {
+function TopBar({ state, online, pending, onInfo, onExitFullscreen }: { state: KioskState; online: boolean; pending: number; onInfo: () => void; onExitFullscreen: (exit: () => void) => void }) {
   const fs = useFullscreen();
   return (
     <header className="flex items-center gap-3 px-5 pt-4 sm:px-8 sm:pt-6">
@@ -256,7 +299,7 @@ function TopBar({ state, online, pending, onInfo }: { state: KioskState; online:
           </span>
         )}
         {fs.supported && (
-          <button onClick={fs.toggle} className="rounded-full p-2.5 text-neutral-400 transition hover:bg-neutral-100 hover:text-neutral-700" aria-label={fs.active ? "Exit full screen" : "Full screen"} data-testid="kiosk-fullscreen">
+          <button onClick={() => (fs.active ? onExitFullscreen(fs.toggle) : fs.toggle())} className="rounded-full p-2.5 text-neutral-400 transition hover:bg-neutral-100 hover:text-neutral-700" aria-label={fs.active ? "Exit full screen" : "Full screen"} data-testid="kiosk-fullscreen">
             {fs.active ? <Minimize className="h-5 w-5" /> : <Maximize className="h-5 w-5" />}
           </button>
         )}
@@ -281,7 +324,7 @@ function useIdle(ms: number, onIdle: () => void, deps: unknown[] = []) {
   }, [ms, ...deps]);
 }
 
-function PinScreen({ tz, employee, error, shake, onSubmit, onBack }: { tz: string; employee?: RosterEmployee; error?: string; shake?: number; onSubmit: (pin: string) => Promise<void> | void; onBack?: () => void }) {
+function PinScreen({ tz, employee, heading, error, shake, maxLength = 6, onSubmit, onBack }: { tz: string; employee?: RosterEmployee; heading?: { title: string; sub: string }; error?: string; shake?: number; maxLength?: number; onSubmit: (pin: string) => Promise<void> | void; onBack?: () => void }) {
   const [pin, setPin] = useState("");
   const [busy, setBusy] = useState(false);
   useEffect(() => { if (shake) setPin(""); }, [shake]);
@@ -292,7 +335,7 @@ function PinScreen({ tz, employee, error, shake, onSubmit, onBack }: { tz: strin
     setBusy(true);
     try { await onSubmit(value); } finally { setBusy(false); setPin(""); }
   }, [busy, onSubmit]);
-  const press = useCallback((d: string) => setPin((p) => (p.length >= 6 ? p : p + d)), []);
+  const press = useCallback((d: string) => setPin((p) => (p.length >= maxLength ? p : p + d)), [maxLength]);
   const back = useCallback(() => setPin((p) => p.slice(0, -1)), []);
 
   useEffect(() => {
@@ -309,7 +352,12 @@ function PinScreen({ tz, employee, error, shake, onSubmit, onBack }: { tz: strin
   return (
     <div className="flex flex-1 flex-col items-center justify-center gap-6 px-6 pb-6 lg:flex-row lg:gap-24">
       <div className="text-center lg:text-left">
-        {employee ? (
+        {heading ? (
+          <div className="kiosk-fade-up">
+            <p className="text-3xl font-semibold tracking-tight">{heading.title}</p>
+            <p className="mt-1 text-lg text-neutral-500">{heading.sub}</p>
+          </div>
+        ) : employee ? (
           <div className="kiosk-fade-up">
             <Avatar name={employee.name} big />
             <p className="mt-4 text-3xl font-semibold tracking-tight">Hi, {firstName(employee.name)}</p>
@@ -509,7 +557,7 @@ function Splash({ online, onRetry }: { online: boolean; onRetry: () => void }) {
   );
 }
 
-function InfoSheet({ state, pending, online, onClose, onSync, onUnpair }: { state: KioskState; pending: number; online: boolean; onClose: () => void; onSync: () => void; onUnpair: () => void }) {
+function InfoSheet({ state, pending, online, canUnpair, guarded, onClose, onSync, onUnpair }: { state: KioskState; pending: number; online: boolean; canUnpair: boolean; guarded: boolean; onClose: () => void; onSync: () => void; onUnpair: () => void }) {
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/20 p-4 sm:items-center" onClick={onClose}>
       <div className="w-full max-w-md rounded-3xl bg-white p-6 shadow-2xl kiosk-fade-up" onClick={(e) => e.stopPropagation()}>
@@ -527,12 +575,17 @@ function InfoSheet({ state, pending, online, onClose, onSync, onUnpair }: { stat
         </dl>
         <div className="mt-6 grid gap-3">
           {pending > 0 && <button onClick={onSync} className="h-14 rounded-2xl bg-neutral-100 text-lg font-medium">Send now</button>}
-          <button
+          {!canUnpair && (
+            <p className="rounded-2xl bg-neutral-50 px-4 py-3 text-sm text-neutral-500">
+              {guarded ? "Unpairing needs the manager PIN, which needs a connection. Try again when online." : "Unpairing is locked until a manager PIN is set in the admin app: Settings → Locations → Time clock."}
+            </p>
+          )}
+          {canUnpair && <button
             onClick={() => { if (window.confirm(pending ? `${pending} punches have not been sent yet and will be lost. Unpair anyway?` : "Unpair this device? You'll need a new pairing code from the admin app.")) { queue.save([]); onUnpair(); } }}
             className="h-14 rounded-2xl text-lg font-medium text-red-600 ring-1 ring-red-200"
           >
             Unpair this device
-          </button>
+          </button>}
         </div>
       </div>
     </div>

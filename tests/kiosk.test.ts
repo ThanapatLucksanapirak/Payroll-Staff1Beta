@@ -365,3 +365,42 @@ test("KIOSK_HOST serves only the kiosk on that hostname", async () => {
     delete process.env.KIOSK_HOST;
   }
 });
+
+test("manager PIN guards kiosk settings and unpairing", async () => {
+  const dev = await A("POST", `/api/sites/${siteId}/kiosk-devices`, { name: "Locked tablet" });
+  const tok = dev.body.token;
+  assert.equal((await K("GET", "/api/kiosk/state", undefined, tok)).body.site.managerPinSet, false);
+  const none = await K("POST", "/api/kiosk/manager-unlock", { pin: "2468" }, tok);
+  assert.equal(none.status, 409);
+  assert.equal(none.body.code, "no_manager_pin");
+  assert.equal((await K("POST", "/api/kiosk/unpair", { pin: "2468" }, tok)).status, 409, "cannot unpair without a manager PIN");
+
+  // Only admins set it; kiosk tokens cannot
+  assert.ok([401, 403].includes((await K("PUT", `/api/sites/${siteId}/kiosk-manager-pin`, { pin: "2468" }, tok)).status));
+  assert.equal((await A("PUT", `/api/sites/${siteId}/kiosk-manager-pin`, { pin: "12" })).status, 400);
+  assert.equal((await A("PUT", `/api/sites/${siteId}/kiosk-manager-pin`, { pin: "2468" })).body.set, true);
+  assert.equal((await A("GET", `/api/sites/${siteId}/kiosk-manager-pin`)).body.set, true);
+  assert.equal((await K("GET", "/api/kiosk/state", undefined, tok)).body.site.managerPinSet, true);
+  const backup = await A("GET", "/api/backup");
+  assert.ok(!backup.body.settings.some((s: any) => s.key.startsWith("kiosk_manager_pin:")), "manager PIN hash left out of backups");
+
+  const wrong = await K("POST", "/api/kiosk/manager-unlock", { pin: "1111" }, tok);
+  assert.equal(wrong.status, 403);
+  assert.equal(wrong.body.code, "pin");
+  assert.equal((await K("POST", "/api/kiosk/manager-unlock", { pin: "2468" }, tok)).body.ok, true);
+
+  // Lockout after repeated wrong PINs, even for the right one
+  for (let i = 0; i < 5; i++) await K("POST", "/api/kiosk/manager-unlock", { pin: "0000" }, tok);
+  assert.equal((await K("POST", "/api/kiosk/manager-unlock", { pin: "2468" }, tok)).status, 429);
+
+  // Unpair revokes the device on the server
+  const dev2 = await A("POST", `/api/sites/${siteId}/kiosk-devices`, { name: "Spare 2" });
+  assert.equal((await K("POST", "/api/kiosk/unpair", { pin: "1111" }, dev2.body.token)).status, 403);
+  assert.equal((await K("GET", "/api/kiosk/state", undefined, dev2.body.token)).status, 200, "wrong PIN keeps the device");
+  assert.equal((await K("POST", "/api/kiosk/unpair", { pin: "2468" }, dev2.body.token)).body.ok, true);
+  assert.equal((await K("GET", "/api/kiosk/state", undefined, dev2.body.token)).status, 401, "unpaired device stops working");
+
+  // Clearing the PIN locks settings again
+  assert.equal((await A("PUT", `/api/sites/${siteId}/kiosk-manager-pin`, { pin: null })).body.set, false);
+  await A("DELETE", `/api/sites/${siteId}/kiosk-devices/${dev.body.device.id}`);
+});
