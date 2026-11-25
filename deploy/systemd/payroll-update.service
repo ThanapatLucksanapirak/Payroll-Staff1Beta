@@ -1,0 +1,13 @@
+[Unit]
+Description=Payroll automatic update check
+Documentation=file:///opt/payroll/deploy/CONTRACT.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+# Does nothing unless AUTO_UPDATE=1 in /etc/payroll/payroll.env.
+ExecStart=/usr/local/bin/payroll update --auto
+Nice=10
+IOSchedulingClass=idle
+TimeoutStartSec=45min

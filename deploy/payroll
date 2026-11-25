@@ -1,0 +1,706 @@
+#!/usr/bin/env bash
+# payroll — admin CLI for the Payroll server.
+# Installed at /opt/payroll/deploy/payroll, linked from /usr/local/bin/payroll.
+# Layout: see deploy/CONTRACT.md.
+set -Eeuo pipefail
+
+SELF="$(readlink -f "${BASH_SOURCE[0]}")"
+DEPLOY_DIR="$(dirname "$SELF")"
+# shellcheck source=lib/common.sh
+. "$DEPLOY_DIR/lib/common.sh"
+if [[ -f "$DEPLOY_DIR/lib/tunnel.sh" ]]; then
+  # shellcheck source=lib/tunnel.sh
+  . "$DEPLOY_DIR/lib/tunnel.sh"
+fi
+
+UPDATE_LOCK="/run/payroll-update.lock"
+UPDATE_LOG="$PAYROLL_LOGS/update.log"
+SKIP_FILE="$PAYROLL_ROOT/.update-skip"   # sha that failed; automatic updates skip it
+UNITS=(payroll-update.timer payroll-update.path payroll-update.service payroll-update-request.service payroll.service)
+
+# ── Small helpers ─────────────────────────────────────────────────────────────
+row()  { printf '    %s%-13s%s %s\n' "$C_DIM" "$1" "$C_RESET" "$2"; }
+more() { printf '    %-13s %s\n' "" "$1"; }
+bad()  { printf '    %s!%s %s\n' "$C_YELLOW" "$C_RESET" "$*"; }
+fix()  { printf '      %s%s%s\n' "$C_DIM" "$*" "$C_RESET"; }
+
+sha7() { local s="${1:-}"; printf '%s' "${s:0:7}"; }
+
+# One-line, JSON-safe status message (write_status escapes quotes, not newlines).
+set_status() {
+  local msg="${4:-}"
+  msg="$(printf '%s' "$msg" | tr '\r\n\t' '   ' | tr -d '\000-\037' | cut -c1-300)"
+  write_status "$1" "${2:-}" "${3:-}" "$msg" 2>/dev/null || true
+}
+
+json_field() { sed -n "s/.*\"$1\":\"\\([^\"]*\\)\".*/\\1/p" "$2" 2>/dev/null | head -n1; }
+
+# "3 minutes ago" for an epoch timestamp.
+ago() {
+  local s=$(( $(date +%s) - $1 ))
+  if (( s < 90 )); then echo "just now"
+  elif (( s < 5400 )); then echo "$(( s / 60 )) minutes ago"
+  elif (( s < 129600 )); then echo "$(( s / 3600 )) hours ago"
+  else echo "$(( s / 86400 )) days ago"; fi
+}
+
+human_size() { numfmt --to=iec --suffix=B "$1" 2>/dev/null || echo "${1}B"; }
+
+# describe <sha> -> "a1b2c3d · 2026-11-20 · Subject"
+describe() {
+  local sha="${1:-}" line
+  [[ -n "$sha" ]] || { echo "unknown"; return 0; }
+  line="$(git_repo log -1 --no-decorate --date=short --format='%h · %cd · %s' "$sha" 2>/dev/null || true)"
+  echo "${line:-$(sha7 "$sha")}"
+}
+
+svc_active()  { has_systemd && systemctl is-active --quiet "$1" 2>/dev/null; }
+svc_enabled() { has_systemd && systemctl is-enabled --quiet "$1" 2>/dev/null; }
+
+need_systemd() { has_systemd || die "systemd is not running on this machine, so the service cannot be managed."; }
+
+setup_code() {
+  if [[ -s "$PAYROLL_DATA/setup-code.txt" ]]; then tr -d '\r\n' <"$PAYROLL_DATA/setup-code.txt"; else env_get SETUP_CODE; fi
+}
+
+setup_code_hint() {
+  local code; code="$(setup_code)"
+  if [[ -n "$code" ]]; then info "and enter this one-time setup code: ${C_BOLD}${code}${C_RESET}"
+  else info "and choose the administrator password there."; fi
+}
+
+setup_required() {
+  curl -fsS --max-time 5 "http://127.0.0.1:$(app_port)/api/auth/status" 2>/dev/null | grep -q '"setupRequired":true'
+}
+
+urls() {
+  local app kiosk
+  app="$(env_get APP_HOST)"; kiosk="$(env_get KIOSK_HOST)"
+  row "Port" "$(app_port)"
+  row "Address" "http://127.0.0.1:$(app_port)"
+  if [[ "$(env_get HOST)" == 0.0.0.0 ]]; then
+    local ip; ip="$(hostname -I 2>/dev/null | awk '{print $1}')"
+    [[ -n "$ip" ]] && more "http://$ip:$(app_port)  (local network)"
+  fi
+  [[ -n "$app" ]] && more "https://$app"
+  [[ -n "$kiosk" ]] && row "Kiosk" "https://$kiosk"
+  return 0
+}
+
+take_lock() {
+  # take_lock [wait-seconds]   (0 = do not wait)
+  local w="${1:-0}"
+  exec 9>"$UPDATE_LOCK"
+  if [[ "$w" == 0 ]]; then flock -n 9; else flock -w "$w" 9; fi
+}
+
+# Point a symlink somewhere atomically.
+relink() { ln -sfn "$1" "$2.tmp" && mv -Tf "$2.tmp" "$2"; }
+
+health_line() {
+  if health_ok; then ok "The app is up and healthy."; return 0; fi
+  warn "The app is not answering its health check yet."
+  info "Check with: payroll status   ·   payroll logs"
+  return 1
+}
+
+# Run a function with its output shown and appended (without colours) to the update log.
+logged() {
+  mkdir -p "$PAYROLL_LOGS"
+  printf '\n── %s  payroll %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$*" >>"$UPDATE_LOG"
+  # Runs "$@" without errexit (it must clean up after itself) and returns its status.
+  local rc=0
+  "$@" 2>&1 | tee >(sed -u $'s/\e\\[[0-9;]*m//g' >>"$UPDATE_LOG") || rc="${PIPESTATUS[0]}"
+  return "$rc"
+}
+
+# ── status / version / open ───────────────────────────────────────────────────
+cmd_status() {
+  local cur sha state="" f free last au st
+  cur="$(current_release)"; sha="$(release_sha "$cur")"
+  printf '\n    %sPayroll%s\n\n' "$C_BOLD" "$C_RESET"
+
+  if ! has_systemd; then state="${C_DIM}unknown (systemd not running)${C_RESET}"
+  elif svc_active payroll.service; then state="${C_GREEN}●${C_RESET} Running"
+  else state="${C_RED}●${C_RESET} $(systemctl is-active payroll.service 2>/dev/null || echo stopped)"; fi
+  if health_ok; then state+="  ·  healthy"; else state+="  ·  ${C_YELLOW}not answering${C_RESET}"; fi
+  row "App" "$state"
+  row "Version" "$(describe "$sha")"
+  urls
+
+  free="$(df -h --output=avail "$PAYROLL_DATA" 2>/dev/null | tail -n1 | tr -d ' ')"
+  row "Data" "$PAYROLL_DATA  ·  ${free:-?} free"
+
+  last="$(find "$PAYROLL_BACKUPS" -maxdepth 1 -name 'data-*.tar.gz' -printf '%T@ %p\n' 2>/dev/null | sort -rn | head -n1 || true)"
+  if [[ -n "$last" ]]; then row "Last backup" "$(ago "${last%%.*}")  ($(basename "${last#* }"))"
+  else row "Last backup" "none yet  (sudo payroll backup)"; fi
+
+  au="Off"; [[ "$(env_get AUTO_UPDATE)" == 1 ]] && au="On"
+  if [[ $au == On ]] && has_systemd && ! svc_active payroll-update.timer; then au="On (but the timer is not running: sudo payroll auto-update on)"; fi
+  row "Auto-update" "$au"
+
+  f="$PAYROLL_DATA/update-status.json"
+  if [[ -f "$f" ]]; then
+    st="$(json_field state "$f")"
+    row "Last update" "${st:-?}  ·  $(json_field at "$f")"
+    [[ -n "$(json_field message "$f")" ]] && more "$(json_field message "$f")"
+  else
+    row "Last update" "never"
+  fi
+
+  if declare -F cf_status >/dev/null && [[ -n "$(env_get TUNNEL_MODE)" ]] || { declare -F cf_have >/dev/null && cf_have; }; then
+    cf_status || true
+  else
+    row "Tunnel" "not set up  (sudo payroll tunnel setup)"
+  fi
+  echo
+}
+
+cmd_version() {
+  local cur sha; cur="$(current_release)"; sha="$(release_sha "$cur")"
+  echo "Payroll $(describe "$sha")"
+  [[ -n "$cur" ]] && echo "Release $cur"
+  return 0
+}
+
+cmd_open() {
+  echo
+  urls
+  if setup_required; then
+    echo
+    info "${C_BOLD}Setup is not finished yet.${C_RESET} Open the address above on this machine"
+    setup_code_hint
+    info "Or create the administrator here: sudo payroll admin create"
+  fi
+  echo
+}
+
+cmd_logs() {
+  command -v journalctl >/dev/null || die "journalctl is not available here. Update history: $UPDATE_LOG"
+  if [[ "${1:-}" == -f ]]; then exec journalctl -u payroll.service -f -n 50
+  else journalctl -u payroll.service -n 200 --no-pager; fi
+}
+
+# ── update ────────────────────────────────────────────────────────────────────
+# Exit codes of update_run: 0 updated, 1 failed, 3 nothing to do.
+update_run() {
+  local auto="$1" ref="$2" force="$3" branch target old_dir old_sha new_dir new_sha prev_before snap n
+  branch="$(env_get BRANCH)"; branch="${branch:-main}"
+  old_dir="$(current_release)"; old_sha="$(release_sha "$old_dir")"
+  prev_before="$(readlink -f "$PAYROLL_PREVIOUS" 2>/dev/null || true)"
+
+  [[ $auto == 1 ]] || step "Checking for updates"
+  [[ $auto == 1 ]] || set_status checking "$old_sha" "" ""
+  if ! git_repo fetch --quiet --prune origin "+refs/heads/$branch:refs/remotes/origin/$branch" 2>&1; then
+    set_status failed "$old_sha" "" "Could not reach the update server."
+    echo "Could not reach the update server (git fetch failed). Nothing was changed." >&2
+    return 1
+  fi
+  if [[ -n "$ref" ]]; then
+    git_repo fetch --quiet --tags origin 2>/dev/null || true
+    git_repo fetch --quiet origin "+refs/heads/$ref:refs/remotes/origin/$ref" 2>/dev/null || true
+    target="$(git_repo rev-parse --verify --quiet "origin/$ref^{commit}" || git_repo rev-parse --verify --quiet "$ref^{commit}" || true)"
+    [[ -n "$target" ]] || { set_status failed "$old_sha" "" "Unknown version: $ref"; echo "Unknown version: $ref" >&2; return 1; }
+  else
+    target="$(git_repo rev-parse --verify "origin/$branch^{commit}")"
+  fi
+
+  if [[ "$target" == "$old_sha" && $force == 0 ]]; then
+    set_status ok "$old_sha" "$target" "Already up to date"
+    [[ $auto == 1 ]] || ok "Already up to date  ($(describe "$target"))"
+    return 3
+  fi
+  if [[ $auto == 1 && "$target" == "$(cat "$SKIP_FILE" 2>/dev/null || true)" ]]; then
+    return 3   # this version failed before; wait for a newer one (status keeps the failure)
+  fi
+
+  [[ $auto == 1 ]] && step "Updating automatically"
+  info "From  $(describe "$old_sha")"
+  info "To    $(describe "$target")"
+  set_status updating "$old_sha" "$target" "Installing the new version"
+
+  local avail; avail="$(df -Pk "$PAYROLL_ROOT" | awk 'NR==2{print $4}')"
+  if (( ${avail:-0} < 512000 )); then
+    set_status failed "$old_sha" "$target" "Not enough disk space to install the update."
+    echo "Not enough free disk space in $PAYROLL_ROOT (need at least 500 MB). Nothing was changed." >&2
+    return 1
+  fi
+
+  step "Saving a backup of your data"
+  if ! snap="$(snapshot_data pre-update | tail -n1)"; then
+    set_status failed "$old_sha" "$target" "Could not back up the data, so the update was not installed."
+    echo "Backing up the data failed. Nothing was changed." >&2
+    return 1
+  fi
+  ok "$snap"
+
+  step "Building the new version (the app keeps running meanwhile)"
+  if ! new_dir="$(build_release "$target" | tail -n1)" || [[ ! -f "$new_dir/dist/index.cjs" ]]; then
+    set_status failed "$old_sha" "$target" "The new version could not be built. Still running the current version."
+    echo "$target" >"$SKIP_FILE"
+    echo "The build failed; you are still on the current version. See $PAYROLL_LOGS/build-*.log" >&2
+    return 1
+  fi
+  new_sha="$(release_sha "$new_dir")"
+  ok "Built $(sha7 "$new_sha")"
+
+  step "Switching to the new version"
+  activate_release "$new_dir"
+  restart_app || true
+  if wait_healthy 90; then
+    set_status ok "$old_sha" "$new_sha" "Updated to $(sha7 "$new_sha")"
+    rm -f "$SKIP_FILE"
+    prune_releases || true
+    ok "Updated and healthy."
+    if [[ -n "$old_sha" ]] && git_repo merge-base --is-ancestor "$old_sha" "$new_sha" 2>/dev/null; then
+      n="$(git_repo rev-list --count "$old_sha..$new_sha" 2>/dev/null || echo 0)"
+      if (( n > 0 )); then
+        step "What's new"
+        git_repo log --oneline --no-decorate -n 15 "$old_sha..$new_sha" | sed 's/^/    /'
+        (( n > 15 )) && info "…and $(( n - 15 )) more"
+      fi
+    elif [[ -n "$old_sha" ]]; then
+      info "(This version is not newer than the one before; no change list.)"
+    fi
+    return 0
+  fi
+
+  # Unhealthy: put the old version back.
+  echo "$new_sha" >"$SKIP_FILE"
+  if [[ -z "$old_dir" || ! -d "$old_dir" ]]; then
+    set_status failed "$old_sha" "$new_sha" "The new version did not start and there is no earlier version to go back to."
+    echo "The new version did not start, and there is no earlier version to go back to. See: payroll logs" >&2
+    return 1
+  fi
+  warn "The new version did not start correctly. Going back to the previous one…"
+  activate_release "$old_dir"
+  if [[ -n "$prev_before" && -d "$prev_before" ]]; then relink "$prev_before" "$PAYROLL_PREVIOUS"
+  else rm -f "$PAYROLL_PREVIOUS"; fi
+  rm -rf "$new_dir"
+  restart_app || true
+  if wait_healthy 90; then
+    set_status rolled_back "$old_sha" "$new_sha" "Version $(sha7 "$new_sha") did not start, so the previous version was restored. Your data was not changed."
+    warn "Rolled back to $(describe "$old_sha"). Your data was not changed."
+  else
+    set_status failed "$old_sha" "$new_sha" "Version $(sha7 "$new_sha") did not start and the previous version is not answering either."
+    warn "Rolled back, but the app is still not answering. Run: payroll doctor"
+  fi
+  info "Data backup from before the update: $snap"
+  info "App logs: payroll logs   ·   Update log: $UPDATE_LOG"
+  return 1
+}
+
+cmd_update() {
+  local auto=0 ref="" force=0 rc out
+  while (( $# )); do
+    case "$1" in
+      --auto) auto=1 ;;
+      --force) force=1 ;;
+      --ref) [[ $# -ge 2 ]] || die "--ref needs a value (branch, tag or commit)."; ref="$2"; shift ;;
+      --ref=*) ref="${1#--ref=}" ;;
+      *) die "Unknown option: $1  (try: payroll help)" ;;
+    esac
+    shift
+  done
+  [[ -d "$PAYROLL_REPO_DIR/.git" || -f "$PAYROLL_REPO_DIR/HEAD" ]] || die "No source repository at $PAYROLL_REPO_DIR. Re-run the installer."
+
+  if [[ $auto == 1 ]]; then
+    [[ "$(env_get AUTO_UPDATE)" == 1 ]] || exit 0
+    take_lock 0 || exit 0          # another update is running
+    mkdir -p "$PAYROLL_LOGS"
+    rc=0; out="$(update_run 1 "$ref" "$force" 2>&1)" || rc=$?
+    [[ $rc == 3 ]] && exit 0       # nothing changed: stay quiet
+    printf '\n── %s  payroll update --auto\n%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+      "$(printf '%s\n' "$out" | sed $'s/\e\\[[0-9;]*m//g')" >>"$UPDATE_LOG"
+    printf '%s\n' "$out"
+    exit "$rc"
+  fi
+
+  if ! take_lock 0; then
+    info "Another update is in progress; waiting for it to finish…"
+    take_lock 900 || die "Another update is still running. Try again later."
+  fi
+  rc=0; logged update_run 0 "$ref" "$force" || rc=$?
+  [[ $rc == 3 ]] && rc=0
+  exit "$rc"
+}
+
+# ── rollback ──────────────────────────────────────────────────────────────────
+# shellcheck disable=SC2329  # called through logged()
+rollback_run() {
+  local cur prev cur_sha prev_sha
+  cur="$(current_release)"; prev="$(readlink -f "$PAYROLL_PREVIOUS" 2>/dev/null || true)"
+  [[ -n "$prev" && -f "$prev/dist/index.cjs" ]] || { echo "There is no previous version to go back to." >&2; return 1; }
+  cur_sha="$(release_sha "$cur")"; prev_sha="$(release_sha "$prev")"
+  step "Switching to the previous version"
+  info "From  $(describe "$cur_sha")"
+  info "To    $(describe "$prev_sha")"
+  activate_release "$prev"
+  restart_app || true
+  if wait_healthy 90; then
+    [[ -n "$cur_sha" ]] && echo "$cur_sha" >"$SKIP_FILE"
+    set_status rolled_back "$cur_sha" "$prev_sha" "Rolled back to $(sha7 "$prev_sha") by the administrator."
+    ok "Switched and healthy."
+    [[ "$(env_get AUTO_UPDATE)" == 1 ]] && info "Automatic updates will skip $(sha7 "$cur_sha") and resume with the next new version."
+    info "To undo this: sudo payroll rollback"
+    return 0
+  fi
+  set_status failed "$cur_sha" "$prev_sha" "Rolled back to $(sha7 "$prev_sha") but the app is not answering."
+  warn "Rolled back, but the app is not answering. Run: payroll doctor   ·   payroll logs"
+  return 1
+}
+
+cmd_rollback() {
+  local rc
+  take_lock 0 || die "An update is in progress. Try again when it has finished."
+  rc=0; logged rollback_run || rc=$?
+  exit "$rc"
+}
+
+# ── backups ───────────────────────────────────────────────────────────────────
+cmd_backup() {
+  local f
+  step "Backing up your data"
+  f="$(snapshot_data manual | tail -n1)"
+  ok "Saved $f  ($(human_size "$(stat -c %s "$f")"))"
+  info "Restore it later with: sudo payroll restore $(basename "$f")"
+}
+
+cmd_backups() {
+  local any=0 f
+  echo
+  while IFS= read -r f; do
+    any=1
+    local name reason
+    name="$(basename "$f")"; reason="${name%.tar.gz}"; reason="${reason#data-????????-??????-}"
+    printf '    %s  %8s  %-12s %s%s%s\n' "$(date -d "@$(stat -c %Y "$f")" '+%Y-%m-%d %H:%M')" \
+      "$(human_size "$(stat -c %s "$f")")" "$reason" "$C_DIM" "$name" "$C_RESET"
+  done < <(ls -1t "$PAYROLL_BACKUPS"/data-*.tar.gz 2>/dev/null || true)
+  if [[ $any == 0 ]]; then info "No backups yet. Make one with: sudo payroll backup"
+  else echo; info "Folder: $PAYROLL_BACKUPS   ·   Restore: sudo payroll restore <file>"; fi
+  echo
+}
+
+cmd_restore() {
+  local file="${1:-}" snap stage old parent
+  [[ -n "$file" ]] || die "Which backup? Usage: sudo payroll restore <file>   (list them with: payroll backups)"
+  [[ -f "$file" ]] || { [[ -f "$PAYROLL_BACKUPS/$file" ]] && file="$PAYROLL_BACKUPS/$file"; }
+  [[ -f "$file" ]] || die "Backup not found: $file"
+  file="$(readlink -f "$file")"
+  tar -tzf "$file" >/dev/null 2>&1 || die "That file is not a readable backup (.tar.gz): $file"
+
+  step "Restore data"
+  info "Backup:  $file  ($(date -d "@$(stat -c %Y "$file")" '+%Y-%m-%d %H:%M'))"
+  info "This replaces everything in $PAYROLL_DATA. The app stops for a moment."
+  confirm "Restore this backup now?" n || { info "Nothing was changed."; return 0; }
+  take_lock 0 || die "An update is in progress. Try again when it has finished."
+
+  step "Saving the current data first"
+  snap="$(snapshot_data pre-restore | tail -n1)"
+  ok "$snap"
+
+  parent="$(dirname "$PAYROLL_DATA")"
+  stage="$(mktemp -d "$parent/.payroll-restore.XXXXXX")"
+  old="$(mktemp -d "$parent/.payroll-old.XXXXXX")"
+  chown "$PAYROLL_USER:$PAYROLL_USER" "$stage"; chmod 700 "$stage" "$old"
+  # Unpack as the app user (never as root), reading the archive through stdin.
+  if ! as_payroll tar -xzf - -C "$stage" --no-same-owner <"$file"; then
+    rm -rf "$stage" "$old"; die "Could not unpack the backup. Nothing was changed."
+  fi
+
+  step "Restoring"
+  if has_systemd; then systemctl stop payroll.service; fi
+  # Swap contents; keep the app's own backups folder and the npm cache (never part of a snapshot).
+  find "$PAYROLL_DATA" -mindepth 1 -maxdepth 1 ! -name backups ! -name .npm -exec mv -t "$old" -- {} +
+  find "$stage" -mindepth 1 -maxdepth 1 ! -name backups ! -name .npm -exec mv -t "$PAYROLL_DATA" -- {} +
+  chown -R "$PAYROLL_USER:$PAYROLL_USER" "$PAYROLL_DATA"
+  chmod 750 "$PAYROLL_DATA"
+  rm -rf "$stage" "$old"
+  ok "Data restored."
+  if has_systemd; then systemctl start payroll.service; else restart_app || true; fi
+  if wait_healthy 60; then ok "The app is up and healthy."
+  else
+    warn "The app is not answering after the restore."
+    info "Your data from just before the restore is in: $snap"
+    info "Put it back with: sudo payroll restore $(basename "$snap")"
+    return 1
+  fi
+}
+
+# ── service control ───────────────────────────────────────────────────────────
+cmd_restart() { step "Restarting"; restart_app; wait_healthy 60 || true; health_line; }
+cmd_start()   { need_systemd; step "Starting"; systemctl start payroll.service; wait_healthy 60 || true; health_line; }
+cmd_stop()    { need_systemd; systemctl stop payroll.service; ok "Stopped. Start again with: sudo payroll start"; }
+
+cmd_auto_update() {
+  case "${1:-status}" in
+    on)
+      env_set AUTO_UPDATE 1
+      rm -f "$SKIP_FILE"
+      if has_systemd; then systemctl enable -q --now payroll-update.timer; fi
+      ok "Automatic updates are on (checked every 10 minutes, with automatic rollback)."
+      ;;
+    off)
+      env_set AUTO_UPDATE 0
+      if has_systemd; then systemctl disable -q --now payroll-update.timer 2>/dev/null || true; fi
+      ok "Automatic updates are off. Update any time with: sudo payroll update"
+      ;;
+    status)
+      if [[ "$(env_get AUTO_UPDATE)" == 1 ]]; then row "Auto-update" "On"; else row "Auto-update" "Off"; fi
+      if has_systemd; then
+        if svc_active payroll-update.timer; then
+          local next; next="$(systemctl show payroll-update.timer -p NextElapseUSecRealtime --value 2>/dev/null || true)"
+          row "Timer" "active${next:+  ·  next check $next}"
+        else row "Timer" "inactive"; fi
+      fi
+      [[ -s "$SKIP_FILE" ]] && row "Skipping" "$(sha7 "$(cat "$SKIP_FILE")") (failed before; a newer version will be tried)"
+      return 0
+      ;;
+    *) die "Usage: sudo payroll auto-update on|off|status" ;;
+  esac
+}
+
+cmd_tunnel() {
+  declare -F cf_status >/dev/null || die "Tunnel support (lib/tunnel.sh) is not part of this version."
+  case "${1:-status}" in
+    setup)  cf_setup_interactive ;;
+    status) cf_status ;;
+    remove) confirm "Remove the Cloudflare Tunnel from this server?" n && cf_remove ;;
+    *) die "Usage: sudo payroll tunnel setup|status|remove" ;;
+  esac
+}
+
+# ── admin accounts ────────────────────────────────────────────────────────────
+cmd_admin() {
+  local sub="${1:-}" user="" pw="" pw2="" rc=0 out
+  shift || true
+  case "$sub" in create|reset-password) ;; *) die "Usage: sudo payroll admin create|reset-password [--username NAME]" ;; esac
+  while (( $# )); do
+    case "$1" in
+      --username) [[ $# -ge 2 ]] || die "--username needs a value."; user="$2"; shift ;;
+      --username=*) user="${1#--username=}" ;;
+      *) die "Unknown option: $1" ;;
+    esac
+    shift
+  done
+  [[ -f "$PAYROLL_CURRENT/dist/index.cjs" ]] || die "The app is not installed yet."
+
+  # Older builds have no admin CLI: running them with arguments would just start a second server.
+  if ! grep -q -- "--password-stdin" "$PAYROLL_CURRENT/dist/index.cjs" 2>/dev/null; then
+    warn "This version of the app cannot manage accounts from the command line yet."
+    admin_fallback "$sub"
+    return 1
+  fi
+
+  ask user "Username" "admin"
+  while :; do
+    pw=""; pw2=""
+    ask_secret pw "New password (at least 8 characters)"
+    [[ -n "$pw" ]] || die "No password entered (a terminal is needed to type it)."
+    if (( ${#pw} < 8 )); then warn "Too short; use at least 8 characters."; continue; fi
+    ask_secret pw2 "Repeat the password"
+    [[ "$pw" == "$pw2" ]] && break
+    warn "The passwords did not match. Try again."
+  done
+
+  # shellcheck disable=SC1090
+  out="$( set -a; . "$PAYROLL_ENV_FILE"; set +a; cd "$PAYROLL_CURRENT" \
+          && printf '%s\n' "$pw" | as_payroll timeout 60 "$(node_bin)" dist/index.cjs admin "$sub" --username "$user" --password-stdin 2>&1 )" || rc=$?
+  pw=""; pw2=""
+  if [[ $rc == 0 ]]; then
+    if [[ $sub == create ]]; then ok "Administrator '$user' created."; env_unset SETUP_CODE
+    else ok "Password for '$user' changed."; fi
+    return 0
+  fi
+  warn "The app could not do that (exit $rc):"
+  printf '%s\n' "$out" | tail -n 8 | sed 's/^/      /' >&2
+  admin_fallback "$sub"
+  return 1
+}
+
+admin_fallback() {
+  if setup_required; then
+    info "Finish setup in a browser instead: open http://127.0.0.1:$(app_port) on this machine"
+    setup_code_hint
+  elif [[ "$1" == reset-password ]]; then
+    info "Sign in and change the password under Settings, or update the app (sudo payroll update) and try again."
+  else
+    info "An administrator already exists. Sign in at http://127.0.0.1:$(app_port)"
+  fi
+}
+
+# ── doctor ────────────────────────────────────────────────────────────────────
+cmd_doctor() {
+  local problems=0 port v major own perm avail tz
+  port="$(app_port)"
+  pass() { ok "$1"; }
+  flag() { bad "$1"; shift; local l; for l in "$@"; do fix "$l"; done; problems=$((problems + 1)); }
+  step "Checking this server"
+
+  if [[ -x "$(node_bin)" ]]; then
+    v="$("$(node_bin)" -v 2>/dev/null || true)"; major="${v#v}"; major="${major%%.*}"
+    if [[ "$major" == "$PAYROLL_NODE_MAJOR" ]]; then pass "Node.js $v"
+    else flag "Node.js is ${v:-broken}, expected v$PAYROLL_NODE_MAJOR" "Fix: re-run the installer to reinstall the runtime"; fi
+  else flag "Node.js runtime missing at $PAYROLL_NODE_DIR" "Fix: re-run the installer"; fi
+
+  if [[ -f "$PAYROLL_CURRENT/dist/index.cjs" ]]; then pass "Active release $(sha7 "$(release_sha "$(current_release)")")"
+  else flag "No active release at $PAYROLL_CURRENT" "Fix: sudo payroll update --force"; fi
+
+  if has_systemd; then
+    if svc_enabled payroll.service; then pass "Service enabled at boot"
+    else flag "Service is not enabled at boot" "Fix: sudo systemctl enable payroll"; fi
+    if svc_active payroll.service; then pass "Service running"
+    else flag "Service is not running" "Fix: sudo payroll start   (then: payroll logs)"; fi
+    if svc_active payroll-update.path; then pass "In-app \"Update now\" is wired up"
+    else flag "payroll-update.path is not active (the in-app update button will not work)" "Fix: sudo systemctl enable --now payroll-update.path"; fi
+    if [[ "$(env_get AUTO_UPDATE)" == 1 ]] && ! svc_active payroll-update.timer; then
+      flag "Auto-update is on but its timer is not running" "Fix: sudo payroll auto-update on"
+    fi
+  else
+    flag "systemd is not running; the app cannot be managed as a service" "Fix: use a systemd-based Debian/Ubuntu machine or VM"
+  fi
+
+  if command -v ss >/dev/null && ss -Hltn "sport = :$port" 2>/dev/null | grep -q .; then pass "Listening on port $port"
+  elif health_ok; then pass "Listening on port $port"
+  else flag "Nothing is listening on port $port" "Fix: sudo payroll restart   (then: payroll logs)"; fi
+
+  if health_ok; then pass "Health check OK"
+  else flag "Health check failed (http://127.0.0.1:$port/api/health)" "Fix: payroll logs   ·   sudo payroll restart"; fi
+
+  avail="$(df -Pk "$PAYROLL_DATA" 2>/dev/null | awk 'NR==2{print $4}')"
+  if (( ${avail:-0} > 1048576 )); then pass "Disk space: $(human_size $(( avail * 1024 ))) free"
+  else flag "Low disk space: $(human_size $(( ${avail:-0} * 1024 ))) free" "Fix: free space, or delete old backups in $PAYROLL_BACKUPS"; fi
+
+  own="$(stat -c '%U:%G' "$PAYROLL_DATA" 2>/dev/null || echo missing)"
+  if [[ "$own" == "$PAYROLL_USER:$PAYROLL_USER" ]] && [[ -z "$(find "$PAYROLL_DATA" ! -user "$PAYROLL_USER" -print -quit 2>/dev/null)" ]]; then
+    pass "Data folder owned by $PAYROLL_USER"
+  else flag "Data folder ownership is wrong ($own or files inside)" "Fix: sudo chown -R $PAYROLL_USER:$PAYROLL_USER $PAYROLL_DATA"; fi
+
+  perm="$(stat -c '%a %U:%G' "$PAYROLL_ENV_FILE" 2>/dev/null || echo missing)"
+  if [[ "$perm" == "640 root:$PAYROLL_USER" ]]; then pass "Settings file protected"
+  else flag "Settings file $PAYROLL_ENV_FILE is $perm (expected 640 root:$PAYROLL_USER)" \
+    "Fix: sudo chown root:$PAYROLL_USER $PAYROLL_ENV_FILE && sudo chmod 640 $PAYROLL_ENV_FILE"; fi
+
+  if [[ -n "$(env_get TUNNEL_MODE)" ]]; then
+    if svc_active cloudflared.service; then pass "Cloudflare Tunnel running"
+    else flag "Cloudflare Tunnel is configured but cloudflared is not running" "Fix: sudo systemctl restart cloudflared   (details: payroll tunnel status)"; fi
+  fi
+
+  if command -v timedatectl >/dev/null && has_systemd; then
+    tz="$(timedatectl show -p NTPSynchronized --value 2>/dev/null || true)"
+    if [[ "$tz" == yes ]]; then pass "Clock synchronised"
+    else flag "Clock is not synchronised (sign-in sessions and payslip dates depend on it)" "Fix: sudo timedatectl set-ntp true"; fi
+  fi
+
+  echo
+  if (( problems == 0 )); then ok "Everything looks good."; else warn "$problems thing(s) need attention."; return 1; fi
+}
+
+# ── uninstall ─────────────────────────────────────────────────────────────────
+cmd_uninstall() {
+  local purge=0 typed="" u
+  [[ "${1:-}" == --purge ]] && purge=1
+  step "Uninstall Payroll"
+  info "This stops the app and removes the program from $PAYROLL_ROOT."
+  if [[ $purge == 1 ]]; then
+    warn "--purge also deletes ALL payroll data, settings and backups:"
+    info "$PAYROLL_DATA  $PAYROLL_ETC  $PAYROLL_BACKUPS  $PAYROLL_LOGS"
+  else
+    info "Your data ($PAYROLL_DATA), settings ($PAYROLL_ETC) and backups ($PAYROLL_BACKUPS) are kept."
+  fi
+  confirm "Uninstall now?" n || { info "Nothing was changed."; return 0; }
+  if [[ $purge == 1 ]]; then
+    ask typed "Type delete to permanently erase the data" ""
+    [[ "$typed" == delete ]] || { info "Nothing was changed."; return 0; }
+  fi
+
+  if [[ -n "$(env_get TUNNEL_MODE)" ]] && declare -F cf_remove >/dev/null; then
+    if confirm "Also remove the Cloudflare Tunnel service from this server?" y; then cf_remove || warn "Could not fully remove the tunnel."; fi
+  fi
+
+  step "Removing"
+  if has_systemd; then
+    for u in "${UNITS[@]}"; do systemctl disable -q --now "$u" 2>/dev/null || true; done
+  fi
+  for u in "${UNITS[@]}"; do rm -f "/etc/systemd/system/$u"; done
+  if has_systemd; then systemctl daemon-reload; systemctl reset-failed 2>/dev/null || true; fi
+  ok "Services removed"
+  rm -f /usr/local/bin/payroll "$UPDATE_LOCK"
+  rm -rf "$PAYROLL_ROOT"
+  ok "Program removed ($PAYROLL_ROOT)"
+
+  if [[ $purge == 1 ]]; then
+    rm -rf "$PAYROLL_DATA" "$PAYROLL_ETC" "$PAYROLL_BACKUPS" "$PAYROLL_LOGS"
+    if id "$PAYROLL_USER" >/dev/null 2>&1; then userdel "$PAYROLL_USER" 2>/dev/null || true; fi
+    ok "Data, settings, backups and logs deleted"
+  else
+    info "Kept: $PAYROLL_DATA  $PAYROLL_ETC  $PAYROLL_BACKUPS"
+    info "Reinstalling later picks these up again."
+  fi
+  echo; ok "Payroll has been uninstalled."
+}
+
+# ── help / dispatch ───────────────────────────────────────────────────────────
+cmd_help() {
+  h() { printf '      %-32s %s\n' "$1" "$2"; }
+  t() { printf '\n    %s%s%s\n' "$C_BOLD" "$1" "$C_RESET"; }
+  printf '\n    %spayroll%s — manage the Payroll server\n' "$C_BOLD" "$C_RESET"
+  t "Everyday"
+  h "status" "How everything is doing"
+  h "open" "Addresses, and the setup code if setup is unfinished"
+  h "logs [-f]" "App logs (-f to follow)"
+  h "doctor" "Check for common problems and how to fix them"
+  t "Updates"
+  h "update [--ref REF] [--force]" "Install the newest version (rolls back if it fails)"
+  h "rollback" "Go back to the previous version"
+  h "auto-update on|off|status" "Automatic updates every 10 minutes"
+  t "Data"
+  h "backup" "Save a backup of all data now"
+  h "backups" "List backups"
+  h "restore <file>" "Replace the data with a backup (current data is saved first)"
+  t "Server"
+  h "start | stop | restart" "Control the app service"
+  h "admin create|reset-password" "Administrator account  [--username NAME]"
+  h "tunnel setup|status|remove" "Cloudflare Tunnel for access from anywhere"
+  h "version" "Installed version"
+  h "uninstall [--purge]" "Remove the program (--purge also erases all data)"
+  echo
+}
+
+main() {
+  local cmd="${1:-help}"
+  [[ $# -gt 0 ]] && shift
+  case "$cmd" in
+    help|-h|--help|version|--version|-v) ;;
+    *)
+      if [[ $EUID -ne 0 ]]; then
+        if command -v sudo >/dev/null; then exec sudo -- "$SELF" "$cmd" "$@"; fi
+        die "Please run as root: payroll $cmd needs administrator rights."
+      fi
+      ;;
+  esac
+  case "$cmd" in
+    status)              cmd_status ;;
+    logs|log)            cmd_logs "$@" ;;
+    update)              cmd_update "$@" ;;
+    rollback)            cmd_rollback ;;
+    backup)              cmd_backup ;;
+    backups)             cmd_backups ;;
+    restore)             cmd_restore "$@" ;;
+    restart)             cmd_restart ;;
+    start)               cmd_start ;;
+    stop)                cmd_stop ;;
+    auto-update|autoupdate) cmd_auto_update "$@" ;;
+    tunnel)              cmd_tunnel "$@" ;;
+    admin)               cmd_admin "$@" ;;
+    open|url|urls)       cmd_open ;;
+    doctor)              cmd_doctor ;;
+    uninstall)           cmd_uninstall "$@" ;;
+    version|--version|-v) cmd_version ;;
+    help|-h|--help)      cmd_help ;;
+    *) printf 'Unknown command: %s\n' "$cmd" >&2; cmd_help >&2; exit 2 ;;
+  esac
+}
+
+main "$@"
+exit $?
