@@ -15,6 +15,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Field, Section } from "@/components/workspace/fields";
 import { SiteDot } from "@/components/AppShell";
 import { RulesEditor } from "./RulesEditor";
+import { TimeClockSection } from "./TimeClockSettings";
 import { cn } from "@/lib/utils";
 
 const COLORS = ["#0f766e", "#2563eb", "#7c3aed", "#db2777", "#ea580c", "#ca8a04", "#16a34a", "#475569"];
@@ -109,6 +110,8 @@ function SiteEditor({ site, onDeleted }: { site: Site; onDeleted: () => void }) 
       </Section>
 
       <SquareSection site={site} />
+
+      <TimeClockSection site={site} draft={draft} onChange={setDraft} />
 
       <div className="sticky bottom-0 z-10 -mx-1 flex items-center justify-end gap-2 border-t bg-background/95 px-1 py-3 backdrop-blur">
         {dirty && <span className="mr-auto text-xs text-muted-foreground">Unsaved changes</span>}

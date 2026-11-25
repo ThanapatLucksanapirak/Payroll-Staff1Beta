@@ -14,6 +14,8 @@ import { LoginPage } from "@/pages/Login";
 import { Dashboard } from "@/pages/Dashboard";
 import { WorkspacePage } from "@/pages/Workspace";
 import { SettingsPage } from "@/pages/Settings";
+import { LivePage } from "@/pages/Live";
+import { EmployeesPage } from "@/pages/Employees";
 import { Button } from "@/components/ui/button";
 
 interface AuthStatus { setupRequired: boolean; authenticated: boolean; appName: string; db: { connected: boolean; error: string | null } }
@@ -72,6 +74,8 @@ function Gate() {
           <Switch>
             <Route path="/" component={Dashboard} />
             <Route path="/timesheet/:id">{(p) => <WorkspacePage key={p.id} id={p.id} />}</Route>
+            <Route path="/live" component={LivePage} />
+            <Route path="/employees" component={EmployeesPage} />
             <Route path="/settings/:section?">{(p) => <SettingsPage section={p.section} />}</Route>
             <Route><Dashboard /></Route>
           </Switch>

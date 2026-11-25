@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "wouter";
-import { AlertTriangle, ArrowLeft, CalendarRange, FileSpreadsheet, FileText, Loader2, PlusSquare, RefreshCw, Upload } from "lucide-react";
+import { AlertTriangle, ArrowLeft, CalendarRange, FileSpreadsheet, FileText, Loader2, PlusSquare, RefreshCw, Tablet, Upload } from "lucide-react";
 import type { Shift, Site } from "@shared/schema";
 import { CSV_FIELD_LABELS, type CsvField, type CsvMapping, type CsvParseResult, parseCsvText } from "@shared/importers/csv";
 import type { ScheduleParseResult } from "@shared/importers/schedule";
@@ -16,7 +16,7 @@ import { payPeriod } from "@/lib/periods";
 import { useApp } from "@/context/AppData";
 import { cn } from "@/lib/utils";
 
-export type ImportSource = "square" | "csv" | "pdf" | "blank";
+export type ImportSource = "square" | "kiosk" | "csv" | "pdf" | "blank";
 export interface ImportResult { shifts: Shift[]; source: string; filename: string; label: string; warnings: string[] }
 
 interface Props {
@@ -48,7 +48,7 @@ export function ImportDialog({ open, onOpenChange, site, mode, initialSource, on
         {review ? (
           <ReviewStep result={review} onBack={() => setReview(null)} onConfirm={async (r) => { await onComplete(r); onOpenChange(false); setTimeout(reset, 200); }} mode={mode} />
         ) : !source ? (
-          <SourcePicker onPick={setSource} showBlank={mode === "create"} />
+          <SourcePicker onPick={setSource} showBlank={mode === "create"} site={site} />
         ) : (
           <div className="space-y-4">
             {!initialSource && (
@@ -57,6 +57,7 @@ export function ImportDialog({ open, onOpenChange, site, mode, initialSource, on
               </button>
             )}
             {source === "square" && <SquareStep site={site} onResult={setReview} />}
+            {source === "kiosk" && <KioskStep site={site} onResult={setReview} />}
             {source === "csv" && <CsvStep onResult={setReview} />}
             {source === "pdf" && <PdfStep site={site} onResult={setReview} />}
             {source === "blank" && <BlankStep site={site} onResult={(r) => onComplete(r)} />}
@@ -67,9 +68,11 @@ export function ImportDialog({ open, onOpenChange, site, mode, initialSource, on
   );
 }
 
-function SourcePicker({ onPick, showBlank }: { onPick: (s: ImportSource) => void; showBlank: boolean }) {
+function SourcePicker({ onPick, showBlank, site }: { onPick: (s: ImportSource) => void; showBlank: boolean; site: Site }) {
+  const timeSource = site.timeSource ?? "square";
   const opts: { id: ImportSource; title: string; desc: string; icon: any }[] = [
-    { id: "square", title: "Pull from Square", desc: "Fetch closed timecards for a date range", icon: CalendarRange },
+    ...(timeSource !== "square" ? [{ id: "kiosk" as const, title: "From the time clock", desc: "Clock-ins and outs from the kiosk for a date range", icon: Tablet }] : []),
+    ...(timeSource !== "kiosk" ? [{ id: "square" as const, title: "Pull from Square", desc: "Fetch closed timecards for a date range", icon: CalendarRange }] : []),
     { id: "csv", title: "Upload CSV", desc: "Square, Toast TimeEntries, Sling, 7shifts or any time-card CSV", icon: FileSpreadsheet },
     { id: "pdf", title: "Toast / Sling PDF", desc: "Printed schedule or time-entry report (PDF)", icon: FileText },
     ...(showBlank ? [{ id: "blank" as const, title: "Start blank", desc: "Enter shifts or manual pay by hand", icon: PlusSquare }] : []),
@@ -136,6 +139,44 @@ function SquareStep({ site, onResult }: { site: Site; onResult: (r: ImportResult
       {error && <ErrorNote>{error}</ErrorNote>}
       <Button onClick={fetchIt} disabled={busy || !start || !end} className="w-full" data-testid="button-square-fetch">
         {busy ? <Loader2 className="animate-spin" /> : <RefreshCw />} Fetch timecards
+      </Button>
+    </div>
+  );
+}
+
+function KioskStep({ site, onResult }: { site: Site; onResult: (r: ImportResult) => void }) {
+  const app = useApp();
+  const cur = payPeriod(site.rules, 0);
+  const prev = payPeriod(site.rules, -1);
+  const [start, setStart] = useState(prev.start);
+  const [end, setEnd] = useState(prev.end);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const fetchIt = async () => {
+    setBusy(true); setError("");
+    try {
+      const r = await api<{ shifts: Shift[]; warnings: string[] }>("GET", `/api/sites/${site.id}/punches/shifts?start=${start}&end=${end}`, undefined, { timeoutMs: 60000 });
+      if (!r.shifts.length) { setError(r.warnings.length ? r.warnings.join(" ") : "No completed shifts were found on the time clock for that range."); return; }
+      onResult({ shifts: r.shifts, source: "kiosk", filename: `Time clock ${app.date(start)} – ${app.date(end)}`, label: "", warnings: r.warnings });
+    } catch (e) { setError(errorMessage(e)); } finally { setBusy(false); }
+  };
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap gap-2">
+        {[{ l: "Last pay period", p: prev }, { l: "Current pay period", p: cur }].map(({ l, p }) => (
+          <Button key={l} size="sm" variant={start === p.start && end === p.end ? "secondary" : "outline"} onClick={() => { setStart(p.start); setEnd(p.end); }}>
+            {l} <span className="text-muted-foreground font-normal">{app.date(p.start)}–{app.date(p.end)}</span>
+          </Button>
+        ))}
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <div className="space-y-1.5"><Label>From</Label><Input type="date" value={start} onChange={(e) => setStart(e.target.value)} data-testid="input-kiosk-start" /></div>
+        <div className="space-y-1.5"><Label>To</Label><Input type="date" value={end} onChange={(e) => setEnd(e.target.value)} data-testid="input-kiosk-end" /></div>
+      </div>
+      <p className="text-xs text-muted-foreground">Clock-ins are paired with clock-outs in {site.rules.timezone}; breaks are recorded on each shift. Shifts without a clock-out are listed as warnings. <Link href="/live" className="underline underline-offset-2">Fix punches</Link> first if needed.</p>
+      {error && <ErrorNote>{error}</ErrorNote>}
+      <Button onClick={fetchIt} disabled={busy || !start || !end} className="w-full" data-testid="button-kiosk-fetch">
+        {busy ? <Loader2 className="animate-spin" /> : <RefreshCw />} Get shifts
       </Button>
     </div>
   );

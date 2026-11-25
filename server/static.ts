@@ -15,7 +15,10 @@ export function serveStatic(app: Express) {
 
   // The time-clock kiosk is a separate page. Its asset URLs are relative, so
   // it must be served at exactly /kiosk.
-  app.get("/kiosk", (_req, res) => res.sendFile(path.resolve(distPath, "kiosk.html")));
+  app.get("/kiosk", (req, res) => {
+    if (req.originalUrl.split("?")[0] !== "/kiosk") return res.redirect(302, "/kiosk");
+    res.sendFile(path.resolve(distPath, "kiosk.html"));
+  });
   app.get("/kiosk/{*path}", (_req, res) => res.redirect(302, "/kiosk"));
 
   // fall through to index.html if the file doesn't exist

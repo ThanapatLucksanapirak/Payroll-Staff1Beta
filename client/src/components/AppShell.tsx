@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { Link, useLocation } from "wouter";
-import { LogOut, MapPin, Settings, Table2 } from "lucide-react";
+import { Activity, LogOut, MapPin, Settings, Table2, Users } from "lucide-react";
 import { useApp } from "@/context/AppData";
 import { session, queryClient } from "@/lib/api";
 import { Logo } from "@/components/Logo";
@@ -20,6 +20,8 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   const nav = [
     { href: "/", label: "Timesheets", icon: Table2, active: loc === "/" || inWorkspace },
+    { href: "/live", label: "Live", icon: Activity, active: loc === "/live" },
+    { href: "/employees", label: "Employees", icon: Users, active: loc === "/employees" },
     { href: "/settings", label: "Settings", icon: Settings, active: loc.startsWith("/settings") },
   ];
 
