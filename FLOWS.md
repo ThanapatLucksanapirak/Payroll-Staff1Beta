@@ -2,7 +2,7 @@
 
 ## Sign in
 - Start: app root
-- Steps: enter admin password, press Unlock
+- Steps: enter username and password (a single owner may leave the username blank), press Sign in
 - Expect: home dashboard with "Saved Timesheets"
 
 ## Saved timesheets dashboard

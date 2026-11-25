@@ -6,6 +6,7 @@ import type { EmployeeConfig, TimesheetSummary } from "@shared/schema";
 import { useApp } from "@/context/AppData";
 import { api, errorMessage, queryClient } from "@/lib/api";
 import { newDoc, timeAgo } from "@/lib/doc";
+import { canEdit, isAdmin } from "@/lib/roles";
 import { useToast } from "@/hooks/use-toast";
 import { useConfirm } from "@/components/ConfirmDialog";
 import { ImportDialog, type ImportResult, type ImportSource } from "@/components/import/ImportDialog";
@@ -35,6 +36,7 @@ export function Dashboard() {
 
   const list = useQuery<TimesheetSummary[]>({ queryKey: ["/api/timesheets"] });
   const site = app.site;
+  const editable = canEdit(app.user);
 
   const rows = useMemo(() => {
     let r = (list.data ?? []).filter((t) => t.siteId === site.id);
@@ -100,7 +102,7 @@ export function Dashboard() {
           <h1 className="text-xl font-semibold tracking-tight" data-testid="text-page-title">Timesheets</h1>
           <p className="text-sm text-muted-foreground">{site.name}{site.address ? ` · ${site.address}` : ""}</p>
         </div>
-        <Button onClick={() => openImport()} data-testid="button-new-timesheet"><Plus /> New timesheet</Button>
+        {editable && <Button onClick={() => openImport()} data-testid="button-new-timesheet"><Plus /> New timesheet</Button>}
       </div>
 
       <div className="grid gap-3 grid-cols-2 lg:grid-cols-4">
@@ -110,11 +112,11 @@ export function Dashboard() {
         <Stat label="Square" value={app.squareConnected[site.id] ? "Connected" : "Not connected"} small tone={app.squareConnected[site.id] ? "ok" : "muted"} />
       </div>
 
-      <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+      {editable && <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
         <QuickAction icon={CalendarRange} title="Pull from Square" onClick={() => openImport("square")} testid="square" />
         <QuickAction icon={FileSpreadsheet} title="Upload CSV" onClick={() => openImport("csv")} testid="csv" />
         <QuickAction icon={FileText} title="Toast / Sling PDF" onClick={() => openImport("pdf")} testid="pdf" />
-      </div>
+      </div>}
 
       <div className="flex flex-wrap items-center gap-2">
         <div className="relative flex-1 min-w-[12rem]">
@@ -154,7 +156,7 @@ export function Dashboard() {
                   <p className="font-medium truncate" title={t.customLabel || t.filename}>{t.customLabel || t.filename || "Untitled"}</p>
                   <p className="text-xs text-muted-foreground mt-0.5">{t.periodStart ? `${app.date(t.periodStart)} – ${app.date(t.periodEnd)}` : "No dates yet"}</p>
                 </div>
-                <div className="pointer-events-auto">
+                {editable && <div className="pointer-events-auto">
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                       <Button variant="ghost" size="icon" className="h-8 w-8 -mr-2 -mt-1" aria-label="Timesheet actions" data-testid={`button-menu-${t.id}`}><MoreHorizontal className="h-4 w-4" /></Button>
@@ -183,7 +185,7 @@ export function Dashboard() {
                       ><Trash2 className="h-4 w-4 mr-2" />Delete</DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
-                </div>
+                </div>}
               </div>
               <div className="relative pointer-events-none mt-4 flex items-end justify-between gap-2">
                 <div>
@@ -242,6 +244,8 @@ function TrashDialog({ open, onOpenChange, onRestore, confirm }: {
 }) {
   const app = useApp();
   const { toast } = useToast();
+  const editable = canEdit(app.user);
+  const admin = isAdmin(app.user);
   const trash = useQuery<TimesheetSummary[]>({ queryKey: ["/api/timesheets?trash=1"], queryFn: () => api("GET", "/api/timesheets?trash=1"), enabled: open });
   const refresh = () => { void trash.refetch(); void queryClient.invalidateQueries({ queryKey: ["/api/timesheets"] }); };
   const removeForever = async (t: TimesheetSummary) => {
@@ -273,14 +277,14 @@ function TrashDialog({ open, onOpenChange, onRestore, confirm }: {
                   <p className="truncate text-sm font-medium">{t.customLabel || t.filename || "Untitled"}</p>
                   <p className="text-xs text-muted-foreground">{app.sites.find((x) => x.id === t.siteId)?.name ?? ""}{t.periodStart ? ` · ${app.date(t.periodStart)} – ${app.date(t.periodEnd)}` : ""} · {daysLeft(t.deletedAt)} days left</p>
                 </div>
-                <Button size="sm" variant="outline" onClick={() => { onRestore(t.id); setTimeout(refresh, 300); }} data-testid={`button-restore-${t.id}`}><RotateCcw className="h-3.5 w-3.5" />Restore</Button>
-                <Button size="icon" variant="ghost" className="h-8 w-8" aria-label="Delete forever" onClick={() => removeForever(t)}><Trash2 className="h-4 w-4" /></Button>
+                {editable && <Button size="sm" variant="outline" onClick={() => { onRestore(t.id); setTimeout(refresh, 300); }} data-testid={`button-restore-${t.id}`}><RotateCcw className="h-3.5 w-3.5" />Restore</Button>}
+                {admin && <Button size="icon" variant="ghost" className="h-8 w-8" aria-label="Delete forever" onClick={() => removeForever(t)}><Trash2 className="h-4 w-4" /></Button>}
               </li>
             ))}
           </ul>
         )}
         <DialogFooter>
-          {items.length > 0 && <Button variant="ghost" className="text-destructive mr-auto" onClick={empty}>Empty Trash</Button>}
+          {admin && items.length > 0 && <Button variant="ghost" className="text-destructive mr-auto" onClick={empty}>Empty Trash</Button>}
           <Button variant="outline" onClick={() => onOpenChange(false)}>Done</Button>
         </DialogFooter>
       </DialogContent>

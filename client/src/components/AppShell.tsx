@@ -1,8 +1,8 @@
 import type { ReactNode } from "react";
 import { Link, useLocation } from "wouter";
-import { LogOut, MapPin, Settings, Table2 } from "lucide-react";
+import { MapPin, Settings, Table2 } from "lucide-react";
 import { useApp } from "@/context/AppData";
-import { session, queryClient } from "@/lib/api";
+import { AccountMenu } from "@/components/AccountMenu";
 import { Logo } from "@/components/Logo";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -64,14 +64,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                 <TooltipContent>Database problem — open Settings</TooltipContent>
               </Tooltip>
             )}
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button variant="ghost" size="icon" aria-label="Sign out" onClick={() => { session.clear(); queryClient.clear(); }} data-testid="button-signout">
-                  <LogOut className="h-4 w-4" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>Sign out</TooltipContent>
-            </Tooltip>
+            <AccountMenu />
           </nav>
         </div>
       </header>

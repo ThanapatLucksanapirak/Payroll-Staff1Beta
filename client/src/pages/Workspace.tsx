@@ -7,6 +7,7 @@ import { useTimesheet, type SaveState } from "@/hooks/useTimesheet";
 import { downloadBlob, safeFilename, timeAgo } from "@/lib/doc";
 import { shiftsToCsv } from "@shared/importers/csv";
 import { errorMessage } from "@/lib/api";
+import { canEdit } from "@/lib/roles";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -23,7 +24,8 @@ import { SiteDot } from "@/components/AppShell";
 export function WorkspacePage({ id }: { id: string }) {
   const app = useApp();
   const { toast } = useToast();
-  const ts = useTimesheet(id, { autosave: app.prefs.autosave });
+  const readOnly = !canEdit(app.user);
+  const ts = useTimesheet(id, { autosave: app.prefs.autosave && !readOnly });
   const [tab, setTab] = useState("payroll");
   const doc = ts.doc;
   const site = (doc && app.sites.find((s) => s.id === doc.siteId)) || app.site;
@@ -52,7 +54,7 @@ export function WorkspacePage({ id }: { id: string }) {
     return <div className="mx-auto max-w-7xl px-3 sm:px-5 py-6 space-y-4"><Skeleton className="h-10 w-72" /><Skeleton className="h-24" /><Skeleton className="h-64" /></div>;
   }
 
-  const locked = doc.status === "final";
+  const locked = doc.status === "final" || readOnly;
   const title = doc.label || doc.filename || "Untitled timesheet";
   const periodTitle = result.periodStart ? `${app.date(result.periodStart)} – ${app.date(result.periodEnd)}` : "No dates yet";
   const props = { doc, result, site, locked, edit: ts.edit };
@@ -72,7 +74,7 @@ export function WorkspacePage({ id }: { id: string }) {
         <div className="min-w-0 flex-1">
           <h1 className="flex items-center gap-2 text-lg font-semibold tracking-tight">
             <span className="line-clamp-2 break-words sm:line-clamp-1" data-testid="text-timesheet-title">{title}</span>
-            {locked ? <Badge className="gap-1"><Lock className="h-3 w-3" />Final</Badge> : <Badge variant="secondary">Draft</Badge>}
+            {doc.status === "final" ? <Badge className="gap-1"><Lock className="h-3 w-3" />Final</Badge> : <Badge variant="secondary">Draft</Badge>}
           </h1>
           <p className="flex items-center gap-1.5 text-xs text-muted-foreground"><SiteDot color={site.color} />{site.name} · {periodTitle}</p>
         </div>
@@ -80,7 +82,7 @@ export function WorkspacePage({ id }: { id: string }) {
           <SaveIndicator state={ts.saveState} error={ts.saveError} savedAt={ts.lastSavedAt} legacy={ts.legacy} />
           <Tooltip><TooltipTrigger asChild><Button variant="ghost" size="icon" onClick={ts.undo} disabled={!ts.canUndo} aria-label="Undo" data-testid="button-undo"><Undo2 className="h-4 w-4" /></Button></TooltipTrigger><TooltipContent>Undo (Ctrl+Z)</TooltipContent></Tooltip>
           <Tooltip><TooltipTrigger asChild><Button variant="ghost" size="icon" onClick={ts.redo} disabled={!ts.canRedo} aria-label="Redo" data-testid="button-redo"><Redo2 className="h-4 w-4" /></Button></TooltipTrigger><TooltipContent>Redo (Ctrl+Shift+Z)</TooltipContent></Tooltip>
-          {(!app.prefs.autosave || ts.saveState === "error" || ts.legacy) && (
+          {!readOnly && (!app.prefs.autosave || ts.saveState === "error" || ts.legacy) && (
             <Button variant="outline" size="sm" onClick={() => ts.save()} disabled={ts.saveState === "saving" || (!ts.dirty && !ts.legacy)} data-testid="button-save"><Save /> Save</Button>
           )}
           <DropdownMenu>
@@ -102,7 +104,13 @@ export function WorkspacePage({ id }: { id: string }) {
           <Button size="sm" onClick={() => ts.save(true)} data-testid="button-overwrite">Keep mine</Button>
         </div>
       )}
-      {locked && (
+      {readOnly && (
+        <div className="flex flex-wrap items-center gap-3 rounded-xl border bg-muted/40 px-4 py-2.5 text-sm" data-testid="banner-view-only">
+          <Lock className="h-4 w-4 text-muted-foreground" />
+          <span className="flex-1">Your account is view-only. You can look through and export this timesheet, but not change it.</span>
+        </div>
+      )}
+      {locked && !readOnly && (
         <div className="flex flex-wrap items-center gap-3 rounded-xl border bg-muted/40 px-4 py-2.5 text-sm">
           <Lock className="h-4 w-4 text-muted-foreground" />
           <span className="flex-1">This timesheet is finalized and read-only.</span>

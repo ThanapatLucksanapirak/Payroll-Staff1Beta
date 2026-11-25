@@ -3,7 +3,8 @@ import { Router, Switch, Route } from "wouter";
 import { useHashLocation } from "wouter/use-hash-location";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Loader2, RefreshCw, ServerCrash } from "lucide-react";
-import { api, queryClient, session } from "@/lib/api";
+import { api, queryClient, session, signOut } from "@/lib/api";
+import type { SessionUser } from "@/lib/roles";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ConfirmProvider } from "@/components/ConfirmDialog";
@@ -16,22 +17,22 @@ import { WorkspacePage } from "@/pages/Workspace";
 import { SettingsPage } from "@/pages/Settings";
 import { Button } from "@/components/ui/button";
 
-interface AuthStatus { setupRequired: boolean; authenticated: boolean; appName: string; db: { connected: boolean; error: string | null } }
+interface AuthStatus { setupRequired: boolean; authenticated: boolean; appName: string; db: { connected: boolean; error: string | null }; user: SessionUser | null }
 
 function FullScreen({ children }: { children: React.ReactNode }) {
   return <div className="min-h-dvh flex items-center justify-center p-6 text-center">{children}</div>;
 }
 
 function Gate() {
-  const token = useSyncExternalStore(session.subscribe, session.get);
+  const epoch = useSyncExternalStore(session.subscribe, session.get);
   const [status, setStatus] = useState<AuthStatus | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const load = () => {
     setError(null);
-    api<AuthStatus>("GET", "/api/auth/status").then(setStatus).catch((e) => setError(e.message));
+    api<AuthStatus>("GET", "/api/auth/status").then((st) => { session.dropLegacyToken(); setStatus(st); }).catch((e) => setError(e.message));
   };
-  useEffect(load, [token]);
+  useEffect(load, [epoch]);
   useEffect(() => { applyTheme("system"); }, []);
 
   if (error) {
@@ -46,7 +47,7 @@ function Gate() {
     );
   }
   if (!status) return <FullScreen><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></FullScreen>;
-  if (!token || !status.authenticated) {
+  if (!status.authenticated) {
     return <LoginPage appName={status.appName} setupRequired={status.setupRequired} dbError={status.db.connected ? null : status.db.error} onDone={() => { queryClient.clear(); load(); }} />;
   }
 
@@ -60,7 +61,7 @@ function Gate() {
               <p className="text-sm">{e.message}</p>
               <div className="flex justify-center gap-2">
                 <Button variant="outline" onClick={retry}><RefreshCw /> Retry</Button>
-                <Button variant="ghost" onClick={() => session.clear()}>Sign out</Button>
+                <Button variant="ghost" onClick={() => void signOut()}>Sign out</Button>
               </div>
             </div>
           ) : <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />}

@@ -8,6 +8,8 @@ import { api, errorMessage, session } from "@/lib/api";
 import { Logo } from "@/components/Logo";
 
 export function LoginPage({ appName, setupRequired, dbError, onDone }: { appName: string; setupRequired: boolean; dbError?: string | null; onDone: () => void }) {
+  const [username, setUsername] = useState("");
+  const [displayName, setDisplayName] = useState("");
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [setupCode, setSetupCode] = useState("");
@@ -20,10 +22,13 @@ export function LoginPage({ appName, setupRequired, dbError, onDone }: { appName
     setError("");
     if (setupRequired && password !== confirm) { setError("The passwords don't match."); return; }
     if (setupRequired && password.length < 8) { setError("Use at least 8 characters."); return; }
+    if (setupRequired && !username.trim()) { setError("Choose a username."); return; }
     setBusy(true);
     try {
-      const r = await api<{ token: string }>("POST", setupRequired ? "/api/auth/setup" : "/api/auth/login", setupRequired ? { password, setupCode } : { password, remember });
-      session.set(r.token, remember);
+      await api("POST", setupRequired ? "/api/auth/setup" : "/api/auth/login", setupRequired
+        ? { username: username.trim(), displayName: displayName.trim() || undefined, password, setupCode }
+        : { username: username.trim(), password, remember });
+      session.set();
       onDone();
     } catch (err) {
       setError(errorMessage(err));
@@ -40,7 +45,7 @@ export function LoginPage({ appName, setupRequired, dbError, onDone }: { appName
           <div>
             <h1 className="text-lg font-semibold">{appName}</h1>
             <p className="text-sm text-muted-foreground">
-              {setupRequired ? "Create the administrator password to get started." : "Enter the administrator password."}
+              {setupRequired ? "Create the owner account to get started." : "Sign in to continue."}
             </p>
           </div>
         </div>
@@ -52,9 +57,20 @@ export function LoginPage({ appName, setupRequired, dbError, onDone }: { appName
             <p className="text-xs text-muted-foreground">Shown by the installer. You can also find it on the server in the data folder, in setup-code.txt.</p>
           </div>
         )}
+        {setupRequired && (
+          <div className="space-y-2">
+            <Label htmlFor="display-name">Your name</Label>
+            <Input id="display-name" autoComplete="name" value={displayName} onChange={(e) => setDisplayName(e.target.value)} placeholder="e.g. Alex Morgan" data-testid="input-display-name" />
+          </div>
+        )}
+        <div className="space-y-2">
+          <Label htmlFor="username">Username</Label>
+          <Input id="username" autoFocus={!setupRequired} autoComplete="username" autoCapitalize="none" spellCheck={false} value={username} onChange={(e) => setUsername(e.target.value)} placeholder={setupRequired ? "e.g. alex" : undefined} data-testid="input-username" />
+          {!setupRequired && <p className="text-xs text-muted-foreground">Used a single shared password before? Your username is <span className="font-mono">admin</span>, or leave this blank.</p>}
+        </div>
         <div className="space-y-2">
           <Label htmlFor="pw">{setupRequired ? "New password" : "Password"}</Label>
-          <Input id="pw" type="password" autoFocus={!setupRequired} autoComplete={setupRequired ? "new-password" : "current-password"} value={password} onChange={(e) => setPassword(e.target.value)} data-testid="input-password" />
+          <Input id="pw" type="password" autoComplete={setupRequired ? "new-password" : "current-password"} value={password} onChange={(e) => setPassword(e.target.value)} data-testid="input-password" />
         </div>
         {setupRequired && (
           <div className="space-y-2">
@@ -67,9 +83,9 @@ export function LoginPage({ appName, setupRequired, dbError, onDone }: { appName
           Keep me signed in on this device
         </label>
         {error && <p className="text-sm text-destructive" role="alert" data-testid="text-login-error">{error}</p>}
-        <Button type="submit" className="w-full" disabled={busy || !password || (setupRequired && !setupCode.trim())} data-testid="button-login">
+        <Button type="submit" className="w-full" disabled={busy || !password || (setupRequired && (!setupCode.trim() || !username.trim()))} data-testid="button-login">
           {busy ? <Loader2 className="animate-spin" /> : setupRequired ? <ShieldCheck /> : <Lock />}
-          {setupRequired ? "Create password" : "Unlock"}
+          {setupRequired ? "Create owner account" : "Sign in"}
         </Button>
       </form>
     </div>
