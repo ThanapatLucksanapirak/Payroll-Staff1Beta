@@ -4,7 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { AlertTriangle, Dices, Download, KeyRound, Loader2, Pencil, Plus, Search, Trash2, UserRound } from "lucide-react";
 import { useApp } from "@/context/AppData";
 import { api, errorMessage, queryClient } from "@/lib/api";
-import { isAdmin } from "@/lib/roles";
+import { can, isAdmin } from "@/lib/roles";
 import { useToast } from "@/hooks/use-toast";
 import { useConfirm } from "@/components/ConfirmDialog";
 import { SiteDot } from "@/components/AppShell";
@@ -36,7 +36,8 @@ export function EmployeesPage() {
   const { toast } = useToast();
   const confirm = useConfirm();
   // Only owners and administrators manage the employee list (the server enforces this too).
-  const admin = isAdmin(app.user);
+  const admin = can(app.user, "employees.manage"); // add and edit people and PINs
+  const settingsAdmin = isAdmin(app.user);
   const key = ["/api/sites", site.id, "employees"];
   const q = useQuery<EmployeeRow[]>({ queryKey: key });
   const [editing, setEditing] = useState<EmployeeRow | "new" | null>(null);
@@ -82,7 +83,7 @@ export function EmployeesPage() {
         <div className="mb-5 flex flex-wrap items-center gap-3 rounded-xl bg-warning-soft px-4 py-3 text-[13px]" role="status">
           <AlertTriangle className="h-4 w-4 shrink-0 text-warning" />
           <span className="flex-1">The time clock is off at {site.name} (hours come from Square). You can still set up employees now.</span>
-          {admin && <Button asChild size="sm" variant="outline"><Link href="/settings/locations">Time clock settings</Link></Button>}
+          {settingsAdmin && <Button asChild size="sm" variant="outline"><Link href="/settings/locations">Time clock settings</Link></Button>}
         </div>
       )}
       {noPin > 0 && (

@@ -20,6 +20,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
+import { can } from "@/lib/roles";
 
 type Range = "3m" | "6m" | "12m" | "all" | "custom";
 const ALL = "__all__";
@@ -88,6 +89,10 @@ export function ReportsPage() {
   const last = periods.at(-1);
   const prev = periods.at(-2);
   const change = last && prev && prev.total > 0 ? (last.total - prev.total) / prev.total : null;
+
+  if (!can(app.user, "reports.view")) {
+    return <Page wide><EmptyState icon={BarChart3} title="Reports aren't available" description="Your account can't see reports. Ask an owner or administrator if you need them." /></Page>;
+  }
 
   return (
     <Page wide>
@@ -290,7 +295,7 @@ function EmployeeBreakdown({ timesheets }: { timesheets: TimesheetSummary[] }) {
 
   return (
     <section>
-      <SectionLabel action={rows.length > 0 && <Button variant="ghost" size="sm" onClick={exportCsv} data-testid="button-export-employees"><Download />Export CSV</Button>}>By employee</SectionLabel>
+      <SectionLabel action={rows.length > 0 && can(app.user, "export") && <Button variant="ghost" size="sm" onClick={exportCsv} data-testid="button-export-employees"><Download />Export CSV</Button>}>By employee</SectionLabel>
       <div className="grid gap-4 lg:grid-cols-[18rem_1fr]">
         <div className="rounded-xl border border-card-border bg-card shadow-card">
           <div className="border-b border-border/70 px-4 py-3">

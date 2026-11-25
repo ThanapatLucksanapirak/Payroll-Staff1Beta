@@ -6,7 +6,7 @@ import { type ClockStatus, type Punch, type PunchType, PUNCH_LABELS, PUNCH_TYPES
 import { instantToLocal, localToInstant, minutesToInput, inputToMinutes, todayISO } from "@shared/dates";
 import { useApp } from "@/context/AppData";
 import { api, errorMessage, queryClient } from "@/lib/api";
-import { canEdit, isAdmin } from "@/lib/roles";
+import { can, isAdmin } from "@/lib/roles";
 import { useLiveEvents } from "@/lib/live";
 import { useToast } from "@/hooks/use-toast";
 import { SiteDot } from "@/components/AppShell";
@@ -52,7 +52,7 @@ export function LivePage() {
   const app = useApp();
   const site = app.site;
   const tz = site.rules.timezone;
-  const editable = canEdit(app.user);
+  const editable = can(app.user, "punches.edit");
   const key = ["/api/sites", site.id, "timeclock"];
   const q = useQuery<DayData>({ queryKey: key, staleTime: 0, refetchInterval: 5 * 60_000 });
   const [fix, setFix] = useState<Punch | null>(null);
