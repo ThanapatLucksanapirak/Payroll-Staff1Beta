@@ -17,6 +17,7 @@ export function SecuritySettings() {
   const { toast } = useToast();
   const confirm = useConfirm();
   const [displayName, setDisplayName] = useState(app.user.displayName);
+  const [username, setUsername] = useState(app.user.username);
   const [current, setCurrent] = useState("");
   const [next, setNext] = useState("");
   const [confirmPw, setConfirmPw] = useState("");
@@ -35,11 +36,13 @@ export function SecuritySettings() {
     } finally { setBusy(false); }
   };
 
+  const profileChanged = username.trim() !== app.user.username || displayName.trim() !== app.user.displayName;
   const saveProfile = async () => {
+    const u = username.trim();
     try {
-      await api("PUT", "/api/auth/profile", { displayName: displayName.trim() });
+      await api("PUT", "/api/auth/profile", { username: u, displayName: displayName.trim() });
       await app.refresh();
-      toast({ title: "Saved" });
+      toast({ title: "Saved", description: u !== app.user.username ? `From now on, sign in as "${u}".` : undefined });
     } catch (e) { toast({ title: "Couldn't save", description: errorMessage(e), variant: "destructive" }); }
   };
 
@@ -50,14 +53,17 @@ export function SecuritySettings() {
 
   return (
     <div className="space-y-5">
-      <Section title="Your account" description={`Signed in as ${app.user.username} · ${ROLE_LABELS[app.user.role]}`}>
-        <form className="flex flex-wrap items-end gap-3" onSubmit={(e) => { e.preventDefault(); void saveProfile(); }}>
-          <Field label="Display name" className="w-full sm:w-72"><Input value={displayName} maxLength={100} onChange={(e) => setDisplayName(e.target.value)} data-testid="input-profile-name" /></Field>
-          <Button type="submit" variant="outline" disabled={displayName.trim() === app.user.displayName || !displayName.trim()} data-testid="button-profile-save">Save</Button>
+      <Section title="Your account" description={`You sign in as "${app.user.username}" · ${ROLE_LABELS[app.user.role]}`}>
+        <form className="grid gap-3 sm:grid-cols-2 items-start" onSubmit={(e) => { e.preventDefault(); if (profileChanged && username.trim().length >= 2) void saveProfile(); }}>
+          <Field label="Sign-in username" hint="What you type on the sign-in screen."><Input value={username} maxLength={64} autoCapitalize="none" autoCorrect="off" spellCheck={false} autoComplete="username" onChange={(e) => setUsername(e.target.value)} data-testid="input-profile-username" /></Field>
+          <Field label="Display name" hint="Shown in the app and on reports. Not used to sign in."><Input value={displayName} maxLength={100} autoComplete="off" onChange={(e) => setDisplayName(e.target.value)} data-testid="input-profile-name" /></Field>
+          <div className="sm:col-span-2"><Button type="submit" variant="outline" disabled={!profileChanged || username.trim().length < 2 || !displayName.trim()} data-testid="button-profile-save">Save</Button></div>
         </form>
       </Section>
-      <Section title="Change password" description="Changing it signs out every other device.">
+      <Section title="Change password" description={`For signing in as "${app.user.username}". Changing it signs out every other device.`}>
         <form className="grid gap-3 sm:grid-cols-3 items-start" onSubmit={(e) => { e.preventDefault(); if (!mismatch && next.length >= MIN) void change(); }}>
+          {/* Tells password managers which account this is, so they save the real sign-in username. */}
+          <input type="text" name="username" autoComplete="username" value={app.user.username} readOnly hidden />
           <Field label="Current password"><Input type="password" autoComplete="current-password" value={current} onChange={(e) => setCurrent(e.target.value)} data-testid="input-pw-current" /></Field>
           <Field label="New password" hint={`At least ${MIN} characters`}><Input type="password" autoComplete="new-password" value={next} onChange={(e) => setNext(e.target.value)} data-testid="input-pw-next" /></Field>
           <Field label="Confirm new password" hint={mismatch ? <span className="text-destructive">Passwords don't match</span> : undefined}><Input type="password" autoComplete="new-password" value={confirmPw} onChange={(e) => setConfirmPw(e.target.value)} data-testid="input-pw-confirm" /></Field>

@@ -362,12 +362,17 @@ export async function bumpSessionVersion(id: string): Promise<UserRecord | null>
   });
 }
 
-export async function updateProfile(id: string, patch: { displayName: string }): Promise<UserRecord> {
-  const displayName = displayNameSchema.parse(patch.displayName);
+export async function updateProfile(id: string, patch: { displayName?: string; username?: string }): Promise<UserRecord> {
+  const displayName = patch.displayName === undefined ? undefined : displayNameSchema.parse(patch.displayName);
+  const username = patch.username === undefined ? undefined : usernameSchema.parse(patch.username);
   return mutate((users) => {
     const u = users.find((x) => x.id === id);
     if (!u) throw new UserError("That user no longer exists.", 404);
-    u.displayName = displayName || u.username;
+    if (username && !sameName(username, u.username) && users.some((x) => x.id !== id && sameName(x.username, username))) {
+      throw new UserError(`The username "${username}" is already taken.`, 409);
+    }
+    if (username) u.username = username;
+    if (displayName !== undefined) u.displayName = displayName || u.username;
     return { ...u };
   });
 }
