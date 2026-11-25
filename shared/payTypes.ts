@@ -139,10 +139,10 @@ export const accountsSchema = z.object({
 export type Accounts = z.infer<typeof accountsSchema>;
 
 export const paySettingsSchema = z.object({
-  cash: cashConfigSchema.catch(cashConfigSchema.parse({})).default({}),
+  cash: cashConfigSchema.catch(cashConfigSchema.parse({})).prefault({}),
   holidays: z.array(holidaySchema).max(400).catch([]).default([]),
   recurring: z.array(recurringItemSchema).max(2000).catch([]).default([]),
-  accounts: accountsSchema.catch(accountsSchema.parse({})).default({}),
+  accounts: accountsSchema.catch(accountsSchema.parse({})).prefault({}),
   tipPoints: z.record(z.string(), z.coerce.number().min(0).max(100).catch(1)).catch({}).default({}),
 });
 export type PaySettings = z.infer<typeof paySettingsSchema>;

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { csvCell } from "@shared/csvSafe";
 import { Link, useLocation } from "wouter";
 import { useQueries, useQuery } from "@tanstack/react-query";
 import { AlertTriangle, ArrowDownRight, ArrowUpRight, BarChart3, Download, Loader2, Users } from "lucide-react";
@@ -185,7 +186,7 @@ export function ReportsPage() {
             </div>
           </section>
 
-          <div className="grid gap-8 lg:grid-cols-[1fr_1.3fr]">
+          <div className="grid grid-cols-1 gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)]">
             <section>
               <SectionLabel>By location</SectionLabel>
               <div className="rounded-xl border border-card-border bg-card p-5 shadow-card">
@@ -289,16 +290,15 @@ function EmployeeBreakdown({ timesheets }: { timesheets: TimesheetSummary[] }) {
   const grand = rows.reduce((s, r) => s + r.total, 0);
 
   const exportCsv = () => {
-    const esc = (v: string | number) => (/[",\n]/.test(String(v)) ? `"${String(v).replace(/"/g, '""')}"` : String(v));
     const lines = [["Employee", "Timesheets", "Full days", "Half days", "Flagged days", "Hours", "Total pay"].join(",")];
-    for (const r of rows) lines.push([r.name, r.sheets, r.fullDays, r.halfDays, r.flagged, Math.round(r.hours * 100) / 100, r.total.toFixed(2)].map(esc).join(","));
+    for (const r of rows) lines.push([r.name, r.sheets, r.fullDays, r.halfDays, r.flagged, Math.round(r.hours * 100) / 100, r.total.toFixed(2)].map(csvCell).join(","));
     downloadBlob(lines.join("\n"), `employees_${new Date().toISOString().slice(0, 10)}.csv`, "text/csv");
   };
 
   return (
     <section>
       <SectionLabel action={rows.length > 0 && can(app.user, "export") && <Button variant="ghost" size="sm" onClick={exportCsv} data-testid="button-export-employees"><Download />Export CSV</Button>}>By employee</SectionLabel>
-      <div className="grid gap-4 lg:grid-cols-[18rem_1fr]">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[18rem_minmax(0,1fr)]">
         <div className="rounded-xl border border-card-border bg-card shadow-card">
           <div className="border-b border-border/70 px-4 py-3">
             <p className="text-[13px] font-semibold">Timesheets</p>

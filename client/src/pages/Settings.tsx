@@ -44,10 +44,10 @@ export function SettingsPage({ section }: { section?: string }) {
   const hasSection = !!section && sections.some((s) => s.id === section);
 
   return (
-    <div className="mx-auto flex w-full max-w-[90rem] md:min-h-dvh">
+    <div className="mx-auto flex w-full max-w-[90rem] lg:min-h-dvh">
       {/* Left pane: section list (on phones this is the whole screen until a section is picked) */}
-      <aside className={cn("w-full shrink-0 border-border/70 px-4 pb-10 pt-6 md:sticky md:top-0 md:block md:h-dvh md:w-64 md:overflow-y-auto md:border-r md:px-3 md:pt-8 lg:w-72", hasSection && "hidden")}>
-        <h1 className="mb-5 px-2 text-display tracking-tight md:text-[22px] md:leading-7" data-testid="text-page-title">Settings</h1>
+      <aside className={cn("w-full shrink-0 border-border/70 px-4 pb-10 pt-6 lg:sticky lg:top-0 lg:block lg:h-dvh lg:w-64 lg:overflow-y-auto lg:border-r lg:px-3 lg:pt-8 xl:w-72", hasSection && "hidden")}>
+        <h1 className="mb-5 px-2 text-display tracking-tight lg:text-[22px] lg:leading-7" data-testid="text-page-title">Settings</h1>
         <nav aria-label="Settings sections" className="space-y-5">
           {SETTINGS_GROUPS.map((g) => {
             const items = sections.filter((s) => s.group === g);
@@ -55,26 +55,26 @@ export function SettingsPage({ section }: { section?: string }) {
             return (
               <div key={g}>
                 <p className="section-label mb-1.5 px-2">{g}</p>
-                <ul className="overflow-hidden rounded-xl border border-card-border bg-card shadow-card md:space-y-0.5 md:overflow-visible md:rounded-none md:border-none md:bg-transparent md:shadow-none">
+                <ul className="overflow-hidden rounded-xl border border-card-border bg-card shadow-card lg:space-y-0.5 lg:overflow-visible lg:rounded-none lg:border-none lg:bg-transparent lg:shadow-none">
                   {items.map((s) => {
                     const active = s.id === cur.id;
                     return (
-                      <li key={s.id} className="border-b border-border/60 last:border-none md:border-none">
+                      <li key={s.id} className="border-b border-border/60 last:border-none lg:border-none">
                         <Link
                           href={`/settings/${s.id}`}
                           aria-current={active ? "page" : undefined}
                           className={cn(
-                            "flex items-center gap-3 px-3 py-2.5 text-[14px] transition-colors md:rounded-md md:px-2 md:py-1.5 md:text-[13px] focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-inset focus-visible:ring-ring/35",
-                            active ? "md:bg-primary md:text-primary-foreground" : "hover:bg-foreground/[0.04]",
+                            "flex items-center gap-3 px-3 py-2.5 text-[14px] transition-colors lg:rounded-md lg:px-2 lg:py-1.5 lg:text-[13px] focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-inset focus-visible:ring-ring/35",
+                            active ? "lg:bg-primary lg:text-primary-foreground" : "hover:bg-foreground/[0.04]",
                           )}
                           data-testid={`nav-settings-${s.id}`}
                         >
                           <IconTile s={s} />
                           <span className="min-w-0 flex-1">
                             <span className="block truncate font-medium">{s.label}</span>
-                            <span className={cn("block truncate text-xs md:hidden", "text-muted-foreground")}>{s.description}</span>
+                            <span className={cn("block truncate text-xs lg:hidden", "text-muted-foreground")}>{s.description}</span>
                           </span>
-                          <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground/60 md:hidden" />
+                          <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground/60 lg:hidden" />
                         </Link>
                       </li>
                     );
@@ -87,8 +87,8 @@ export function SettingsPage({ section }: { section?: string }) {
       </aside>
 
       {/* Right pane: the section */}
-      <section className={cn("min-w-0 flex-1 px-4 pb-16 pt-4 sm:px-8 md:block md:pt-8", !hasSection && "hidden")} aria-labelledby="settings-section-title">
-        <Link href="/settings" className="mb-3 inline-flex items-center gap-0.5 text-[15px] font-medium text-primary md:hidden" data-testid="link-settings-back">
+      <section className={cn("min-w-0 flex-1 px-4 pb-16 pt-4 sm:px-8 lg:block lg:pt-8", !hasSection && "hidden")} aria-labelledby="settings-section-title">
+        <Link href="/settings" className="mb-3 inline-flex items-center gap-0.5 text-[15px] font-medium text-primary lg:hidden" data-testid="link-settings-back">
           <ChevronLeft className="h-5 w-5" />Settings
         </Link>
         <div className="mx-auto max-w-4xl">

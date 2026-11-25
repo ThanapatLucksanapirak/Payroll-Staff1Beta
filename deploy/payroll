@@ -361,7 +361,7 @@ cmd_rollback() {
 cmd_backup() {
   local f
   step "Backing up your data"
-  f="$(snapshot_data manual | tail -n1)"
+  f="$(snapshot_data manual | tail -n1)" && [[ -n "$f" ]] || die "The backup failed. See the message above."
   ok "Saved $f  ($(human_size "$(stat -c %s "$f")"))"
   info "Restore it later with: sudo payroll restore $(basename "$f")"
 }
@@ -396,7 +396,7 @@ cmd_restore() {
   take_lock 0 || die "An update is in progress. Try again when it has finished."
 
   step "Saving the current data first"
-  snap="$(snapshot_data pre-restore | tail -n1)"
+  snap="$(snapshot_data pre-restore | tail -n1)" && [[ -n "$snap" ]] || die "Could not back up the current data, so nothing was restored."
   ok "$snap"
 
   parent="$(dirname "$PAYROLL_DATA")"
@@ -417,7 +417,7 @@ cmd_restore() {
   chmod 750 "$PAYROLL_DATA"
   rm -rf "$stage" "$old"
   ok "Data restored."
-  if has_systemd; then systemctl start payroll.service; else restart_app || true; fi
+  if has_systemd; then systemctl reset-failed payroll.service 2>/dev/null || true; systemctl start payroll.service; else restart_app || true; fi
   if wait_healthy 60; then ok "The app is up and healthy."
   else
     warn "The app is not answering after the restore."

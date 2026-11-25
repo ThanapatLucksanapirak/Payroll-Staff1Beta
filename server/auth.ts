@@ -9,6 +9,7 @@ import path from "node:path";
 import { DATA_DIR, getAuthSecret, loadConfig, saveConfig } from "./config";
 import { safeEqual } from "./passwords";
 import { type UserRecord, getUser, invalidateUsersCache, listUsers, setupRequired } from "./users";
+import { db } from "./db";
 
 export const SESSION_COOKIE = "payroll_session";
 const TOKEN_TAG = "payroll-admin";
@@ -23,12 +24,42 @@ export function issueToken(user: Pick<UserRecord, "id" | "sessionVersion">, days
   return { token: `${payload}.${sign(payload)}`, expiresAt };
 }
 
+// ── Signed-out sessions ───────────────────────────────────────────────────────
+// Tokens are stateless, so signing out records the token's signature until it
+// would have expired anyway. Kept in settings so it survives restarts.
+const REVOKED_KEY = "revoked_sessions";
+let revoked: Map<string, number> | null = null;
+async function revokedSet(): Promise<Map<string, number>> {
+  if (revoked) return revoked;
+  const m = new Map<string, number>();
+  try {
+    const raw = JSON.parse((await (await db()).getSetting(REVOKED_KEY)) || "{}");
+    for (const [k, v] of Object.entries(raw)) if (typeof v === "number") m.set(k, v);
+  } catch { /* none */ }
+  return (revoked = m);
+}
+export function invalidateRevokedCache() { revoked = null; }
+/** End this one session on the server (the user's other devices stay signed in). */
+export async function revokeToken(token: string | undefined) {
+  if (!token) return;
+  const [payload, sig] = token.split(".");
+  if (!payload || !sig || !safeEqual(sig, sign(payload))) return;
+  let exp = Date.now() + 31 * 86400000;
+  try { const d = JSON.parse(Buffer.from(payload, "base64url").toString("utf8")); if (typeof d.exp === "number") exp = d.exp; } catch { /* default */ }
+  const m = await revokedSet();
+  const now = Date.now();
+  for (const [k, v] of m) if (v < now) m.delete(k);
+  m.set(sig, exp);
+  await (await db()).setSetting(REVOKED_KEY, JSON.stringify(Object.fromEntries(m)));
+}
+
 /** The user a token belongs to, if the token is valid and still current. */
 export async function verifyToken(token: string | undefined): Promise<{ user: UserRecord; legacy: boolean } | null> {
   if (!token) return null;
   try {
     const [payload, sig] = token.split(".");
     if (!payload || !sig || !safeEqual(sig, sign(payload))) return null;
+    if ((await revokedSet()).has(sig)) return null;
     const data = JSON.parse(Buffer.from(payload, "base64url").toString("utf8"));
     if (data.p !== TOKEN_TAG || typeof data.exp !== "number" || data.exp < Date.now()) return null;
     if (data.v === 2 && typeof data.u === "string") {

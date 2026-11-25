@@ -26,3 +26,12 @@ test("old punches with only edits still read cleanly", () => {
   assert.equal(p.flags, undefined);
   assert.equal(p.meta, undefined);
 });
+
+test("parsePatch keeps only the fields that were sent (zod 4 partial fills defaults)", async () => {
+  const { z } = await import("zod");
+  const { parsePatch } = await import("@shared/patch");
+  const s = z.object({ name: z.string(), active: z.boolean().default(true), role: z.string().default("") });
+  assert.deepEqual(parsePatch(s, { name: "Ana" }), { name: "Ana" });
+  assert.deepEqual(parsePatch(s, { active: false }), { active: false });
+  assert.throws(() => parsePatch(s, { active: "no" }));
+});

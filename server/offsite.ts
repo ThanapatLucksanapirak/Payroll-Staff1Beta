@@ -8,6 +8,7 @@
 // restore never uses anyway. The configuration and last result live in app
 // settings under "offsite:*", which are never put in any backup, and the
 // secret key is never sent back to the browser.
+import { parsePatch } from "@shared/patch";
 import fs from "node:fs";
 import path from "node:path";
 import { createHash, createHmac } from "node:crypto";
@@ -43,7 +44,7 @@ export const s3Schema = z.object({
   secretAccessKey: z.string().max(400).default(""),
   keep: keepSchema.default(30),
 });
-export const configSchema = z.object({ folder: folderSchema.default({}), s3: s3Schema.default({}) });
+export const configSchema = z.object({ folder: folderSchema.prefault({}), s3: s3Schema.prefault({}) });
 export type OffsiteConfig = z.infer<typeof configSchema>;
 export type Target = "folder" | "s3";
 
@@ -51,7 +52,7 @@ export interface TargetStatus { lastSuccessAt: string | null; lastFailureAt: str
 export type OffsiteStatus = Record<Target, TargetStatus>;
 const emptyStatus = (): TargetStatus => ({ lastSuccessAt: null, lastFailureAt: null, lastError: null, lastFile: null });
 
-function parse<T>(raw: string | null, schema: z.ZodType<T, z.ZodTypeDef, unknown>, fallback: T): T {
+function parse<T>(raw: string | null, schema: z.ZodType<T, any>, fallback: T): T {
   if (!raw) return fallback;
   try { const r = schema.safeParse(JSON.parse(raw)); return r.success ? r.data : fallback; } catch { return fallback; }
 }
@@ -310,8 +311,8 @@ type Handler = (req: Request, res: Response) => Promise<unknown>;
 const h = (fn: Handler) => (req: Request, res: Response, next: NextFunction) => { fn(req, res).catch(next); };
 
 const inputSchema = z.object({
-  folder: folderSchema.partial().optional(),
-  s3: s3Schema.partial().optional(),
+  folder: z.unknown().optional().transform((v) => (v === undefined ? undefined : parsePatch(folderSchema, v))),
+  s3: z.unknown().optional().transform((v) => (v === undefined ? undefined : parsePatch(s3Schema, v))),
 });
 
 /** Merge a change onto the saved settings. A blank secret key keeps the saved one. */

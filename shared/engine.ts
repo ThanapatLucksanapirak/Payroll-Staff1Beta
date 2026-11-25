@@ -216,6 +216,7 @@ export function computePayroll(input: ComputeInput): AnalysisResult {
 
     // Overtime bookkeeping (hourly only)
     const weekRegular = new Map<string, number>();
+    const dayRegular = new Map<string, number>(); // the daily cap is per date, even when shifts aren't merged
     const days: DayResult[] = [];
     const bonusUsed = new Set<string>();
 
@@ -225,18 +226,22 @@ export function computePayroll(input: ComputeInput): AnalysisResult {
       const dayType: DayType = adj.overrideStatus ?? orig;
       const hours = paidMinutes / 60;
       const dayRates = cfg?.rateHistory?.length ? ratesOnDate(cfg, g.date, input.categories, rates) : rates;
+      const cancelled = !!adj.cancelled;
       let base = 0;
       let otHours = 0;
       if (dayRates.payBasis === "hourly") {
         if (dayType !== "absent") {
-          if (rules.overtimeEnabled) {
+          // A cancelled (unpaid) day doesn't use up regular hours for the week.
+          if (rules.overtimeEnabled && !cancelled) {
             const wk = startOfWeek(g.date, rules.weekStartsOn);
             const used = weekRegular.get(wk) ?? 0;
+            const usedToday = dayRegular.get(g.date) ?? 0;
             const weeklyLeft = Math.max(0, rules.overtimeWeeklyHours - used);
-            const dailyCap = rules.overtimeDailyHours > 0 ? rules.overtimeDailyHours : Infinity;
-            const regular = Math.min(hours, weeklyLeft, dailyCap);
+            const dailyLeft = rules.overtimeDailyHours > 0 ? Math.max(0, rules.overtimeDailyHours - usedToday) : Infinity;
+            const regular = Math.min(hours, weeklyLeft, dailyLeft);
             otHours = Math.max(0, hours - regular);
             weekRegular.set(wk, used + regular);
+            dayRegular.set(g.date, usedToday + regular);
             base = regular * dayRates.hourlyRate + otHours * dayRates.hourlyRate * rules.overtimeMultiplier;
           } else {
             base = hours * dayRates.hourlyRate;
@@ -246,7 +251,6 @@ export function computePayroll(input: ComputeInput): AnalysisResult {
         base = dayRatePay(dayType, dayRates, rules);
       }
       base = round2(base);
-      const cancelled = !!adj.cancelled;
       const dock = cancelled ? 0 : Math.min(Math.max(0, Number(adj.dockAmount) || 0), base);
       const dayBonuses = g.key === g.date ? (datedBonuses.get(g.date) ?? []) : [];
       if (dayBonuses.length) bonusUsed.add(g.date);
@@ -286,8 +290,8 @@ export function computePayroll(input: ComputeInput): AnalysisResult {
       flaggedDays: live.filter((d) => d.dayType === "flagged" && !d.cancelled).length,
       absentDays: live.filter((d) => d.dayType === "absent").length,
       cancelledDays: live.filter((d) => d.cancelled).length,
-      hoursWorked: round2(sum(live.map((d) => d.hours))),
-      overtimeHours: round2(sum(live.map((d) => d.overtimeHours))),
+      hoursWorked: round2(sum(live.filter((d) => !d.cancelled).map((d) => d.hours))),
+      overtimeHours: round2(sum(live.filter((d) => !d.cancelled).map((d) => d.overtimeHours))),
       totalBasePay, totalDocked: round2(sum(days.map((d) => d.dockAmount))), totalBonuses, totalDeductions,
       totalPay: round2(totalBasePay + totalBonuses - totalDeductions),
       payment: paymentFor(cfg?.paymentMethod, cfg?.splitCashAmount, totalBasePay + totalBonuses - totalDeductions, rules),
@@ -339,6 +343,9 @@ export function computePayroll(input: ComputeInput): AnalysisResult {
     });
   }
 
+  for (const e of employees) {
+    if (!e.excluded && e.totalPay < 0) warnings.push({ level: "warn", employee: e.name, message: `Deductions are more than pay: owes ${(-e.totalPay).toFixed(2)}. Nothing is paid out to them.` });
+  }
   return { periodStart, periodEnd, employees, warnings, totals: totalsOf(employees) };
 }
 
@@ -347,9 +354,11 @@ export function totalsOf(employees: EmployeeSummary[]): AnalysisResult["totals"]
   const inc = employees.filter((e) => !e.excluded);
   return {
     employees: inc.length,
-    totalPay: round2(sum(inc.map((e) => e.totalPay))),
-    netPay: round2(sum(inc.filter((e) => e.isNetPay).map((e) => e.totalPay))),
-    grossPay: round2(sum(inc.filter((e) => !e.isNetPay).map((e) => e.totalPay))),
+    // What is actually paid out: someone who owes money (deductions over pay)
+    // is paid nothing, and that never reduces anyone else's pay.
+    totalPay: round2(sum(inc.map((e) => Math.max(0, e.totalPay)))),
+    netPay: round2(sum(inc.filter((e) => e.isNetPay).map((e) => Math.max(0, e.totalPay)))),
+    grossPay: round2(sum(inc.filter((e) => !e.isNetPay).map((e) => Math.max(0, e.totalPay)))),
     bonuses: round2(sum(inc.map((e) => e.totalBonuses))),
     deductions: round2(sum(inc.map((e) => e.totalDeductions))),
     docked: round2(sum(inc.map((e) => e.totalDocked))),

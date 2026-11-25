@@ -31,8 +31,25 @@ function expandYear(y: number): number {
   return y + 2000;
 }
 
+/**
+ * Whether slash dates like 03/11/2026 are day-first, judged from the values
+ * themselves: a first number over 12 means D/M, a second over 12 means M/D.
+ * Returns null when every date could be either.
+ */
+export function detectDayFirst(values: string[]): boolean | null {
+  let dm = false, md = false;
+  for (const v of values) {
+    const m = String(v).match(/(?<![\d-])(\d{1,2})\/(\d{1,2})(?:\/\d{2,4})?/);
+    if (!m) continue;
+    if (+m[1] > 12 && +m[2] <= 12) dm = true;
+    else if (+m[2] > 12 && +m[1] <= 12) md = true;
+    if (dm && md) return null;
+  }
+  return dm ? true : md ? false : null;
+}
+
 /** Parse many date spellings into ISO. Returns null if no date is found. */
-export function parseDateToISO(input: unknown, opts: { defaultYear?: number } = {}): string | null {
+export function parseDateToISO(input: unknown, opts: { defaultYear?: number; dayFirst?: boolean } = {}): string | null {
   if (input == null) return null;
   const s = String(input).trim();
   if (!s) return null;
@@ -42,7 +59,10 @@ export function parseDateToISO(input: unknown, opts: { defaultYear?: number } = 
   if (m) return toISO(+m[1], +m[2], +m[3]);
 
   m = s.match(/(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?/);
-  if (m) return toISO(m[3] ? expandYear(+m[3]) : fallbackYear, +m[1], +m[2]);
+  if (m) {
+    const y = m[3] ? expandYear(+m[3]) : fallbackYear;
+    return opts.dayFirst ? toISO(y, +m[2], +m[1]) : toISO(y, +m[1], +m[2]);
+  }
 
   // "Nov 3, 2026", "November 3", "Mon, Nov 3"
   m = s.match(/\b([A-Za-z]{3,9})\.?\s+(\d{1,2})(?:st|nd|rd|th)?(?:,?\s+(\d{4}))?/);
@@ -170,12 +190,25 @@ export function legacyDate(iso: string): string {
   return `${m}/${d}/${String(y).slice(2)}`;
 }
 
+// Building an Intl.DateTimeFormat is slow (~0.1 ms); big imports call this
+// hundreds of thousands of times, so keep one per time zone.
+const tzFormatters = new Map<string, Intl.DateTimeFormat>();
+function tzFormatter(timeZone: string): Intl.DateTimeFormat {
+  let f = tzFormatters.get(timeZone);
+  if (!f) {
+    f = new Intl.DateTimeFormat("en-US", {
+      timeZone, hourCycle: "h23", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit",
+    });
+    if (tzFormatters.size > 200) tzFormatters.clear();
+    tzFormatters.set(timeZone, f);
+  }
+  return f;
+}
+
 /** Offset in minutes of `timeZone` from UTC at the given UTC instant. */
 export function tzOffsetMinutes(timeZone: string, at: Date): number {
   try {
-    const dtf = new Intl.DateTimeFormat("en-US", {
-      timeZone, hourCycle: "h23", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit",
-    });
+    const dtf = tzFormatter(timeZone);
     const p: Record<string, number> = {};
     for (const part of dtf.formatToParts(at)) if (part.type !== "literal") p[part.type] = +part.value;
     const asUTC = Date.UTC(p.year, p.month - 1, p.day, p.hour % 24, p.minute, p.second);

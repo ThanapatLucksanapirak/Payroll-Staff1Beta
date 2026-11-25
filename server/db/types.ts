@@ -71,6 +71,24 @@ export function patchToRow(patch: PunchPatch): Partial<PunchRow> {
   return out;
 }
 
+/** Most punches one query may return (callers ask for one more to detect overflow). */
+export const MAX_PUNCH_QUERY = 100_000;
+
+export interface ImportData {
+  settings: { key: string; value: string }[];
+  timesheets: TimesheetWrite[];
+  /** Time-clock punches. Left out = punches are not touched. */
+  punches?: Punch[];
+}
+export interface ImportOptions {
+  /**
+   * Restore mode: afterwards the store holds exactly the imported data.
+   * Settings for which keepSetting(key) is true are never deleted or overwritten.
+   */
+  replace?: boolean;
+  keepSetting?: (key: string) => boolean;
+}
+
 export interface DataStore {
   readonly kind: "sqlite" | "supabase";
   readonly label: string;
@@ -90,7 +108,7 @@ export interface DataStore {
    * Write many settings and timesheets as one unit: either everything is
    * written or nothing is (used by restore and database copy).
    */
-  importAll(data: { settings: { key: string; value: string }[]; timesheets: TimesheetWrite[] }): Promise<{ settings: number; timesheets: number }>;
+  importAll(data: ImportData, opts?: ImportOptions): Promise<{ settings: number; timesheets: number; punches: number }>;
   // Time-clock punches (kiosk). Inserting an id that already exists changes nothing.
   listPunches(q: PunchQuery): Promise<Punch[]>;
   getPunch(id: string): Promise<Punch | null>;

@@ -156,7 +156,7 @@ export const scheduleSettingsSchema = z.object({
     minutes: z.number().int().min(0).max(240).catch(10).default(10),
     /** start: pay from the scheduled start; cap: pay from `minutes` before the start. */
     mode: z.enum(EARLY_MODES).catch("start").default("start"),
-  }).catch({ enabled: false, minutes: 10, mode: "start" }).default({}),
+  }).catch({ enabled: false, minutes: 10, mode: "start" }).prefault({}),
 });
 export type ScheduleSettings = z.infer<typeof scheduleSettingsSchema>;
 export const DEFAULT_SCHEDULE_SETTINGS: ScheduleSettings = scheduleSettingsSchema.parse({});

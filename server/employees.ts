@@ -1,5 +1,6 @@
 // Employee directory for the time clock, one per location. Stored in the
 // app_settings key/value table so it works on SQLite and Supabase alike.
+import { parsePatch } from "@shared/patch";
 import { randomBytes, randomUUID, scrypt as nodeScrypt, timingSafeEqual } from "node:crypto";
 import { promisify } from "node:util";
 import type { Express, NextFunction, Request, Response } from "express";
@@ -140,7 +141,7 @@ export async function createEmployee(siteId: string, input: z.input<typeof emplo
 }
 
 export async function updateEmployee(siteId: string, id: string, patch: Partial<z.input<typeof employeeInputSchema>>): Promise<StoredEmployee> {
-  const data = employeeInputSchema.partial().parse(patch);
+  const data = parsePatch(employeeInputSchema, patch);
   return withLock(siteId, async () => {
     const dir = await load(siteId);
     const cur = dir.employees.find((e) => e.id === id);

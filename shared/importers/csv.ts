@@ -3,8 +3,9 @@
 // chosen by the user.
 import Papa from "papaparse";
 import type { Shift, ShiftSource } from "../schema";
-import { hasMeridiem, parseDateToISO, parseTimeToMinutes } from "../dates";
+import { detectDayFirst, hasMeridiem, parseDateToISO, parseTimeToMinutes } from "../dates";
 import { normalizeName } from "../engine";
+import { neutralizeFormula, unneutralize } from "../csvSafe";
 
 export type CsvField = "name" | "firstName" | "lastName" | "date" | "start" | "endDate" | "end" | "breakMinutes" | "breakHours" | "role";
 export type CsvMapping = Partial<Record<CsvField, string>>;
@@ -73,7 +74,7 @@ export function newShiftId(prefix = "s"): string {
   return `${prefix}_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 7)}${counter.toString(36)}`;
 }
 
-export function parseCsvText(text: string, opts: { mapping?: CsvMapping; source?: ShiftSource; defaultYear?: number } = {}): CsvParseResult {
+export function parseCsvText(text: string, opts: { mapping?: CsvMapping; source?: ShiftSource; defaultYear?: number; dayFirst?: boolean } = {}): CsvParseResult {
   const parsed = Papa.parse<Record<string, string>>(text.replace(/^\uFEFF/, ""), { header: true, skipEmptyLines: "greedy", transformHeader: (h) => h.trim() });
   const headers = (parsed.meta.fields ?? []).filter(Boolean);
   const mapping = opts.mapping ?? detectMapping(headers);
@@ -84,16 +85,26 @@ export function parseCsvText(text: string, opts: { mapping?: CsvMapping; source?
 
   const shifts: Shift[] = [];
   let skipped = 0;
+  let zeroLength = 0;
+  // Slash dates: the file decides when it can (13/11 is clearly day-first),
+  // otherwise the date-format preference does.
+  const dateValues = mapping.date ? parsed.data.map((r) => String(r[mapping.date!] ?? "")) : [];
+  const detected = detectDayFirst(dateValues);
+  const dayFirst = detected ?? !!opts.dayFirst;
+  if (detected != null && detected !== !!opts.dayFirst && dateValues.some((v) => /\d\/\d/.test(v))) {
+    base.warnings.push(detected ? "Dates in this file are day-first (D/M/Y), so they were read that way." : "Dates in this file are month-first (M/D/Y), so they were read that way.");
+  }
+  const dateOpts = { defaultYear: opts.defaultYear, dayFirst };
   const source = opts.source ?? (format.startsWith("Toast") ? "toast" : format.startsWith("Square") ? "square" : "csv");
   for (const row of parsed.data) {
-    const get = (f: CsvField) => (mapping[f] ? String(row[mapping[f]!] ?? "").trim() : "");
+    const get = (f: CsvField) => (mapping[f] ? unneutralize(String(row[mapping[f]!] ?? "").trim()) : "");
     let name = get("name");
     if (!name && (mapping.firstName || mapping.lastName)) name = `${get("firstName")} ${get("lastName")}`;
     name = normalizeName(name);
     if (!name || /^(grand )?totals?$/i.test(name)) { skipped++; continue; }
 
     const dateRaw = get("date");
-    const date = parseDateToISO(dateRaw, { defaultYear: opts.defaultYear });
+    const date = parseDateToISO(dateRaw, dateOpts);
     const startRaw = get("start") || (hasTime(dateRaw) ? dateRaw.replace(/^[^ ]*\d[^ ]*\s+/, "") : "");
     const endDateRaw = get("endDate");
     const endRaw = get("end") || (hasTime(endDateRaw) ? endDateRaw.replace(/^[^ ]*\d[^ ]*\s+/, "") : "");
@@ -101,7 +112,9 @@ export function parseCsvText(text: string, opts: { mapping?: CsvMapping; source?
     const endT = parseTimeToMinutes(endRaw);
     if (!date || start == null || endT == null) { skipped++; continue; }
 
-    const endDate = parseDateToISO(endDateRaw, { defaultYear: opts.defaultYear }) ?? date;
+    const endDate = parseDateToISO(endDateRaw, dateOpts) ?? date;
+    // Same clock-in and clock-out on the same day is an empty shift, not 24 hours.
+    if (endT === start && endDate === date) { zeroLength++; continue; }
     let end = endT + Math.max(0, dayDiff(date, endDate)) * 1440;
     if (end <= start) end += 1440; // overnight without an explicit out-date
     let brk = 0;
@@ -113,6 +126,7 @@ export function parseCsvText(text: string, opts: { mapping?: CsvMapping; source?
       breakMinutes: Math.max(0, Math.min(brk, 1440)), role: get("role"), source, note: "",
     });
   }
+  if (zeroLength) base.warnings.push(`${zeroLength} row${zeroLength === 1 ? "" : "s"} skipped: clock-in and clock-out are the same time.`);
   if (skipped) base.warnings.push(`${skipped} row${skipped === 1 ? "" : "s"} skipped (missing name, date, or clock times).`);
   if (!shifts.length) base.warnings.push("No complete shifts were found. Check the column mapping.");
   return { ...base, shifts, skipped, needsMapping: shifts.length === 0 };
@@ -139,8 +153,8 @@ export function shiftsToCsv(shifts: Shift[]): string {
   return Papa.unparse({
     fields: ["Team Member", "Clockin date", "Clockin time", "Clockout time", "Clockout date", "Break minutes", "Role", "Source", "Shift ID"],
     data: rows.map((s) => [
-      s.employee, legacyDate(s.date), fmtT(s.start), fmtT(s.end), legacyDate(addDays(s.date, Math.floor(s.end / 1440))),
-      s.breakMinutes, s.role, s.source, s.id,
+      neutralizeFormula(s.employee), legacyDate(s.date), fmtT(s.start), fmtT(s.end), legacyDate(addDays(s.date, Math.floor(s.end / 1440))),
+      s.breakMinutes, neutralizeFormula(s.role), s.source, s.id,
     ]),
   });
 }

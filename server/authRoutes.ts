@@ -3,7 +3,7 @@ import type { Express, NextFunction, Request, Response } from "express";
 import { z } from "zod";
 import { dbStatus } from "./db";
 import * as settings from "./settings";
-import { clearSessionCookie, clearSetupCode, currentUser, loginThrottle, recordLogin, setSessionCookie, setupCodeMatches } from "./auth";
+import { clearSessionCookie, clearSetupCode, currentUser, loginThrottle, recordLogin, requestToken, revokeToken, setSessionCookie, setupCodeMatches } from "./auth";
 import { actorOf, audit, queryAudit } from "./audit";
 import {
   type UserRecord, ROLE_LABELS, bumpSessionVersion, createUser, createUserSchema, deleteUser, displayNameSchema, getUser, listUsers,
@@ -85,6 +85,7 @@ export function registerAuthRoutes(app: Express) {
 
   app.post("/api/auth/logout", h(async (req, res) => {
     const u = currentUser(res);
+    await revokeToken(requestToken(req));
     clearSessionCookie(req, res);
     if (u) audit({ ...actorOf(req, res), action: "auth.logout", target: `user:${u.id}` });
     res.json({ ok: true });
