@@ -18,6 +18,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { HomeLaborTiles } from "@/components/schedule/Labor";
 
 function greeting() {
   const h = new Date().getHours();
@@ -84,6 +85,8 @@ export function HomePage() {
           {quick.map((a) => <QuickAction key={a.testid} icon={a.icon} tint={a.tint} title={a.title} sub={a.sub} onClick={() => newTimesheet(a.source)} testid={a.testid} />)}
         </div>
       )}
+
+      <HomeLaborTiles />
 
       {list.isLoading ? (
         <div className="space-y-4"><div className="grid gap-4 sm:grid-cols-3">{[0, 1, 2].map((i) => <Skeleton key={i} className="h-32 rounded-xl" />)}</div><Skeleton className="h-64 rounded-xl" /></div>

@@ -20,6 +20,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
+import { LaborSection } from "@/components/schedule/Labor";
 
 type Range = "3m" | "6m" | "12m" | "all" | "custom";
 const ALL = "__all__";
@@ -227,6 +228,7 @@ export function ReportsPage() {
           {undated > 0 && <p className="text-xs text-muted-foreground">{undated} timesheet{undated === 1 ? " has" : "s have"} no dates yet and {undated === 1 ? "isn't" : "aren't"} included.</p>}
         </div>
       )}
+      <LaborSection className="mt-10" />
     </Page>
   );
 }

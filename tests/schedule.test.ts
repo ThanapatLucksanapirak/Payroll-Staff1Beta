@@ -135,6 +135,29 @@ test("early clock-in rule: off by default, start and cap modes, only scheduled d
   assert.equal(odd.shifts[1].start, 300);
 });
 
+test("schedule PDF builds in Node with shifts, time off and odd characters", async () => {
+  const { buildSchedulePdf } = await import("../client/src/lib/pdf/schedule");
+  const { prefsSchema, siteSchema } = await import("../shared/schema");
+  const week = parseWeek({
+    shifts: [
+      sched({ employeeId: "a", employeeName: "Ana Ruiz", date: "2026-11-23", start: 540, end: 1020, station: "Grill" }),
+      sched({ employeeId: "a", employeeName: "Ana Ruiz", date: "2026-11-24", start: 1320, end: 1800, note: "Close ✓" }),
+      sched({ employeeId: "k", employeeName: "Kenji Satō", date: "2026-11-25", start: 600, end: 900 }),
+    ],
+    publishedAt: "2026-11-20T10:00:00Z",
+  }, "s", "2026-11-23");
+  const timeOff: TimeOff[] = [{ id: "t", employeeId: "k", employeeName: "Kenji Satō", start: "2026-11-27", end: "2026-11-28", reason: "Trip", status: "approved", requestedBy: "owner", createdAt: "", decidedAt: null, decidedBy: null }];
+  const people = [{ employeeId: "a", employeeName: "Ana Ruiz", role: "Cook" }, { employeeId: "k", employeeName: "Kenji Satō" }];
+  const pdf = buildSchedulePdf({ week, people, timeOff, prefs: prefsSchema.parse({ businessName: "Noodle Bar" }), site: siteSchema.parse({ id: "s", name: "Main" }), generatedAt: new Date("2026-11-21T12:00:00") });
+  assert.equal(pdf.getNumberOfPages(), 1);
+  assert.ok(pdf.output("arraybuffer").byteLength > 1000);
+  const many = Array.from({ length: 60 }, (_, i) => ({ employeeId: `e${i}`, employeeName: `Person ${i}` }));
+  const big = buildSchedulePdf({ week: parseWeek({ shifts: many.map((p, i) => sched({ ...p, id: `x${i}`, date: "2026-11-23", start: 540, end: 1020 })) }, "s", "2026-11-23"), people: many, timeOff: [], prefs: prefsSchema.parse({}), site: siteSchema.parse({ id: "s", name: "Main" }) });
+  assert.ok(big.getNumberOfPages() >= 2, "long teams flow onto more pages");
+  const empty = buildSchedulePdf({ week: parseWeek(null, "s", "2026-11-23"), people: [], timeOff: [], prefs: prefsSchema.parse({}), site: siteSchema.parse({ id: "s", name: "Main" }) });
+  assert.equal(empty.getNumberOfPages(), 1);
+});
+
 // ── API ──────────────────────────────────────────────────────────────────────
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), "payroll-schedule-"));
 let base = "";
