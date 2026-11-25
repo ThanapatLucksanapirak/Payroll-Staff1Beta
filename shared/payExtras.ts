@@ -481,6 +481,17 @@ export function ytdTotals(results: AnalysisResult[]): YtdRow[] {
   return [...map.values()].sort((a, b) => a.name.localeCompare(b.name));
 }
 
+/** YTD for statements: earlier finalized totals (rows) plus this run, by employee key. */
+export function ytdStatementMap(rows: YtdRow[], current: AnalysisResult): Record<string, { gross: number; net: number }> {
+  const out: Record<string, { gross: number; net: number }> = {};
+  for (const r of rows) out[r.key] = { gross: r.gross, net: r.net };
+  for (const c of ytdTotals([current])) {
+    const o = out[c.key] ?? { gross: 0, net: 0 };
+    out[c.key] = { gross: round2(o.gross + c.gross), net: round2(o.net + c.net) };
+  }
+  return out;
+}
+
 const csvCell = (v: unknown) => { const s = String(v ?? ""); return /[",\r\n]/.test(s) || /^[=+\-@]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
 export const toCsv = (rows: (string | number)[][]) => rows.map((r) => r.map(csvCell).join(",")).join("\r\n");
 

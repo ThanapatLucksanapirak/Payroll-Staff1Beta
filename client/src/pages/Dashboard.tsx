@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { useLocation } from "wouter";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { AlertTriangle, ArrowUpDown, CalendarRange, Tablet, CheckCircle2, Copy, FileSpreadsheet, LayoutGrid, List, Loader2, MoreHorizontal, MoveRight, Pencil, Plus, RotateCcw, Search, Trash2, Users } from "lucide-react";
+import { AlertTriangle, ArrowUpDown, CalendarRange, Tablet, Copy, Lock, LockOpen, FileSpreadsheet, LayoutGrid, List, Loader2, MoreHorizontal, MoveRight, Pencil, Plus, RotateCcw, Search, Trash2, Users } from "lucide-react";
 import type { Site, TimesheetSummary } from "@shared/schema";
 import { useApp } from "@/context/AppData";
 import { api, errorMessage, queryClient } from "@/lib/api";
@@ -23,6 +23,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuSub, DropdownMenuSubContent, DropdownMenuSubTrigger, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ToastAction } from "@/components/ui/toast";
+import { ReopenDialog } from "@/components/pay/ReopenDialog";
 
 type Sort = "updated" | "period" | "pay" | "name";
 type View = "grid" | "list";
@@ -40,6 +41,7 @@ export function Dashboard() {
   const [view, setViewState] = useState<View>(() => (safeStorage.get(VIEW_KEY) === "list" ? "list" : "grid"));
   const [renaming, setRenaming] = useState<TimesheetSummary | null>(null);
   const [trashOpen, setTrashOpen] = useState(false);
+  const [reopening, setReopening] = useState<TimesheetSummary | null>(null);
   const setView = (v: View) => { setViewState(v); safeStorage.set(VIEW_KEY, v); };
 
   const list = useQuery<TimesheetSummary[]>({ queryKey: ["/api/timesheets"] });
@@ -97,7 +99,7 @@ export function Dashboard() {
       t={t}
       onRename={() => setRenaming(t)}
       onDuplicate={() => duplicate.mutate(t.id)}
-      onToggleFinal={() => patch.mutate({ id: t.id, body: { status: t.status === "final" ? "draft" : "final" } })}
+      onToggleFinal={() => (t.status === "final" ? setReopening(t) : patch.mutate({ id: t.id, body: { status: "final" } }))}
       onMove={(s) => patch.mutate({ id: t.id, body: { siteId: s.id } }, { onSuccess: () => toast({ title: `Moved to ${s.name}` }) })}
       onDelete={() => remove.mutate(t.id)}
     />
@@ -204,6 +206,7 @@ export function Dashboard() {
       )}
 
       <TrashDialog open={trashOpen} onOpenChange={setTrashOpen} onRestore={(id) => restore.mutate(id)} confirm={confirm} />
+      <ReopenDialog timesheet={reopening ? { id: reopening.id, siteId: reopening.siteId, title: reopening.customLabel || reopening.filename || "Untitled" } : null} onClose={() => setReopening(null)} />
       <RenameDialog item={renaming} onClose={() => setRenaming(null)} onSave={(label) => renaming ? patch.mutateAsync({ id: renaming.id, body: { label } }) : undefined} />
     </Page>
   );
@@ -221,8 +224,10 @@ function TimesheetMenu({ t, onRename, onDuplicate, onToggleFinal, onMove, onDele
       <DropdownMenuContent align="end">
         <DropdownMenuItem onClick={onRename}><Pencil />Rename</DropdownMenuItem>
         <DropdownMenuItem onClick={onDuplicate}><Copy />Duplicate</DropdownMenuItem>
-        <DropdownMenuItem onClick={onToggleFinal}><CheckCircle2 />{t.status === "final" ? "Reopen as draft" : "Mark as final"}</DropdownMenuItem>
-        {app.activeSites.length > 1 && (
+        {t.status === "final"
+          ? <DropdownMenuItem onClick={onToggleFinal} disabled={app.user.role !== "owner"}><LockOpen />{app.user.role === "owner" ? "Reopen…" : "Reopen (owner only)"}</DropdownMenuItem>
+          : <DropdownMenuItem onClick={onToggleFinal}><Lock />Mark as final</DropdownMenuItem>}
+        {app.activeSites.length > 1 && t.status !== "final" && (
           <DropdownMenuSub>
             <DropdownMenuSubTrigger><MoveRight />Move to location</DropdownMenuSubTrigger>
             <DropdownMenuSubContent>
@@ -232,8 +237,8 @@ function TimesheetMenu({ t, onRename, onDuplicate, onToggleFinal, onMove, onDele
             </DropdownMenuSubContent>
           </DropdownMenuSub>
         )}
-        <DropdownMenuSeparator />
-        <DropdownMenuItem className="text-destructive focus:text-destructive [&_svg]:text-current" onClick={onDelete} data-testid={`button-delete-${t.id}`}><Trash2 />Delete</DropdownMenuItem>
+        {t.status !== "final" && <DropdownMenuSeparator />}
+        {t.status !== "final" && <DropdownMenuItem className="text-destructive focus:text-destructive [&_svg]:text-current" onClick={onDelete} data-testid={`button-delete-${t.id}`}><Trash2 />Delete</DropdownMenuItem>}
       </DropdownMenuContent>
     </DropdownMenu>
   );

@@ -23,6 +23,7 @@ const ACTION_LABELS: Record<string, string> = {
   "timesheet.restore": "Restored from Trash", "timesheet.delete": "Deleted forever", "timesheet.empty-trash": "Emptied Trash",
   "settings.update": "Changed preferences", "site.create": "Added location", "site.update": "Changed location", "site.delete": "Deleted location",
   "categories.update": "Changed pay categories", "wages.update": "Saved rates", "square.connect": "Connected Square", "square.disconnect": "Disconnected Square",
+  "pay.settings": "Changed pay extras", "pay.advance.create": "Recorded advance", "pay.advance.update": "Changed advance", "pay.advance.writeoff": "Wrote off advance", "pay.advance.delete": "Deleted advance",
   "database.switch": "Switched database", "backup.export": "Downloaded export", "backup.restore": "Restored backup", "backup.create": "Made server backup", "backup.download": "Downloaded backup",
 };
 
