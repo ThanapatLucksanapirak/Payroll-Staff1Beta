@@ -22,6 +22,8 @@ import { type BackupFile, BACKUP_DIR, listBackups, onBackupWritten } from "./bac
 export const CONFIG_KEY = "offsite:config";
 export const STATUS_KEY = "offsite:status";
 const NAME = /^payroll-\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}(?:-(?:manual|auto|pre-restore))?\.json\.gz$/;
+/** An error with a message meant for the owner (answered as 400 by the routes). */
+const bad = (message: string) => Object.assign(new Error(message), { status: 400 });
 
 // ── Configuration ────────────────────────────────────────────────────────────
 const keepSchema = z.coerce.number().int().min(1).max(365);
@@ -114,16 +116,16 @@ export function sanitizedExport(file: string): Buffer {
 
 // ── Folder ───────────────────────────────────────────────────────────────────
 function checkFolder(dir: string): string {
-  if (!dir) throw new Error("Choose a folder.");
-  if (!path.isAbsolute(dir)) throw new Error("Use a full folder path, starting with /.");
+  if (!dir) throw bad("Choose a folder.");
+  if (!path.isAbsolute(dir)) throw bad("Use a full folder path, starting with /.");
   const resolved = path.resolve(dir);
-  if (resolved === path.parse(resolved).root) throw new Error("Choose a folder, not the whole disk.");
+  if (resolved === path.parse(resolved).root) throw bad("Choose a folder, not the whole disk.");
   const inside = (a: string, b: string) => a === b || a.startsWith(b + path.sep);
-  if (inside(resolved, path.resolve(DATA_DIR)) || inside(resolved, BACKUP_DIR)) throw new Error("Choose a folder outside the app's own data folder.");
+  if (inside(resolved, path.resolve(DATA_DIR)) || inside(resolved, BACKUP_DIR)) throw bad("Choose a folder outside the app's own data folder.");
   let st: fs.Stats;
   // Never create it: if a USB disk isn't mounted, writing to an empty mount point would fill the system disk.
-  try { st = fs.statSync(resolved); } catch { throw new Error("That folder doesn't exist (is the disk or share connected?)."); }
-  if (!st.isDirectory()) throw new Error("That path is not a folder.");
+  try { st = fs.statSync(resolved); } catch { throw bad("That folder doesn't exist (is the disk or share connected?)."); }
+  if (!st.isDirectory()) throw bad("That path is not a folder.");
   return resolved;
 }
 
@@ -145,7 +147,7 @@ export async function testFolder(cfg: OffsiteConfig["folder"]): Promise<string> 
   fs.writeFileSync(probe, text, { mode: 0o600 });
   const back = fs.readFileSync(probe, "utf8");
   fs.unlinkSync(probe);
-  if (back !== text) throw new Error("The folder did not keep what was written.");
+  if (back !== text) throw bad("The folder did not keep what was written.");
   let free = "";
   try {
     const s = fs.statfsSync(dir);
@@ -198,14 +200,14 @@ export function signV4(i: SignInput): Record<string, string> {
 }
 
 function checkS3(cfg: OffsiteConfig["s3"]) {
-  if (!cfg.bucket) throw new Error("Enter the bucket name.");
-  if (!/^[a-z0-9][a-z0-9.\-_]{1,98}[a-z0-9]$/i.test(cfg.bucket)) throw new Error("That bucket name doesn't look right.");
-  if (!cfg.accessKeyId || !cfg.secretAccessKey) throw new Error("Enter the access key ID and secret key.");
-  if (!cfg.region) throw new Error("Enter the region (use \"auto\" for Cloudflare R2).");
+  if (!cfg.bucket) throw bad("Enter the bucket name.");
+  if (!/^[a-z0-9][a-z0-9.\-_]{1,98}[a-z0-9]$/i.test(cfg.bucket)) throw bad("That bucket name doesn't look right.");
+  if (!cfg.accessKeyId || !cfg.secretAccessKey) throw bad("Enter the access key ID and secret key.");
+  if (!cfg.region) throw bad("Enter the region (use \"auto\" for Cloudflare R2).");
   if (cfg.endpoint) {
     let u: URL;
-    try { u = new URL(cfg.endpoint); } catch { throw new Error("The endpoint must be a full address, like https://s3.us-west-004.backblazeb2.com."); }
-    if (u.protocol !== "https:" && !(u.protocol === "http:" && /^(localhost|127\.0\.0\.1|\[::1\])$/.test(u.hostname))) throw new Error("The endpoint must use https://.");
+    try { u = new URL(cfg.endpoint); } catch { throw bad("The endpoint must be a full address, like https://s3.us-west-004.backblazeb2.com."); }
+    if (u.protocol !== "https:" && !(u.protocol === "http:" && /^(localhost|127\.0\.0\.1|\[::1\])$/.test(u.hostname))) throw bad("The endpoint must use https://.");
   }
 }
 
@@ -237,7 +239,7 @@ async function s3Request(cfg: OffsiteConfig["s3"], method: string, key: string |
   if (!res.ok) {
     const code = text.match(/<Code>([^<]+)<\/Code>/)?.[1];
     const msg = text.match(/<Message>([^<]+)<\/Message>/)?.[1];
-    throw new Error(`The storage service answered ${res.status}${code ? ` ${code}` : ""}${msg ? `: ${msg}` : ""}`);
+    throw bad(`The storage service answered ${res.status}${code ? ` ${code}` : ""}${msg ? `: ${msg}` : ""}`);
   }
   return text;
 }

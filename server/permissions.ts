@@ -96,15 +96,16 @@ export function permissionsMiddleware() {
     let perms: Permission[];
     try { perms = await permissionsOf(user); } catch (err) { return next(err); }
     const hidePay = !perms.includes("pay.view");
-    const addUser = WITH_USER.has(req.path);
+    const p = req.path; // req.path changes once the request reaches a route
+    const addUser = WITH_USER.has(p);
     if (!hidePay && !addUser) return next();
     const json = res.json.bind(res);
     res.json = (body: any) => {
       let out = body;
       if (res.statusCode < 400 && out && typeof out === "object") {
-        if (hidePay && !req.path.startsWith("/auth/")) { out = redactMoney(out); res.setHeader("X-Pay-Hidden", "1"); }
+        if (hidePay && !p.startsWith("/auth/")) { out = redactMoney(out); res.setHeader("X-Pay-Hidden", "1"); }
         if (addUser) {
-          if (req.path === "/auth/me") out = { ...out, permissions: perms };
+          if (p === "/auth/me") out = { ...out, permissions: perms };
           else if (out.user && typeof out.user === "object") out = { ...out, user: { ...out.user, permissions: perms } };
         }
       }
