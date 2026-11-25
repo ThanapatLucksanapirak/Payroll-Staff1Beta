@@ -47,6 +47,12 @@ export function RulesEditor({ rules, onChange, disabled, siteLevel }: Props) {
             <SelectContent><SelectItem value="none">Nothing (review manually)</SelectItem><SelectItem value="half">Half-day rate</SelectItem><SelectItem value="full">Full-day rate</SelectItem></SelectContent>
           </Select>
         </Field>
+        <Field label="Default payment method" hint="Used for anyone without their own method (set per person on the Rates tab)">
+          <Select value={rules.defaultPaymentMethod} onValueChange={(v) => set("defaultPaymentMethod", v as any)} disabled={disabled}>
+            <SelectTrigger data-testid="select-default-payment"><SelectValue /></SelectTrigger>
+            <SelectContent><SelectItem value="cash">Cash</SelectItem><SelectItem value="bank">Bank transfer</SelectItem><SelectItem value="check">Check</SelectItem></SelectContent>
+          </Select>
+        </Field>
       </Group>
 
       {rules.classificationMethod === "cutoffs" && (

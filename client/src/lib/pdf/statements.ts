@@ -6,7 +6,7 @@ import { DAY_LABELS } from "@shared/schema";
 import { type Fmt, dayNote, pdfText } from "./format";
 import {
   C, type Ctx, type PdfOptions, basisText, brandHeader, createCtx, daysText, eyebrow, finishPages, fitColumns, fitText, flushEdges, font,
-  hairline, lastY, people, plural, sectionTitle, shrinkToFit, statusCell, tableBase, wrapText,
+  hairline, lastY, paymentText, people, plural, sectionTitle, shrinkToFit, statusCell, tableBase, wrapText,
 } from "./kit";
 
 type Line = { desc: string; detail: string; amount: number | null };
@@ -85,7 +85,7 @@ function statement(ctx: Ctx, e: EmployeeSummary) {
   font(ctx, 9, "normal", C.muted);
   pdf.text(fitText(ctx, basisText(e, fmt), leftW), M, ly);
   ly += 4.4;
-  pdf.text(fitText(ctx, [pdfText(o.site.name), e.isNetPay ? "Net pay" : "Gross pay"].filter(Boolean).join("  ·  "), leftW), M, ly);
+  pdf.text(fitText(ctx, [pdfText(o.site.name), e.isNetPay ? "Net pay" : "Gross pay", paymentText(e, fmt) ? `Paid by ${paymentText(e, fmt)}` : ""].filter(Boolean).join("  ·  "), leftW), M, ly);
 
   const bx = W - M - boxW;
   pdf.setFillColor(...C.accentWash);

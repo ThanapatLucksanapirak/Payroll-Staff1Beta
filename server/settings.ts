@@ -177,8 +177,8 @@ export async function getWageProfile(siteId: string): Promise<EmployeeConfig[]> 
 }
 
 export async function saveWageProfile(siteId: string, entries: EmployeeConfig[]) {
-  const slim = entries.map(({ name, categoryId, payBasis, fullDayRate, halfDayRate, hourlyRate, isNetPay, excluded }) => ({
-    name, categoryId, payBasis, fullDayRate, halfDayRate, hourlyRate, isNetPay, excluded,
+  const slim = entries.map(({ name, categoryId, payBasis, fullDayRate, halfDayRate, hourlyRate, isNetPay, excluded, paymentMethod, splitCashAmount }) => ({
+    name, categoryId, payBasis, fullDayRate, halfDayRate, hourlyRate, isNetPay, excluded, paymentMethod, splitCashAmount,
   }));
   await (await c()).store.setSetting(K.wages(siteId), JSON.stringify(slim));
   return slim.length;

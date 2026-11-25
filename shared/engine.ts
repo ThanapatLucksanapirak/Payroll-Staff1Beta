@@ -3,7 +3,7 @@
 // code when it needs totals. There is no other copy of the pay math.
 import {
   type AnalysisResult, type BonusEntry, type Category, type DayResult, type DayType, type EmployeeConfig,
-  type EmployeeSummary, type ManualEmployee, type PayrollWarning, type Shift, type SiteRules, DEFAULT_RULES,
+  type EmployeeSummary, type ManualEmployee, type PaymentMethod, type PaymentSplit, type PayrollWarning, type Shift, type SiteRules, DEFAULT_RULES,
 } from "./schema";
 import { dayOfWeek, formatTime, isISODate, parseDateToISO, startOfWeek } from "./dates";
 
@@ -107,6 +107,21 @@ function dayRatePay(type: DayType, r: ResolvedRates, rules: SiteRules): number {
   if (type === "half_day") return r.halfDayRate;
   if (type === "flagged") return rules.flaggedDayPay === "full" ? r.fullDayRate : rules.flaggedDayPay === "half" ? r.halfDayRate : 0;
   return 0;
+}
+
+/**
+ * Split a person's total by payment method. "default" uses the pay run's
+ * default. A split pays up to `splitCashAmount` in cash and the rest by bank.
+ * Nothing is paid out for a total of zero or less.
+ */
+export function paymentFor(method: "default" | PaymentMethod | undefined, splitCashAmount: number | undefined, total: number, rules: Pick<SiteRules, "defaultPaymentMethod">): PaymentSplit {
+  const m: PaymentMethod = !method || method === "default" ? rules.defaultPaymentMethod ?? "bank" : method;
+  const t = Math.max(0, round2(total));
+  if (m === "split") {
+    const cash = round2(Math.min(t, Math.max(0, Number(splitCashAmount) || 0)));
+    return { method: m, cash, bank: round2(t - cash), check: 0 };
+  }
+  return { method: m, cash: m === "cash" ? t : 0, bank: m === "bank" ? t : 0, check: m === "check" ? t : 0 };
 }
 
 /** Bonus dates may be legacy M/D/YY strings; normalise to ISO for matching. */
@@ -259,6 +274,7 @@ export function computePayroll(input: ComputeInput): AnalysisResult {
       overtimeHours: round2(sum(live.map((d) => d.overtimeHours))),
       totalBasePay, totalDocked: round2(sum(days.map((d) => d.dockAmount))), totalBonuses, totalDeductions,
       totalPay: round2(totalBasePay + totalBonuses - totalDeductions),
+      payment: paymentFor(cfg?.paymentMethod, cfg?.splitCashAmount, totalBasePay + totalBonuses - totalDeductions, rules),
       fullDayRate: rates.fullDayRate, halfDayRate: rates.halfDayRate, hourlyRate: rates.hourlyRate, isNetPay: rates.isNetPay,
       days, generalBonuses, generalDeductions: deductions, isManual: false, excluded: !!cfg?.excluded,
     });
@@ -301,6 +317,7 @@ export function computePayroll(input: ComputeInput): AnalysisResult {
       fullDays: 0, halfDays: 0, flaggedDays: 0, absentDays: 0, cancelledDays: 0, hoursWorked: 0, overtimeHours: 0,
       totalBasePay: round2(base), totalDocked: 0, totalBonuses, totalDeductions,
       totalPay: round2(base + totalBonuses - totalDeductions),
+      payment: paymentFor(m.paymentMethod, m.splitCashAmount, base + totalBonuses - totalDeductions, rules),
       fullDayRate: 0, halfDayRate: 0, hourlyRate: 0, isNetPay: m.isNetPay, days,
       generalBonuses: gb, generalDeductions: dd, isManual: true, excluded: m.excluded,
     });
@@ -322,6 +339,9 @@ export function computePayroll(input: ComputeInput): AnalysisResult {
       flaggedDays: sum(inc.map((e) => e.flaggedDays)),
       hours: round2(sum(inc.map((e) => e.hoursWorked))),
       overtimeHours: round2(sum(inc.map((e) => e.overtimeHours))),
+      cash: round2(sum(inc.map((e) => e.payment.cash))),
+      bank: round2(sum(inc.map((e) => e.payment.bank))),
+      check: round2(sum(inc.map((e) => e.payment.check))),
     },
   };
 }

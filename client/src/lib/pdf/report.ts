@@ -6,7 +6,7 @@ import { DAY_LABELS, type DayResult, type DayType, type EmployeeSummary } from "
 import { dayNote, pdfText } from "./format";
 import {
   C, type Ctx, type PdfOptions, basisText, brandHeader, createCtx, finishPages, fitText, flushEdges, font, hero, lastY, newPage,
-  fitColumns, notesBlock, people, sectionTitle, statusCell, summaryTable, tableBase, totalsOf, workedText, wrapText,
+  fitColumns, notesBlock, paymentText, payoutLine, people, sectionTitle, statusCell, summaryTable, tableBase, totalsOf, workedText, wrapText,
 } from "./kit";
 
 export function buildPayrollPdf(o: PdfOptions): jsPDF {
@@ -23,6 +23,15 @@ export function buildPayrollPdf(o: PdfOptions): jsPDF {
     ctx.pdf.text("No employees to report for this period.", ctx.M, y + 8);
   } else {
     summaryTable(ctx, list, y + 1, t);
+    const line = payoutLine(list, ctx.fmt);
+    const fy = lastY(ctx, y);
+    if (line && fy + 8 < ctx.bottom) {
+      font(ctx, 8, "bold", C.ink);
+      ctx.pdf.text("Pay out", ctx.M, fy + 6);
+      font(ctx, 8, "normal", C.body);
+      ctx.pdf.text(fitText(ctx, line, ctx.W - 2 * ctx.M - 18), ctx.M + 14, fy + 6);
+      (ctx.pdf as any).lastAutoTable.finalY = fy + 6;
+    }
   }
   markContinuation(ctx, 2, "Summary");
 
@@ -78,7 +87,8 @@ function employeeBlock(ctx: Ctx, e: EmployeeSummary, y: number) {
   y += (nameLines.length - 1) * 5.4 + 5;
   font(ctx, 8.5, "normal", C.muted);
   const rates = e.isManual ? basisText(e, fmt) : [basisText(e, fmt), workedText(e, fmt)].filter((s) => s && s !== "—").join("  ·  ");
-  pdf.text(fitText(ctx, `${rates}  ·  ${e.isNetPay ? "Net pay" : "Gross pay"}`, W - 2 * M - totalW - 10), M, y);
+  const paid = paymentText(e, fmt);
+  pdf.text(fitText(ctx, `${rates}  ·  ${e.isNetPay ? "Net pay" : "Gross pay"}${paid ? `  ·  Paid by ${paid.charAt(0).toLowerCase()}${paid.slice(1)}` : ""}`, W - 2 * M - totalW - 10), M, y);
   y += 3.5;
 
   const showTimes = o.prefs.pdfShowShiftTimes && !e.isManual;

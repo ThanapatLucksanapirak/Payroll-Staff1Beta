@@ -1,3 +1,4 @@
+import { PAYMENT_LABELS } from "@shared/schema";
 import { useMemo, useState } from "react";
 import { AlertTriangle, ChevronDown, ChevronRight, FileText, Info, Plus, Search, Trash2, Users } from "lucide-react";
 import { DAY_LABELS, type BonusEntry, type DayResult, type DeductionEntry, type EmployeeSummary } from "@shared/schema";
@@ -41,6 +42,8 @@ export function PayrollTab(p: WsProps) {
         <Kpi label="Hours" value={String(t.hours)} sub={`${t.overtimeHours ? `${t.overtimeHours} OT · ` : ""}Bonuses ${app.money(t.bonuses)}`} />
       </div>
 
+      <PayoutStrip cash={t.cash} bank={t.bank} check={t.check} people={result.employees.filter((e) => !e.excluded)} />
+
       {result.warnings.length > 0 && (
         <div className={cn("overflow-hidden rounded-xl", warns.length ? "bg-warning-soft" : "border border-card-border bg-card shadow-card")}>
           <button className="flex w-full items-center gap-2 px-4 py-3 text-left text-[13px] focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-inset focus-visible:ring-ring/35" onClick={() => setShowWarnings(!showWarnings)} aria-expanded={showWarnings} data-testid="button-warnings">
@@ -73,6 +76,31 @@ export function PayrollTab(p: WsProps) {
           {list.map((e) => <EmployeeCard key={e.sourceId} {...p} emp={e} open={!!open[e.sourceId]} onToggle={() => setOpen({ ...open, [e.sourceId]: !open[e.sourceId] })} />)}
         </div>
       )}
+    </div>
+  );
+}
+
+function paymentLabel(p: EmployeeSummary["payment"], money: (n: number) => string) {
+  if (p.method === "split") return `${money(p.cash)} cash + ${money(p.bank)} bank`;
+  return PAYMENT_LABELS[p.method];
+}
+
+/** How the run is paid out: cash / bank / check totals, with counts. Only shown when it adds information. */
+function PayoutStrip({ cash, bank, check, people }: { cash: number; bank: number; check: number; people: EmployeeSummary[] }) {
+  const app = useApp();
+  const count = (k: "cash" | "bank" | "check") => people.filter((e) => e.payment[k] > 0).length;
+  const parts = ([["cash", "Cash", cash], ["bank", "Bank transfer", bank], ["check", "Check", check]] as const).filter(([, , v]) => v > 0);
+  if (!parts.length) return null;
+  return (
+    <div className="flex flex-wrap items-center gap-x-6 gap-y-2 rounded-xl border border-card-border bg-card px-4 py-3 shadow-card" data-testid="strip-payout">
+      <span className="text-[13px] font-medium text-muted-foreground">Pay out</span>
+      {parts.map(([k, label, v]) => (
+        <span key={k} className="text-[13px]" data-testid={`payout-${k}`}>
+          <span className="text-muted-foreground">{label}</span>{" "}
+          <span className="font-semibold tabular">{app.money(v)}</span>{" "}
+          <span className="text-xs text-muted-foreground">({count(k)} {count(k) === 1 ? "person" : "people"})</span>
+        </span>
+      ))}
     </div>
   );
 }
@@ -143,6 +171,7 @@ function EmployeeCard(p: WsProps & { emp: EmployeeSummary; open: boolean; onTogg
         </button>
         {noRate && !emp.excluded && <Badge variant="warning" className="hidden sm:inline-flex">No rate</Badge>}
         <Badge variant="secondary" className="hidden sm:inline-flex">{emp.isNetPay ? "Net" : "Gross"}</Badge>
+        {!emp.excluded && <Badge variant="outline" className="hidden md:inline-flex" data-testid={`badge-payment-${emp.sourceId}`}>{paymentLabel(emp.payment, app.money)}</Badge>}
         <p className="w-24 text-right text-[15px] font-semibold tabular" data-testid={`text-total-${employeeKey(emp.name)}`}>{app.money(emp.totalPay)}</p>
       </div>
 

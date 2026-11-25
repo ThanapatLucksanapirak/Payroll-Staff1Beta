@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "wouter";
-import { AlertTriangle, Check, ChevronLeft, Circle, CloudOff, Download, FileDown, FileSpreadsheet, FileText, Files, Loader2, Lock, Redo2, RefreshCw, Save, Table2, Undo2 } from "lucide-react";
+import { AlertTriangle, Banknote, Check, ChevronLeft, Circle, CloudOff, Download, FileDown, FileSpreadsheet, FileText, Files, Loader2, Lock, Redo2, RefreshCw, Save, Table2, Undo2 } from "lucide-react";
 import { computePayroll } from "@shared/engine";
 import { useApp } from "@/context/AppData";
 import { useTimesheet, type SaveState } from "@/hooks/useTimesheet";
@@ -59,12 +59,13 @@ export function WorkspacePage({ id }: { id: string }) {
   const periodTitle = result.periodStart ? `${app.date(result.periodStart)} – ${app.date(result.periodEnd)}` : "No dates yet";
   const props = { doc, result, site, locked, edit: ts.edit };
 
-  const exportPdf = async (kind: "report" | "summary" | "statements" = "report") => {
+  const exportPdf = async (kind: "report" | "summary" | "statements" | "payout" = "report") => {
     try {
       const pdf = await import("@/lib/pdf");
       const o = { result, prefs: app.prefs, site, title: doc.label || `Payroll ${periodTitle}`, notes: doc.notes };
       if (kind === "summary") pdf.downloadSummaryPdf({ ...o, fileBase: `${base}_summary` });
       else if (kind === "statements") pdf.downloadPayStatementsPdf({ ...o, fileBase: `${base}_pay_statements` });
+      else if (kind === "payout") pdf.downloadPayoutSheetPdf({ ...o, fileBase: `${base}_payout` });
       else pdf.downloadPayrollPdf({ ...o, fileBase: `${base}_payroll` });
     } catch (e) { toast({ title: "PDF export failed", description: errorMessage(e), variant: "destructive" }); }
   };
@@ -100,6 +101,7 @@ export function WorkspacePage({ id }: { id: string }) {
                 <DropdownMenuItem onClick={() => exportPdf("report")} data-testid="button-export-pdf"><FileDown />Full report (PDF)</DropdownMenuItem>
                 <DropdownMenuItem onClick={() => exportPdf("summary")} data-testid="button-export-summary-pdf"><FileText />Manager summary (PDF)</DropdownMenuItem>
                 <DropdownMenuItem onClick={() => exportPdf("statements")} data-testid="button-export-statements-pdf"><Files />Pay statements (PDF)</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => exportPdf("payout")} data-testid="button-export-payout-pdf"><Banknote />Pay-out sheet (PDF)</DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={async () => downloadBlob((await import("@/lib/pdf")).payrollSummaryCsv(result), `${base}_summary.csv`, "text/csv")} data-testid="button-export-csv"><FileSpreadsheet />Summary CSV</DropdownMenuItem>
                 <DropdownMenuItem onClick={() => downloadBlob(shiftsToCsv(doc.shifts), `${base}_shifts.csv`, "text/csv")} data-testid="button-export-shifts"><Table2 />Shifts CSV (re-importable)</DropdownMenuItem>

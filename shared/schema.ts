@@ -13,6 +13,24 @@ export const DAY_LABELS: Record<DayType, string> = {
 };
 
 const money = z.coerce.number().finite().catch(0);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// How people are paid
+// ─────────────────────────────────────────────────────────────────────────────
+export const PAYMENT_METHODS = ["cash", "bank", "check", "split"] as const;
+export type PaymentMethod = (typeof PAYMENT_METHODS)[number];
+/** Single methods that can be a default (a split needs a per-person cash amount). */
+export const DEFAULT_PAYMENT_METHODS = ["cash", "bank", "check"] as const;
+export type DefaultPaymentMethod = (typeof DEFAULT_PAYMENT_METHODS)[number];
+export const PAYMENT_LABELS: Record<PaymentMethod, string> = {
+  cash: "Cash",
+  bank: "Bank transfer",
+  check: "Check",
+  split: "Cash + bank",
+};
+/** Per-person choice; "default" follows the pay run's default method. */
+const employeePaymentMethod = z.enum(["default", ...PAYMENT_METHODS]).catch("default").default("default");
+export interface PaymentSplit { method: PaymentMethod; cash: number; bank: number; check: number }
 const nonNegMoney = z.coerce.number().finite().min(0).catch(0);
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -46,6 +64,8 @@ export const siteRulesSchema = z.object({
   payPeriod: z.enum(["weekly", "biweekly", "semimonthly", "monthly"]).default("biweekly"),
   payPeriodAnchor: z.string().default(""),
   longShiftWarningHours: z.number().min(0).max(48).default(14),
+  /** Default payment method for this location's pay runs (each timesheet keeps its own copy of these rules). */
+  defaultPaymentMethod: z.enum(DEFAULT_PAYMENT_METHODS).catch("bank").default("bank"),
 });
 export type SiteRules = z.infer<typeof siteRulesSchema>;
 export const DEFAULT_RULES: SiteRules = siteRulesSchema.parse({});
@@ -177,6 +197,9 @@ export const employeeConfigSchema = z.object({
   deductions: z.array(deductionSchema).default([]),
   excluded: z.boolean().default(false),
   note: z.string().default(""),
+  paymentMethod: employeePaymentMethod,
+  /** For "split": this much is paid in cash, the rest by bank transfer. */
+  splitCashAmount: nonNegMoney.default(0),
 });
 export type EmployeeConfig = z.infer<typeof employeeConfigSchema>;
 
@@ -196,6 +219,8 @@ export const manualEmployeeSchema = z.object({
   deductions: z.array(deductionSchema).default([]),
   excluded: z.boolean().default(false),
   categoryId: z.string().default("custom"),
+  paymentMethod: employeePaymentMethod,
+  splitCashAmount: nonNegMoney.default(0),
 });
 export type ManualEmployee = z.infer<typeof manualEmployeeSchema>;
 
@@ -284,6 +309,8 @@ export interface EmployeeSummary {
   generalDeductions: DeductionEntry[];
   isManual: boolean;
   excluded: boolean;
+  /** How this person's total is paid out. */
+  payment: PaymentSplit;
 }
 
 export interface PayrollWarning {
@@ -311,6 +338,10 @@ export interface AnalysisResult {
     flaggedDays: number;
     hours: number;
     overtimeHours: number;
+    /** Included employees' pay by payment method. */
+    cash: number;
+    bank: number;
+    check: number;
   };
 }
 

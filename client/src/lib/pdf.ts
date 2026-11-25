@@ -1,14 +1,15 @@
 // PDF + CSV exports. The builders in ./pdf/* are pure (they run in Node for
 // tests); this module adds the browser download wrappers.
-import type { AnalysisResult } from "@shared/schema";
+import { PAYMENT_LABELS, type AnalysisResult } from "@shared/schema";
 import { downloadBlob, safeFilename } from "./doc";
 import type { PdfOptions } from "./pdf/kit";
 import { buildPayrollPdf } from "./pdf/report";
 import { buildPayStatementsPdf } from "./pdf/statements";
 import { buildSummaryPdf } from "./pdf/summary";
+import { buildPayoutSheetPdf } from "./pdf/payout";
 
 export type { PdfOptions } from "./pdf/kit";
-export { buildPayrollPdf, buildPayStatementsPdf, buildSummaryPdf };
+export { buildPayrollPdf, buildPayStatementsPdf, buildSummaryPdf, buildPayoutSheetPdf };
 
 type DownloadOptions = PdfOptions & { fileBase?: string };
 
@@ -31,12 +32,17 @@ export function downloadPayStatementsPdf(o: DownloadOptions) {
   save(buildPayStatementsPdf(o), o.fileBase || `${o.title} pay statements`);
 }
 
+/** Pay-out sheet: cash (with signature lines), bank transfers and checks. */
+export function downloadPayoutSheetPdf(o: DownloadOptions) {
+  save(buildPayoutSheetPdf(o), o.fileBase || `${o.title} payout`);
+}
+
 /** Summary CSV (one row per employee) — opens cleanly in Excel / Sheets. */
 export function payrollSummaryCsv(result: AnalysisResult): string {
   const esc = (v: unknown) => { const s = String(v ?? ""); return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
-  const rows = [["Employee", "Category", "Pay basis", "Full days", "Half days", "Flagged days", "Hours", "Overtime hours", "Base pay", "Docked", "Bonuses", "Deductions", "Total pay", "Net/Gross", "Included"]];
+  const rows = [["Employee", "Category", "Pay basis", "Full days", "Half days", "Flagged days", "Hours", "Overtime hours", "Base pay", "Docked", "Bonuses", "Deductions", "Total pay", "Net/Gross", "Paid by", "Cash", "Bank transfer", "Check", "Included"]];
   for (const e of result.employees) {
-    rows.push([e.name, e.isManual ? "Manual" : e.categoryName ?? "Custom", e.payBasis, e.fullDays, e.halfDays, e.flaggedDays, e.hoursWorked, e.overtimeHours, e.totalBasePay, e.totalDocked, e.totalBonuses, e.totalDeductions, e.totalPay, e.isNetPay ? "Net" : "Gross", e.excluded ? "No" : "Yes"].map(String));
+    rows.push([e.name, e.isManual ? "Manual" : e.categoryName ?? "Custom", e.payBasis, e.fullDays, e.halfDays, e.flaggedDays, e.hoursWorked, e.overtimeHours, e.totalBasePay, e.totalDocked, e.totalBonuses, e.totalDeductions, e.totalPay, e.isNetPay ? "Net" : "Gross", PAYMENT_LABELS[e.payment.method], e.payment.cash, e.payment.bank, e.payment.check, e.excluded ? "No" : "Yes"].map(String));
   }
   return rows.map((r) => r.map(esc).join(",")).join("\r\n");
 }

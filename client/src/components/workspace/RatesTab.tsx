@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Download, Loader2, Plus, Save, Trash2, Users } from "lucide-react";
-import type { EmployeeConfig, ManualEmployee } from "@shared/schema";
+import { PAYMENT_LABELS, type EmployeeConfig, type ManualEmployee, type PaymentMethod } from "@shared/schema";
 import { employeeKey, shiftEmployeeNames } from "@shared/engine";
 import { useApp } from "@/context/AppData";
 import { api, errorMessage } from "@/lib/api";
@@ -16,6 +16,32 @@ import { EmptyState } from "@/components/ui/empty-state";
 import type { WsProps } from "./types";
 
 const CUSTOM = "custom";
+
+/** "Paid by" picker: Default (follows the pay run), Cash, Bank, Check, or Cash + bank with a cash amount. */
+export function PaymentPicker({ method, cash, defaultMethod, disabled, onChange, testid }: {
+  method: "default" | PaymentMethod; cash: number; defaultMethod: PaymentMethod; disabled?: boolean;
+  onChange: (patch: { paymentMethod?: "default" | PaymentMethod; splitCashAmount?: number }, key?: string) => void; testid: string;
+}) {
+  const app = useApp();
+  return (
+    <div className="flex items-center gap-2">
+      <Select value={method} onValueChange={(v) => onChange({ paymentMethod: v as any })} disabled={disabled}>
+        <SelectTrigger className="h-8 w-[9.5rem]" data-testid={`select-payment-${testid}`}><SelectValue /></SelectTrigger>
+        <SelectContent>
+          <SelectItem value="default">Default ({PAYMENT_LABELS[defaultMethod]})</SelectItem>
+          <SelectItem value="cash">Cash</SelectItem>
+          <SelectItem value="bank">Bank transfer</SelectItem>
+          <SelectItem value="check">Check</SelectItem>
+          <SelectItem value="split">Cash + bank</SelectItem>
+        </SelectContent>
+      </Select>
+      {method === "split" && (
+        <NumberInput className="h-8 w-28" prefix={app.prefs.currencySymbol} value={cash} disabled={disabled} aria-label="Cash amount" title="Paid in cash; the rest goes by bank transfer"
+          onChange={(n) => onChange({ splitCashAmount: Math.max(0, n) }, `split:${testid}`)} data-testid={`input-split-cash-${testid}`} />
+      )}
+    </div>
+  );
+}
 
 export function RatesTab(p: WsProps) {
   const app = useApp();
@@ -70,12 +96,12 @@ export function RatesTab(p: WsProps) {
       >
         {rows.length === 0 ? <EmptyState compact icon={Users} title="No employees with shifts yet" description="Rates appear here once the timesheet has shifts. Add them on the Shifts tab." /> : (
           <div className="overflow-x-auto -mx-5 px-5">
-            <table className="w-full text-sm min-w-[46rem]">
+            <table className="w-full text-sm min-w-[58rem]">
               <thead>
                 <tr className="text-left text-xs text-muted-foreground">
                   <th className="sticky left-0 z-10 bg-card pb-2 font-medium">Employee</th><th className="pb-2 font-medium">Category</th><th className="pb-2 font-medium">Pay basis</th>
                   <th className="pb-2 font-medium">Full day</th><th className="pb-2 font-medium">Half day</th><th className="pb-2 font-medium">Hourly</th>
-                  <th className="pb-2 font-medium text-center">Net</th><th className="pb-2 font-medium text-center">Include</th>
+                  <th className="pb-2 font-medium text-center">Net</th><th className="pb-2 font-medium">Paid by</th><th className="pb-2 font-medium text-center">Include</th>
                 </tr>
               </thead>
               <tbody>
@@ -105,6 +131,7 @@ export function RatesTab(p: WsProps) {
                       <td className="py-2 pr-2 w-28"><NumberInput className="h-8" prefix={app.prefs.currencySymbol} value={cat ? cat.halfDayRate : e.halfDayRate} disabled={locked || !!cat || basis === "hourly"} onChange={(n) => setEmp(e.name, { halfDayRate: n }, `half:${k}`)} data-testid={`input-half-${k}`} /></td>
                       <td className="py-2 pr-2 w-28"><NumberInput className="h-8" prefix={app.prefs.currencySymbol} value={cat ? cat.hourlyRate : e.hourlyRate} disabled={locked || !!cat || basis !== "hourly"} onChange={(n) => setEmp(e.name, { hourlyRate: n }, `hourly:${k}`)} data-testid={`input-hourly-${k}`} /></td>
                       <td className="py-2 text-center"><Switch checked={e.isNetPay} disabled={locked} onCheckedChange={(v) => setEmp(e.name, { isNetPay: v })} aria-label="Net pay" /></td>
+                      <td className="py-2 pr-2"><PaymentPicker method={e.paymentMethod} cash={e.splitCashAmount} defaultMethod={doc.rules.defaultPaymentMethod} disabled={locked} testid={k} onChange={(patch, key) => setEmp(e.name, patch, key)} /></td>
                       <td className="py-2 text-center"><Switch checked={!e.excluded} disabled={locked} onCheckedChange={(v) => setEmp(e.name, { excluded: !v })} aria-label="Include in totals" /></td>
                     </tr>
                   );
@@ -122,7 +149,7 @@ export function RatesTab(p: WsProps) {
       >
         {doc.manualEmployees.length === 0 ? <p className="rounded-lg border border-dashed border-border px-4 py-6 text-center text-[13px] text-muted-foreground">No manual employees. Use <b className="font-medium text-foreground">Add person</b> for anyone paid outside of timecards.</p> : (
           <div className="space-y-3">
-            {doc.manualEmployees.map((m) => <ManualRow key={m.id} m={m} locked={locked} onChange={(fn, key) => edit((d) => updateManual(d, m.id, fn), key)} onRemove={() => edit((d) => ({ ...d, manualEmployees: d.manualEmployees.filter((x) => x.id !== m.id) }))} />)}
+            {doc.manualEmployees.map((m) => <ManualRow key={m.id} m={m} locked={locked} defaultMethod={doc.rules.defaultPaymentMethod} onChange={(fn, key) => edit((d) => updateManual(d, m.id, fn), key)} onRemove={() => edit((d) => ({ ...d, manualEmployees: d.manualEmployees.filter((x) => x.id !== m.id) }))} />)}
           </div>
         )}
       </Section>
@@ -130,7 +157,7 @@ export function RatesTab(p: WsProps) {
   );
 }
 
-function ManualRow({ m, locked, onChange, onRemove }: { m: ManualEmployee; locked: boolean; onChange: (fn: (m: ManualEmployee) => ManualEmployee, key?: string) => void; onRemove: () => void }) {
+function ManualRow({ m, locked, defaultMethod, onChange, onRemove }: { m: ManualEmployee; locked: boolean; defaultMethod: PaymentMethod; onChange: (fn: (m: ManualEmployee) => ManualEmployee, key?: string) => void; onRemove: () => void }) {
   const app = useApp();
   const total = m.payMode === "lump_sum" ? m.lumpSum : m.payDates.reduce((s, d) => s + d.amount, 0);
   return (
@@ -161,6 +188,7 @@ function ManualRow({ m, locked, onChange, onRemove }: { m: ManualEmployee; locke
           {!locked && <Button variant="outline" size="sm" onClick={() => onChange((x) => ({ ...x, payDates: [...x.payDates, { date: "", amount: 0, note: "" }] }))}><Plus /> Add date</Button>}
         </div>
       )}
+      <Field label="Paid by"><PaymentPicker method={m.paymentMethod} cash={m.splitCashAmount} defaultMethod={defaultMethod} disabled={locked} testid={`manual-${m.id}`} onChange={(patch, key) => onChange((x) => ({ ...x, ...patch }), key)} /></Field>
       <p className="text-xs text-muted-foreground">Base {app.money(total)} · bonuses and deductions can be added on the Payroll tab.</p>
     </div>
   );

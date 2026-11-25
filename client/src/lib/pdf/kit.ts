@@ -435,6 +435,26 @@ export function workedText(e: EmployeeSummary, fmt: Fmt): string {
   return daysText(e.fullDays, e.halfDays, e.flaggedDays) || "—";
 }
 
+const PAY_SHORT = { cash: "Cash", bank: "Bank", check: "Check", split: "Cash+bank" } as const;
+
+/** "Cash", "Bank transfer", or "Cash $200.00 + bank $350.00" for a split. */
+export function paymentText(e: EmployeeSummary, fmt: Ctx["fmt"]): string {
+  const p = e.payment;
+  if (!p) return "";
+  if (p.method === "split") return `Cash ${fmt.money(p.cash)} + bank ${fmt.money(p.bank)}`;
+  return p.method === "bank" ? "Bank transfer" : p.method === "check" ? "Check" : "Cash";
+}
+
+/** One line with the run's pay-out totals by method (empty when nothing is paid). */
+export function payoutLine(list: EmployeeSummary[], fmt: Ctx["fmt"]): string {
+  const sum = (k: "cash" | "bank" | "check") => list.reduce((s, e) => s + (e.payment?.[k] ?? 0), 0);
+  const count = (k: "cash" | "bank" | "check") => list.filter((e) => (e.payment?.[k] ?? 0) > 0).length;
+  return ([["cash", "Cash"], ["bank", "Bank transfer"], ["check", "Check"]] as const)
+    .filter(([k]) => sum(k) > 0)
+    .map(([k, label]) => `${label} ${fmt.money(sum(k))} (${plural(count(k), "person", "people")})`)
+    .join("   ·   ");
+}
+
 export interface SummaryTableOpts { fs?: number; padY?: number; singleLine?: boolean; showBasis?: boolean; extraRow?: RowInput }
 
 export function summaryTable(ctx: Ctx, list: EmployeeSummary[], startY: number, t: Totals, opts: SummaryTableOpts = {}) {
@@ -444,7 +464,7 @@ export function summaryTable(ctx: Ctx, list: EmployeeSummary[], startY: number, 
   const adj = (e: EmployeeSummary) => e.totalBonuses - e.totalDeductions - e.totalDocked;
   const body: RowInput[] = list.map((e) => [
     pdfText(e.name), basisText(e, fmt), workedText(e, fmt), fmt.money(e.totalBasePay + e.totalDocked),
-    fmt.signed(adj(e)) || "—", fmt.money(e.totalPay), e.isNetPay ? "Net" : "Gross",
+    fmt.signed(adj(e)) || "—", fmt.money(e.totalPay), `${e.isNetPay ? "Net" : "Gross"}${e.payment ? ` · ${PAY_SHORT[e.payment.method]}` : ""}`,
   ]);
   if (opts.extraRow) body.push(opts.extraRow);
   const workedTotal = [daysText(t.full, t.half, t.flagged), t.hrs ? `${fmt.hours(t.hrs)} h` : ""].filter(Boolean).join(" · ") || "—";
@@ -459,7 +479,7 @@ export function summaryTable(ctx: Ctx, list: EmployeeSummary[], startY: number, 
     3: { halign: "right", cellWidth: "wrap" },
     4: { halign: "right", cellWidth: "wrap" },
     5: { halign: "right", cellWidth: "wrap", fontStyle: "bold", textColor: C.ink },
-    6: { halign: "right", cellWidth: 11, textColor: C.muted, fontSize: fs - 1 },
+    6: { halign: "right", cellWidth: 24, textColor: C.muted, fontSize: fs - 1 },
   };
   if (widths) for (const [i, w] of Object.entries(widths)) columnStyles[+i] = { ...columnStyles[+i], cellWidth: w };
   autoTable(ctx.pdf, {
