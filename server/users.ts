@@ -154,8 +154,10 @@ export async function findUserByName(username: string) {
 }
 
 /** True until the first account exists (or a legacy password can be migrated). */
+/** Always re-reads the database: an owner may have just been created by the CLI in another process. */
 export async function setupRequired(): Promise<boolean> {
-  return (await listUsers()).length === 0;
+  const users = await listUsers({ fresh: true }).catch(() => listUsers());
+  return users.length === 0;
 }
 
 /** Change the accounts under the lock. `fn` may mutate the array it is given and returns a result. */
