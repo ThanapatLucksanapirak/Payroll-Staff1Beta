@@ -43,6 +43,11 @@ const fromRowAndBody = (pick: (body: any) => unknown): SiteResolver => async (re
 };
 const fromParam: SiteResolver = async (req) => [decodeURIComponent(req.path.split("/")[2] ?? "")];
 
+const punchSite: SiteResolver = async (req) => {
+  const p = await (await db()).getPunch(decodeURIComponent(req.path.split("/")[2] ?? ""));
+  return [p?.siteId ?? undefined];
+};
+
 const POLICY: Rule[] = [
   // Own account
   { method: "POST", path: /^\/auth\/(logout-all|change-password)$/, need: "user" },
@@ -63,6 +68,14 @@ const POLICY: Rule[] = [
   // Saved wage profiles (used from the timesheet editor)
   { method: "GET", path: /^\/sites\/[^/]+\/wages$/, need: "user", sites: fromParam },
   { method: "PUT", path: /^\/sites\/[^/]+\/wages$/, need: "editor", sites: fromParam },
+  // Time clock: everyone signed in can watch Live for their locations; editors fix punches
+  // and build timesheets from them. Employees and kiosk devices stay owner/admin.
+  { method: "POST", path: /^\/live\/ticket$/, need: "user" },
+  { method: "GET", path: /^\/sites\/[^/]+\/(timeclock|punches|punches\/shifts)$/, need: "user", sites: fromParam },
+  { method: "GET", path: /^\/sites\/[^/]+\/employees$/, need: "user", sites: fromParam },
+  { method: "POST", path: /^\/sites\/[^/]+\/punches$/, need: "editor", sites: fromParam },
+  { method: "PATCH", path: /^\/punches\/[^/]+$/, need: "editor", sites: punchSite },
+  { method: "DELETE", path: /^\/punches\/[^/]+$/, need: "editor", sites: punchSite },
 ];
 
 const MESSAGES: Record<Need, string> = {

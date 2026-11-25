@@ -15,8 +15,8 @@ const NAME = /^payroll-(\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2})(?:-(manual|auto|pre
 
 export interface BackupFile { name: string; size: number; createdAt: string; kind: "export" | "database"; reason: string }
 
-export function exportPayload(settings: { key: string; value: string }[], timesheets: unknown[]) {
-  return { app: "payroll-admin", version: 2, exportedAt: new Date().toISOString(), settings, timesheets };
+export function exportPayload(settings: { key: string; value: string }[], timesheets: unknown[], punches: unknown[] = []) {
+  return { app: "payroll-admin", version: 2, exportedAt: new Date().toISOString(), settings, timesheets, punches };
 }
 
 let running: Promise<BackupFile[]> | null = null;
@@ -29,7 +29,7 @@ export function runBackup(reason: "auto" | "manual" | "pre-restore" = "manual"):
     fs.mkdirSync(BACKUP_DIR, { recursive: true });
     const stamp = new Date().toISOString().slice(0, 19).replace(/:/g, "-");
     const base = path.join(BACKUP_DIR, `payroll-${stamp}-${reason}`);
-    const payload = exportPayload(await store.allSettings(), await store.allTimesheets());
+    const payload = exportPayload(await store.allSettings(), await store.allTimesheets(), await store.allPunches().catch(() => []));
     const tmp = `${base}.json.gz.tmp`;
     fs.writeFileSync(tmp, gzipSync(JSON.stringify(payload)), { mode: 0o600 });
     fs.renameSync(tmp, `${base}.json.gz`);

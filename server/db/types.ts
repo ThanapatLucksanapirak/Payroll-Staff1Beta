@@ -1,4 +1,5 @@
 import type { DatabaseHealth, TimesheetSummary } from "@shared/schema";
+import type { Punch, PunchEdit } from "@shared/punches";
 
 /** A row of the `recent_uploads` table (legacy name kept for compatibility). */
 export interface TimesheetRow {
@@ -21,6 +22,44 @@ export interface TimesheetRow {
 
 export type TimesheetWrite = Omit<TimesheetRow, "id" | "created_at" | "updated_at"> & { id?: string; created_at?: string };
 
+/** Filter for time-clock punches. `from` is inclusive and `to` exclusive (UTC ISO). */
+export interface PunchQuery { siteId?: string; employeeId?: string; from?: string; to?: string; limit?: number }
+export type PunchPatch = Partial<Pick<Punch, "type" | "at" | "note" | "editedAt" | "edits" | "employeeName">>;
+
+/** A row of the `punches` table. */
+export interface PunchRow {
+  id: string; site_id: string; employee_id: string; employee_name: string; type: string; at: string; source: string;
+  device_id: string | null; note: string | null; created_at: string; edited_at: string | null; meta_json: any;
+}
+
+export function punchToRow(p: Punch): PunchRow {
+  return {
+    id: p.id, site_id: p.siteId, employee_id: p.employeeId, employee_name: p.employeeName, type: p.type, at: p.at, source: p.source,
+    device_id: p.deviceId, note: p.note || null, created_at: p.createdAt, edited_at: p.editedAt, meta_json: { edits: p.edits ?? [] },
+  };
+}
+
+const isoOf = (v: any) => (v ? new Date(v).toISOString() : null);
+export function rowToPunch(r: any): Punch {
+  const meta = typeof r.meta_json === "string" ? (() => { try { return JSON.parse(r.meta_json); } catch { return null; } })() : r.meta_json;
+  return {
+    id: String(r.id), siteId: r.site_id, employeeId: r.employee_id, employeeName: r.employee_name, type: r.type, at: isoOf(r.at)!,
+    source: r.source === "admin" ? "admin" : "kiosk", deviceId: r.device_id ?? null, note: r.note ?? "", createdAt: isoOf(r.created_at)!,
+    editedAt: isoOf(r.edited_at), edits: Array.isArray(meta?.edits) ? (meta.edits as PunchEdit[]) : [],
+  };
+}
+
+export function patchToRow(patch: PunchPatch): Partial<PunchRow> {
+  const out: Partial<PunchRow> = {};
+  if (patch.type !== undefined) out.type = patch.type;
+  if (patch.at !== undefined) out.at = patch.at;
+  if (patch.note !== undefined) out.note = patch.note || null;
+  if (patch.editedAt !== undefined) out.edited_at = patch.editedAt;
+  if (patch.employeeName !== undefined) out.employee_name = patch.employeeName;
+  if (patch.edits !== undefined) out.meta_json = { edits: patch.edits };
+  return out;
+}
+
 export interface DataStore {
   readonly kind: "sqlite" | "supabase";
   readonly label: string;
@@ -41,6 +80,13 @@ export interface DataStore {
    * written or nothing is (used by restore and database copy).
    */
   importAll(data: { settings: { key: string; value: string }[]; timesheets: TimesheetWrite[] }): Promise<{ settings: number; timesheets: number }>;
+  // Time-clock punches (kiosk). Inserting an id that already exists changes nothing.
+  listPunches(q: PunchQuery): Promise<Punch[]>;
+  getPunch(id: string): Promise<Punch | null>;
+  insertPunch(p: Punch): Promise<{ punch: Punch; created: boolean }>;
+  updatePunch(id: string, patch: PunchPatch): Promise<Punch | null>;
+  deletePunch(id: string): Promise<boolean>;
+  allPunches(): Promise<Punch[]>;
   /** Write a consistent snapshot of the database to a file, if the store supports it. */
   snapshotTo?(file: string): Promise<void>;
   health(): Promise<DatabaseHealth>;
@@ -83,9 +129,28 @@ alter table public.recent_uploads add column if not exists site_id text;
 alter table public.recent_uploads add column if not exists meta_json jsonb;
 create index if not exists recent_uploads_site_idx on public.recent_uploads (site_id, updated_at desc);
 
+-- Time clock (kiosk) punches, added in v3
+create table if not exists public.punches (
+  id text primary key,
+  site_id text not null,
+  employee_id text not null,
+  employee_name text not null,
+  type text not null check (type in ('in', 'break_start', 'break_end', 'out')),
+  at timestamptz not null,
+  source text not null default 'kiosk',
+  device_id text,
+  note text,
+  created_at timestamptz not null default now(),
+  edited_at timestamptz,
+  meta_json jsonb
+);
+create index if not exists punches_site_at_idx on public.punches (site_id, at);
+create index if not exists punches_employee_at_idx on public.punches (employee_id, at);
+
 -- Lock the tables down. The app connects with the service_role key, which bypasses RLS.
 alter table public.app_settings enable row level security;
 alter table public.recent_uploads enable row level security;
+alter table public.punches enable row level security;
 `;
 
 export function toSummary(r: any): TimesheetSummary {

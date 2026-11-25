@@ -16,6 +16,14 @@ export default defineConfig({
   build: {
     outDir: path.resolve(import.meta.dirname, "dist/public"),
     emptyOutDir: true,
+    // The manifest lets the server list exactly which files the kiosk page needs (KIOSK_HOST).
+    manifest: true,
+    rollupOptions: {
+      input: {
+        main: path.resolve(import.meta.dirname, "client", "index.html"),
+        kiosk: path.resolve(import.meta.dirname, "client", "kiosk.html"),
+      },
+    },
   },
   server: {
     fs: {

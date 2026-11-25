@@ -8,6 +8,7 @@ import { announceSetupCode } from "./auth";
 import { scheduleBackups, stopBackups } from "./backup";
 import { securityHeaders } from "./security";
 import { runAdminCliAndExit } from "./cli";
+import { endLiveStreams } from "./live";
 
 const app = express();
 const httpServer = createServer(app);
@@ -44,6 +45,7 @@ function shutdown(reason: string, code = 0) {
   stopping = true;
   console.log(`[server] shutting down (${reason})`);
   stopBackups();
+  endLiveStreams();
   const force = setTimeout(() => {
     closeDatabase();
     process.exit(code);
