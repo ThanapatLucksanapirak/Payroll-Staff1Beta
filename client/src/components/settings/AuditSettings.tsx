@@ -25,6 +25,7 @@ const ACTION_LABELS: Record<string, string> = {
   "categories.update": "Changed pay categories", "wages.update": "Saved rates", "square.connect": "Connected Square", "square.disconnect": "Disconnected Square",
   "pay.settings": "Changed pay extras", "pay.advance.create": "Recorded advance", "pay.advance.update": "Changed advance", "pay.advance.writeoff": "Wrote off advance", "pay.advance.delete": "Deleted advance",
   "database.switch": "Switched database", "backup.export": "Downloaded export", "backup.restore": "Restored backup", "backup.create": "Made server backup", "backup.download": "Downloaded backup",
+  "permissions.update": "Changed role permissions", "user.2fa-enable": "Turned on two-factor", "user.2fa-disable": "Turned off two-factor", "user.2fa-reset": "Reset two-factor", "user.2fa-recovery": "New recovery codes", "user.2fa-devices": "Forgot remembered devices", "settings.2fa-policy": "Changed two-factor requirement", "settings.offsite": "Changed offsite backups", "backup.offsite": "Copied backup offsite",
 };
 
 export function AuditSettings() {

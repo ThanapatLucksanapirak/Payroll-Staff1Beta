@@ -595,6 +595,8 @@ export function kioskHostGuard() {
     const p = req.path;
     if (p === "/" && (req.method === "GET" || req.method === "HEAD")) return res.redirect(302, "/kiosk");
     if (p === "/api/health" || p.startsWith("/api/kiosk/") || p === "/kiosk" || p === "/kiosk/" || p === "/favicon.svg") return next();
+    // Installable kiosk (home-screen icon, manifest and the static-shell service worker)
+    if (p === "/kiosk.webmanifest" || p === "/sw.js" || /^\/icons\/[\w.-]+$/.test(p)) return next();
     if (kioskAssetSet().has(p)) return next();
     if (process.env.NODE_ENV !== "production" && DEV_PREFIXES.some((x) => p.startsWith(x))) return next();
     if (p.startsWith("/api/")) return res.status(404).json({ error: "Not found." });

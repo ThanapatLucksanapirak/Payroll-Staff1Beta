@@ -16,7 +16,7 @@ import { authorize, csrfGuard } from "./access";
 import { AUDIT_PREFIX, auditTrail } from "./audit";
 import { registerAuthRoutes } from "./authRoutes";
 import { USERS_KEY, canAccessSite, toPublic } from "./users";
-import { backupPath, listBackups, readBackup, runBackup } from "./backup";
+import { NEVER_BACKED_UP, backupPath, listBackups, readBackup, runBackup } from "./backup";
 import { listLocations, pullTimecards } from "./square";
 import { extractPdfText } from "./pdf";
 import { invalidateEmployeeCache } from "./employees";
@@ -26,6 +26,9 @@ import { registerScheduleRoutes } from "./schedule";
 import { registerTimeclockRoutes } from "./timeclock";
 import { registerKioskFeatureAdminRoutes } from "./kioskFeatures";
 import { registerPayRoutes } from "./pay";
+import { registerPermissionRoutes } from "./permissions";
+import { TWO_FACTOR_PUBLIC, registerTwoFactorRoutes } from "./twofactor";
+import { registerOffsiteRoutes } from "./offsite";
 
 type Handler = (req: Request, res: Response) => Promise<unknown>;
 const h = (fn: Handler) => (req: Request, res: Response, next: NextFunction) => { fn(req, res).catch(next); };
@@ -121,7 +124,7 @@ async function restoreFrom(raw: unknown) {
   const store = await db();
   const keep = new Set(["password_hash", USERS_KEY]);
   const result = await store.importAll({
-    settings: body.settings.filter((x) => !keep.has(x.key) && !x.key.startsWith(AUDIT_PREFIX)),
+    settings: body.settings.filter((x) => !keep.has(x.key) && !x.key.startsWith(AUDIT_PREFIX) && !NEVER_BACKED_UP(x.key)),
     timesheets: body.timesheets.map(({ updated_at: _u, ...rest }: any) => rest),
   });
   // Time-clock punches: inserted by id, so restoring twice adds nothing.
@@ -138,7 +141,7 @@ async function restoreFrom(raw: unknown) {
 
 export function registerRoutes(app: Express) {
   // /live checks its own short-lived ticket (EventSource cannot send headers).
-  const PUBLIC = new Set(["/health", "/auth/status", "/auth/login", "/auth/setup", "/auth/logout", "/live"]);
+  const PUBLIC = new Set(["/health", "/auth/status", "/auth/login", "/auth/setup", "/auth/logout", "/live", ...TWO_FACTOR_PUBLIC]);
   app.use(kioskHostGuard()); // KIOSK_HOST: serve only the kiosk on that hostname
   // Never cache API responses (payroll data) in browsers or at the Cloudflare edge.
   app.use("/api", (_req, res, next) => { res.setHeader("Cache-Control", "no-store"); next(); });
@@ -148,7 +151,10 @@ export function registerRoutes(app: Express) {
   app.use("/api", requireAuth(PUBLIC));
   app.use("/api", authorize(PUBLIC));
   app.use("/api", auditTrail());
+  registerPermissionRoutes(app); // role permissions; adds them to bootstrap/me and hides pay when needed
   registerPayRoutes(app, { rowFromDoc }); // pay extras, lock on finalized timesheets (before the timesheet routes)
+  registerTwoFactorRoutes(app);
+  registerOffsiteRoutes(app);
 
   // ── Public ──────────────────────────────────────────────────────────────────
   app.get("/api/health", h(async (_req, res) => {
@@ -416,7 +422,7 @@ export function registerRoutes(app: Express) {
     const all = await store.allSettings();
     res.json({
       app: "payroll-admin", version: 2, exportedAt: new Date().toISOString(),
-      settings: all.filter((s) => includeSecrets || !secret(s.key)),
+      settings: all.filter((s) => !NEVER_BACKED_UP(s.key) && (includeSecrets || !secret(s.key))),
       timesheets: await store.allTimesheets(),
       punches: await store.allPunches(),
     });

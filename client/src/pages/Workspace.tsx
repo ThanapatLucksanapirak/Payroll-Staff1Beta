@@ -8,7 +8,7 @@ import { useTimesheet, type SaveState } from "@/hooks/useTimesheet";
 import { downloadBlob, safeFilename, timeAgo } from "@/lib/doc";
 import { shiftsToCsv } from "@shared/importers/csv";
 import { errorMessage } from "@/lib/api";
-import { canEdit } from "@/lib/roles";
+import { can, canEdit } from "@/lib/roles";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -117,7 +117,7 @@ export function WorkspacePage({ id }: { id: string }) {
             {!readOnly && (!app.prefs.autosave || ts.saveState === "error" || ts.legacy) && (
               <Button variant="outline" size="sm" onClick={() => ts.save()} disabled={ts.saveState === "saving" || (!ts.dirty && !ts.legacy)} data-testid="button-save"><Save /> Save</Button>
             )}
-            <DropdownMenu>
+            {can(app.user, "export") && <DropdownMenu>
               <DropdownMenuTrigger asChild><Button size="sm" className="ml-1" aria-label="Export" data-testid="button-export"><Download /><span className="hidden sm:inline">Export</span></Button></DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-56">
                 <DropdownMenuItem onClick={() => setChecklist(true)} data-testid="button-payroll-checklist"><ListChecks />Check before export…</DropdownMenuItem>
@@ -132,7 +132,7 @@ export function WorkspacePage({ id }: { id: string }) {
                 <DropdownMenuItem onClick={() => downloadBlob(shiftsToCsv(doc.shifts), `${base}_shifts.csv`, "text/csv")} data-testid="button-export-shifts"><Table2 />Shifts CSV (re-importable)</DropdownMenuItem>
                 <DropdownMenuItem onClick={() => downloadBlob(journalCsv(result, pay.settings.accounts, { date: result.periodEnd || doc.periodEnd, memo: `Payroll ${site.name} ${periodTitle}` }), `${base}_journal.csv`, "text/csv")} data-testid="button-export-journal"><BookOpen />Accounting journal (CSV)</DropdownMenuItem>
               </DropdownMenuContent>
-            </DropdownMenu>
+            </DropdownMenu>}
           </div>
         </div>
       </div>

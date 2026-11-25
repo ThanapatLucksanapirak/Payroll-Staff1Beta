@@ -6,6 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { api, errorMessage, session } from "@/lib/api";
 import { Logo } from "@/components/Logo";
+import { TwoFactorStep } from "@/components/TwoFactorLogin";
 
 export function LoginPage({ appName, setupRequired, dbError, onDone }: { appName: string; setupRequired: boolean; dbError?: string | null; onDone: () => void }) {
   const [username, setUsername] = useState("");
@@ -16,6 +17,8 @@ export function LoginPage({ appName, setupRequired, dbError, onDone }: { appName
   const [remember, setRemember] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  /** Second sign-in step (two-factor), after a correct password. */
+  const [second, setSecond] = useState<{ kind: "verify" | "setup"; ticket: string } | null>(null);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -25,9 +28,10 @@ export function LoginPage({ appName, setupRequired, dbError, onDone }: { appName
     if (setupRequired && !username.trim()) { setError("Choose a username."); return; }
     setBusy(true);
     try {
-      await api("POST", setupRequired ? "/api/auth/setup" : "/api/auth/login", setupRequired
+      const r = await api<{ twoFactor?: "verify" | "setup"; ticket?: string }>("POST", setupRequired ? "/api/auth/setup" : "/api/auth/login", setupRequired
         ? { username: username.trim(), displayName: displayName.trim() || undefined, password, setupCode }
         : { username: username.trim(), password, remember });
+      if (r?.twoFactor && r.ticket) { setPassword(""); setSecond({ kind: r.twoFactor, ticket: r.ticket }); return; }
       session.set();
       onDone();
     } catch (err) {
@@ -47,10 +51,15 @@ export function LoginPage({ appName, setupRequired, dbError, onDone }: { appName
           <div>
             <h1 className="text-[26px] font-bold tracking-tight">{appName}</h1>
             <p className="mt-1 text-[14px] text-muted-foreground">
-              {setupRequired ? "Create the owner account to get started." : "Sign in to continue."}
+              {setupRequired ? "Create the owner account to get started." : second?.kind === "setup" ? "Set up two-factor sign-in to continue." : second ? "Enter the code from your authenticator app." : "Sign in to continue."}
             </p>
           </div>
         </div>
+        {second ? (
+          <div className="rounded-2xl border border-card-border bg-card/90 p-6 shadow-float backdrop-blur-xl">
+            <TwoFactorStep {...second} appName={appName} onBack={(msg) => { setSecond(null); setError(msg ?? ""); }} onDone={() => { session.set(); onDone(); }} />
+          </div>
+        ) : (
         <form onSubmit={submit} className="space-y-4 rounded-2xl border border-card-border bg-card/90 p-6 shadow-float backdrop-blur-xl" data-testid="form-login">
           {dbError && <p className="rounded-lg bg-warning-soft px-3 py-2 text-xs text-warning" role="alert">Database issue: {dbError}</p>}
           {setupRequired && (
@@ -92,6 +101,7 @@ export function LoginPage({ appName, setupRequired, dbError, onDone }: { appName
             {setupRequired ? "Create owner account" : "Sign in"}
           </Button>
         </form>
+        )}
         <p className="mt-6 text-center text-xs text-muted-foreground">Your data stays on your own server.</p>
       </div>
     </div>

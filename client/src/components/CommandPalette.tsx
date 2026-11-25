@@ -10,7 +10,7 @@ import { canEdit } from "@/lib/roles";
 import { timeAgo } from "@/lib/doc";
 import { overlayClass } from "@/components/ui/dialog";
 import { useNewTimesheet } from "@/components/NewTimesheet";
-import { NAV_ITEMS } from "@/components/nav";
+import { visibleNav } from "@/components/nav";
 import { visibleSettingsSections } from "@/pages/settings-sections";
 import { cn } from "@/lib/utils";
 
@@ -65,7 +65,7 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
     ] : [];
     const out: Item[] = [
       ...actions,
-      ...NAV_ITEMS.map((n) => ({ id: `nav-${n.href}`, group: "Go to" as const, label: n.label, icon: n.icon, keywords: n.keywords, run: go(n.href) })),
+      ...visibleNav(app.user).map((n) => ({ id: `nav-${n.href}`, group: "Go to" as const, label: n.label, icon: n.icon, keywords: n.keywords, run: go(n.href) })),
       ...(timeSource !== "square" ? [{ id: "nav-fix-punches", group: "Go to" as const, label: "Fix punches", hint: "Missed clock-outs, approvals", icon: Wrench, keywords: "punch missed clock out forgot approve review auto closed", run: go("/live/fix") }] : []),
       ...visibleSettingsSections(app.user).map((s) => ({ id: `set-${s.id}`, group: "Settings" as const, label: s.label, hint: s.description, icon: s.icon, keywords: `settings ${s.keywords ?? ""}`, run: go(`/settings/${s.id}`) })),
       { id: "signout", group: "Actions", label: "Sign out", icon: LogOut, keywords: "logout lock", run: () => void signOut() },

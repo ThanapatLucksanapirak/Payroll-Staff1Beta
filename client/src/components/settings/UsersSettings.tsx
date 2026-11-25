@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { KeyRound, Loader2, MoreHorizontal, MonitorSmartphone, Pencil, Plus, Trash2, UserX, UserCheck } from "lucide-react";
+import { KeyRound, Loader2, ShieldOff, MoreHorizontal, MonitorSmartphone, Pencil, Plus, Trash2, UserX, UserCheck } from "lucide-react";
 import { useApp } from "@/context/AppData";
 import { api, errorMessage, queryClient } from "@/lib/api";
 import { type Role, type SessionUser, ROLE_HELP, ROLE_LABELS } from "@/lib/roles";
@@ -18,6 +18,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Field, Section } from "@/components/workspace/fields";
 import { SiteDot } from "@/components/AppShell";
+import { RolePermissionsPanel } from "@/components/settings/RolePermissions";
 
 const MIN = 8;
 const KEY = ["/api/users"];
@@ -52,6 +53,10 @@ export function UsersSettings() {
       if (!ok) return;
     }
     await run(u.active ? "User deactivated" : "User activated", () => api("PATCH", `/api/users/${u.id}`, { active: !u.active }));
+  };
+  const resetTwoFactor = async (u: SessionUser) => {
+    const ok = await confirm({ title: `Reset two-factor for ${u.displayName || u.username}?`, description: "Use this if they lost their phone. They'll sign in with just their password and can set up two-factor again.", confirmLabel: "Reset two-factor" });
+    if (ok) await run("Two-factor reset", () => api("POST", `/api/users/${u.id}/2fa/reset`));
   };
   const signOutUser = async (u: SessionUser) => run("Signed out everywhere", () => api("POST", `/api/users/${u.id}/logout-all`));
 
@@ -95,6 +100,7 @@ export function UsersSettings() {
                         <div className="flex flex-wrap items-center gap-1">
                           <Badge variant={u.role === "owner" || u.role === "admin" ? "default" : "secondary"}>{ROLE_LABELS[u.role]}</Badge>
                           {!u.active && <Badge variant="outline">Inactive</Badge>}
+                          {u.twoFactorEnabled && <Badge variant="outline" title="Signs in with a code from an authenticator app">2FA</Badge>}
                         </div>
                       </td>
                       <td className="px-4 py-2.5 hidden md:table-cell text-muted-foreground max-w-[16rem] truncate">{siteNames(u)}</td>
@@ -108,6 +114,7 @@ export function UsersSettings() {
                             <DropdownMenuContent align="end">
                               <DropdownMenuItem onClick={() => setEditing(u)}><Pencil className="h-4 w-4 mr-2" />Edit</DropdownMenuItem>
                               <DropdownMenuItem onClick={() => setResetting(u)}><KeyRound className="h-4 w-4 mr-2" />{self ? "Set a new password" : "Reset password"}</DropdownMenuItem>
+                              {!self && me.role === "owner" && u.twoFactorEnabled && <DropdownMenuItem onClick={() => void resetTwoFactor(u)}><ShieldOff className="h-4 w-4 mr-2" />Reset two-factor</DropdownMenuItem>}
                               {!self && <DropdownMenuItem onClick={() => void signOutUser(u)}><MonitorSmartphone className="h-4 w-4 mr-2" />Sign out everywhere</DropdownMenuItem>}
                               {!self && (
                                 <DropdownMenuItem disabled={u.active && isLastOwner(u)} onClick={() => void toggleActive(u)}>
@@ -132,13 +139,7 @@ export function UsersSettings() {
           </div>
         )}
       </Section>
-      <Section title="Roles">
-        <dl className="grid gap-2 sm:grid-cols-2 text-sm">
-          {(Object.keys(ROLE_LABELS) as Role[]).map((r) => (
-            <div key={r}><dt className="font-medium">{ROLE_LABELS[r]}</dt><dd className="text-muted-foreground text-xs">{ROLE_HELP[r]}</dd></div>
-          ))}
-        </dl>
-      </Section>
+      <RolePermissionsPanel />
       <UserDialog
         user={editing === "new" ? null : editing}
         open={editing !== null}
