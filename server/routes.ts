@@ -21,6 +21,7 @@ import { extractPdfText } from "./pdf";
 import { invalidateEmployeeCache } from "./employees";
 import { type Punch, punchSchema } from "@shared/punches";
 import { kioskHostGuard, registerKioskRoutes, registerTimeClockAdminRoutes } from "./kiosk";
+import { registerScheduleRoutes } from "./schedule";
 
 type Handler = (req: Request, res: Response) => Promise<unknown>;
 const h = (fn: Handler) => (req: Request, res: Response, next: NextFunction) => { fn(req, res).catch(next); };
@@ -436,6 +437,7 @@ export function registerRoutes(app: Express) {
   }));
 
   registerTimeClockAdminRoutes(app); // employees, punches, kiosk devices, live updates
+  registerScheduleRoutes(app); // schedule, time off, late alerts, labor vs. sales, forecast
 
   // ── Errors ──────────────────────────────────────────────────────────────────
   app.use("/api", (_req: Request, res: Response) => res.status(404).json({ error: "Not found." }));

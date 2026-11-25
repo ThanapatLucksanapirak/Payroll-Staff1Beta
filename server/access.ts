@@ -76,6 +76,16 @@ const POLICY: Rule[] = [
   { method: "POST", path: /^\/sites\/[^/]+\/punches$/, need: "editor", sites: fromParam },
   { method: "PATCH", path: /^\/punches\/[^/]+$/, need: "editor", sites: punchSite },
   { method: "DELETE", path: /^\/punches\/[^/]+$/, need: "editor", sites: punchSite },
+  // Schedule, time off, labor vs. sales, forecast. Everyone can read their locations;
+  // editors change the schedule, time off and sales; schedule settings stay owner/admin.
+  { method: "GET", path: /^\/schedule$/, need: "user", sites: async (req) => [typeof req.query.siteId === "string" ? req.query.siteId : undefined] },
+  { method: "GET", path: /^\/sites\/[^/]+\/(schedule\/week|schedule\/settings|schedule\/alerts|time-off|labor|sales|forecast)$/, need: "user", sites: fromParam },
+  { method: "PUT", path: /^\/sites\/[^/]+\/schedule\/week\/[^/]+$/, need: "editor", sites: fromParam },
+  { method: "POST", path: /^\/sites\/[^/]+\/schedule\/week\/[^/]+\/(copy-previous|publish)$/, need: "editor", sites: fromParam },
+  { method: "POST", path: /^\/sites\/[^/]+\/time-off$/, need: "editor", sites: fromParam },
+  { method: "PUT", path: /^\/sites\/[^/]+\/time-off\/[^/]+$/, need: "editor", sites: fromParam },
+  { method: "DELETE", path: /^\/sites\/[^/]+\/time-off\/[^/]+$/, need: "editor", sites: fromParam },
+  { method: "PUT", path: /^\/sites\/[^/]+\/sales$/, need: "editor", sites: fromParam },
 ];
 
 const MESSAGES: Record<Need, string> = {
