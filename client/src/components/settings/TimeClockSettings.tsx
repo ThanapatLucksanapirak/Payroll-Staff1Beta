@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link } from "wouter";
 import { useQuery } from "@tanstack/react-query";
-import { Check, Copy, ExternalLink, Loader2, Plus, Tablet, Trash2 } from "lucide-react";
+import { Check, Copy, ExternalLink, KeyRound, Loader2, Plus, Tablet, Trash2 } from "lucide-react";
 import type { Site, TimeSource } from "@shared/schema";
 import { api, errorMessage, queryClient } from "@/lib/api";
 import { timeAgo } from "@/lib/doc";
@@ -64,6 +64,7 @@ export function TimeClockSection({ site, draft, onChange }: { site: Site; draft:
           </>
         )}
         <Devices site={site} enabled={site.timeSource !== "square"} />
+        <ManagerPin site={site} />
       </div>
     </Section>
   );
@@ -121,6 +122,113 @@ function Devices({ site, enabled }: { site: Site; enabled: boolean }) {
         <Button type="submit" variant="outline" disabled={busy} data-testid="button-add-device">{busy ? <Loader2 className="animate-spin" /> : <Plus />} Add device</Button>
       </form>
       {created && <PairDialog created={created} onClose={() => setCreated(null)} />}
+    </div>
+  );
+}
+
+const LOCK_GUIDE: { title: string; steps: string[] }[] = [
+  { title: "iPad (Guided Access)", steps: [
+    "Settings → Accessibility → Guided Access: turn it on, then set a passcode under Passcode Settings (use a different code from the manager PIN).",
+    "Open the kiosk in Safari and tap Share → Add to Home Screen, then open it from the Home Screen so it runs without the address bar.",
+    "Triple-click the side (or Home) button and tap Start. The iPad now stays on the time clock.",
+    "To leave, triple-click again and enter the Guided Access passcode.",
+  ] },
+  { title: "Android (screen pinning)", steps: [
+    "Settings → Security (or Security & privacy → More) → App pinning: turn it on, and turn on “Ask for PIN before unpinning”.",
+    "Open the kiosk in Chrome, tap ⋮ → Add to Home screen → Install, and open it from the Home screen.",
+    "Open Recent apps, tap the app's icon at the top of its card, and choose Pin.",
+    "To leave, hold Back and Overview (or swipe up and hold), then enter the device PIN.",
+  ] },
+  { title: "Windows or Linux PC (Chrome kiosk mode)", steps: [
+    "Make a shortcut that runs: chrome --kiosk --app=https://YOUR-ADDRESS/kiosk",
+    "Windows: put the shortcut in the Startup folder (Win+R, shell:startup). Linux: add it to your desktop's autostart apps.",
+    "For a fully locked PC, use a separate Windows account with Assigned Access (Settings → Accounts → Other users → Set up a kiosk).",
+    "To leave, press Alt+F4 (Windows) or Ctrl+Shift+Q (Linux).",
+  ] },
+];
+
+function LockGuide({ onClose }: { onClose: () => void }) {
+  return (
+    <Dialog open onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-h-[85vh] max-w-lg overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Lock the tablet to the time clock</DialogTitle>
+          <DialogDescription>The manager PIN protects the kiosk's own settings. These steps stop people leaving the app or opening other apps on the device.</DialogDescription>
+        </DialogHeader>
+        <div className="space-y-4">
+          {LOCK_GUIDE.map((g) => (
+            <div key={g.title}>
+              <p className="text-[13px] font-semibold">{g.title}</p>
+              <ol className="mt-1 list-decimal space-y-1 pl-5 text-[13px] text-muted-foreground">
+                {g.steps.map((s) => <li key={s}>{s}</li>)}
+              </ol>
+            </div>
+          ))}
+          <p className="text-xs text-muted-foreground">Also turn off auto-lock or sleep while plugged in, and keep the device on its charger.</p>
+        </div>
+        <DialogFooter><Button onClick={onClose}>Done</Button></DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/** Manager PIN: needed on the kiosk to open its settings, unpair it, or leave full screen. */
+function ManagerPin({ site }: { site: Site }) {
+  const { toast } = useToast();
+  const confirm = useConfirm();
+  const key = ["/api/sites", site.id, "kiosk-manager-pin"];
+  const q = useQuery<{ set: boolean }>({ queryKey: key });
+  const [editing, setEditing] = useState(false);
+  const [pin, setPin] = useState("");
+  const [again, setAgain] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [guide, setGuide] = useState(false);
+  const valid = /^\d{4,8}$/.test(pin);
+  const match = pin === again;
+
+  const save = async (value: string | null) => {
+    setBusy(true);
+    try {
+      await api("PUT", `/api/sites/${site.id}/kiosk-manager-pin`, { pin: value });
+      await queryClient.invalidateQueries({ queryKey: key });
+      setEditing(false); setPin(""); setAgain("");
+      toast({ title: value ? "Manager PIN saved" : "Manager PIN removed" });
+    } catch (e) { toast({ title: "Couldn't save the PIN", description: errorMessage(e), variant: "destructive" }); } finally { setBusy(false); }
+  };
+  const remove = async () => {
+    if (!(await confirm({ title: "Remove the manager PIN?", description: "Kiosk settings will stay locked, and nobody can unpair a kiosk or leave full screen from the tablet until you set a new one.", confirmLabel: "Remove PIN", destructive: true }))) return;
+    await save(null);
+  };
+  const isSet = q.data?.set;
+
+  return (
+    <div className="space-y-3 rounded-xl border border-border/80 p-3">
+      <div className="flex items-start gap-3">
+        <KeyRound className="mt-0.5 h-4 w-4 text-muted-foreground" />
+        <div className="min-w-0 flex-1">
+          <p className="flex items-center gap-2 text-[13px] font-semibold">Manager PIN {q.isLoading ? null : isSet ? <Badge variant="success">On</Badge> : <Badge variant="warning">Not set</Badge>}</p>
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            Asked for on the kiosk before anyone can open its settings, unpair it, or leave full screen. Keep it different from employee PINs.{" "}
+            <button type="button" onClick={() => setGuide(true)} className="font-medium text-primary hover:underline" data-testid="button-lock-guide">How to lock the tablet itself</button>
+          </p>
+        </div>
+        {!editing && (
+          <div className="flex gap-1">
+            <Button size="sm" variant="outline" onClick={() => setEditing(true)} data-testid="button-manager-pin-edit">{isSet ? "Change" : "Set PIN"}</Button>
+            {isSet && <Button size="sm" variant="ghost" className="text-muted-foreground hover:text-destructive" onClick={remove} disabled={busy} data-testid="button-manager-pin-remove">Remove</Button>}
+          </div>
+        )}
+      </div>
+      {editing && (
+        <form className="flex flex-wrap items-end gap-2" onSubmit={(e) => { e.preventDefault(); if (valid && match) void save(pin); }}>
+          <Field label="New PIN (4 to 8 digits)" className="w-40"><Input type="password" inputMode="numeric" autoComplete="new-password" maxLength={8} value={pin} onChange={(e) => setPin(e.target.value.replace(/\D/g, ""))} data-testid="input-manager-pin" /></Field>
+          <Field label="Type it again" className="w-40"><Input type="password" inputMode="numeric" autoComplete="new-password" maxLength={8} value={again} onChange={(e) => setAgain(e.target.value.replace(/\D/g, ""))} data-testid="input-manager-pin-again" /></Field>
+          <Button type="submit" disabled={busy || !valid || !match} data-testid="button-manager-pin-save">{busy && <Loader2 className="animate-spin" />} Save PIN</Button>
+          <Button type="button" variant="ghost" onClick={() => { setEditing(false); setPin(""); setAgain(""); }}>Cancel</Button>
+          {again.length > 0 && !match && <p className="w-full text-xs text-destructive">The two PINs don't match.</p>}
+        </form>
+      )}
+      {guide && <LockGuide onClose={() => setGuide(false)} />}
     </div>
   );
 }

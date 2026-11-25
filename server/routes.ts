@@ -406,7 +406,7 @@ export function registerRoutes(app: Express) {
   app.get("/api/backup", h(async (req, res) => {
     const includeSecrets = req.query.secrets === "1";
     const store = await db();
-    const secret = (k: string) => k === "password_hash" || k === USERS_KEY || k.startsWith("square_token:") || k === "square_access_token";
+    const secret = (k: string) => k === "password_hash" || k === USERS_KEY || k.startsWith("square_token:") || k.startsWith("kiosk_manager_pin:") || k === "square_access_token";
     const all = await store.allSettings();
     res.json({
       app: "payroll-admin", version: 2, exportedAt: new Date().toISOString(),

@@ -19,6 +19,7 @@ import * as settings from "./settings";
 import { type StoredEmployee, PIN_RE, findByPin, getEmployee, listEmployees, registerEmployeeRoutes } from "./employees";
 import { PUNCH_ID_RE, PunchError, recordPunch, registerPunchRoutes } from "./punches";
 import { registerLiveRoutes } from "./live";
+import { hashPassword, verifyHash } from "./passwords";
 
 // ── Devices ───────────────────────────────────────────────────────────────────
 export interface KioskDevice {
@@ -156,6 +157,25 @@ setInterval(() => {
   for (const [k, f] of pinFails) if (now - f.last > 60 * 60_000) pinFails.delete(k);
 }, 10 * 60_000).unref();
 
+// ── Manager PIN (per location) ───────────────────────────────────────────────
+// Guards the kiosk's own settings: opening device settings, unpairing, and
+// leaving full screen. Stored as a scrypt hash in the settings table.
+export const MANAGER_PIN_RE = /^\d{4,8}$/;
+const managerKey = (siteId: string) => `kiosk_manager_pin:${siteId}`;
+
+export async function managerPinSet(siteId: string): Promise<boolean> {
+  return !!(await (await db()).getSetting(managerKey(siteId)));
+}
+export async function setManagerPin(siteId: string, pin: string | null) {
+  const store = await db();
+  if (pin) await store.setSetting(managerKey(siteId), await hashPassword(`kiosk-manager:${pin}`));
+  else await store.deleteSetting(managerKey(siteId));
+}
+async function checkManagerPin(siteId: string, pin: string): Promise<boolean> {
+  const stored = await (await db()).getSetting(managerKey(siteId));
+  return !!stored && MANAGER_PIN_RE.test(pin) && (await verifyHash(`kiosk-manager:${pin}`, stored));
+}
+
 // ── Short-lived "this person entered their PIN" ticket ───────────────────────
 const TICKET_MS = 2 * 60_000;
 const signTicket = (payload: string) => createHmac("sha256", getAuthSecret()).update(`kiosk-ticket:${payload}`).digest("base64url");
@@ -270,13 +290,46 @@ export function registerKioskRoutes(app: Express) {
     for (const p of punches) { if (!byEmp.has(p.employeeId)) byEmp.set(p.employeeId, []); byEmp.get(p.employeeId)!.push(p); }
     res.json({
       device: { id: device.id, name: device.name },
-      site: { id: site.id, name: site.name, color: site.color, timezone: site.rules.timezone, loginMode: site.kioskLoginMode, enabled: kioskEnabled(site) },
+      site: { id: site.id, name: site.name, color: site.color, timezone: site.rules.timezone, loginMode: site.kioskLoginMode, enabled: kioskEnabled(site), managerPinSet: await managerPinSet(site.id) },
       serverTime: new Date(now).toISOString(),
       employees: employees.map((e) => {
         const st = clockState(byEmp.get(e.id) ?? [], now);
         return { id: e.id, name: e.name, role: e.role, status: st.status, since: st.since };
       }).sort((a, b) => a.name.localeCompare(b.name)),
     });
+  }));
+
+  // Manager PIN: unlock the device settings (and full-screen exit) on this kiosk.
+  // Shares the device's wrong-PIN lockout so it can't be guessed.
+  const managerGate = async (req: Request, res: Response): Promise<boolean> => {
+    const { device, site } = ctx(res);
+    const lockKey = `mgr:${device.id}`;
+    const locked = pinLockedFor(lockKey);
+    if (locked) { lockedResponse(res, locked); return false; }
+    const { pin } = z.object({ pin: z.string().max(12).default("") }).parse(req.body ?? {});
+    if (!(await managerPinSet(site.id))) {
+      res.status(409).json({ error: "No manager PIN is set for this location. Set one in the admin app: Settings → Locations → Time clock.", code: "no_manager_pin" });
+      return false;
+    }
+    const ok = await checkManagerPin(site.id, pin);
+    recordPin(lockKey, ok);
+    if (!ok) {
+      const nowLocked = pinLockedFor(lockKey);
+      if (nowLocked) lockedResponse(res, nowLocked);
+      else res.status(403).json({ error: "That manager PIN isn't right.", code: "pin" });
+      return false;
+    }
+    return true;
+  };
+  app.post("/api/kiosk/manager-unlock", h(async (req, res) => {
+    if (await managerGate(req, res)) res.json({ ok: true });
+  }));
+  // Unpairing from the kiosk revokes the device on the server too.
+  app.post("/api/kiosk/unpair", h(async (req, res) => {
+    if (!(await managerGate(req, res))) return;
+    const { device, site } = ctx(res);
+    await revokeDevice(device.id, site.id);
+    res.json({ ok: true });
   }));
 
   app.post("/api/kiosk/identify", h(async (req, res) => {
@@ -353,6 +406,16 @@ export function registerTimeClockAdminRoutes(app: Express) {
   }));
   app.delete("/api/sites/:siteId/kiosk-devices/:id", h(async (req, res) => {
     res.json({ ok: await revokeDevice(String(req.params.id), String(req.params.siteId)) });
+  }));
+  app.get("/api/sites/:siteId/kiosk-manager-pin", h(async (req, res) => {
+    res.json({ set: await managerPinSet(String(req.params.siteId)) });
+  }));
+  app.put("/api/sites/:siteId/kiosk-manager-pin", h(async (req, res) => {
+    const site = await settings.getSite(String(req.params.siteId));
+    if (!site) return res.status(404).json({ error: "Location not found." });
+    const { pin } = z.object({ pin: z.string().regex(MANAGER_PIN_RE, "Use 4 to 8 digits.").nullable() }).parse(req.body ?? {});
+    await setManagerPin(site.id, pin);
+    res.json({ set: !!pin });
   }));
 }
 

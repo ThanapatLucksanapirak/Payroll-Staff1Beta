@@ -15,7 +15,7 @@ const OFFSET_KEY = "kiosk.clockOffset";
 export interface RosterEmployee { id: string; name: string; role: string; status: ClockStatus; since: string | null }
 export interface KioskState {
   device: { id: string; name: string };
-  site: { id: string; name: string; color: string; timezone: string; loginMode: "pin" | "name_pin"; enabled: boolean };
+  site: { id: string; name: string; color: string; timezone: string; loginMode: "pin" | "name_pin"; enabled: boolean; managerPinSet?: boolean };
   serverTime: string;
   employees: RosterEmployee[];
 }
