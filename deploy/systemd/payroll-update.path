@@ -1,0 +1,10 @@
+[Unit]
+Description=Watch for "Update now" requests from the Payroll app
+
+[Path]
+# The app (user payroll) touches this file; root then runs `payroll update`.
+PathModified=/var/lib/payroll/update-request
+Unit=payroll-update-request.service
+
+[Install]
+WantedBy=multi-user.target
