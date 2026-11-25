@@ -13,7 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { PayrollTab } from "@/components/workspace/PayrollTab";
 import { RatesTab } from "@/components/workspace/RatesTab";
@@ -59,10 +59,13 @@ export function WorkspacePage({ id }: { id: string }) {
   const periodTitle = result.periodStart ? `${app.date(result.periodStart)} – ${app.date(result.periodEnd)}` : "No dates yet";
   const props = { doc, result, site, locked, edit: ts.edit };
 
-  const exportPdf = async () => {
+  const exportPdf = async (kind: "report" | "summary" | "statements" = "report") => {
     try {
-      const { downloadPayrollPdf } = await import("@/lib/pdf");
-      downloadPayrollPdf({ result, prefs: app.prefs, site, title: doc.label || `Payroll ${periodTitle}`, notes: doc.notes, fileBase: `${base}_payroll` });
+      const pdf = await import("@/lib/pdf");
+      const o = { result, prefs: app.prefs, site, title: doc.label || `Payroll ${periodTitle}`, notes: doc.notes };
+      if (kind === "summary") pdf.downloadSummaryPdf({ ...o, fileBase: `${base}_summary` });
+      else if (kind === "statements") pdf.downloadPayStatementsPdf({ ...o, fileBase: `${base}_pay_statements` });
+      else pdf.downloadPayrollPdf({ ...o, fileBase: `${base}_payroll` });
     } catch (e) { toast({ title: "PDF export failed", description: errorMessage(e), variant: "destructive" }); }
   };
   const base = safeFilename(`${site.name} ${doc.label || result.periodStart || "payroll"}`);
@@ -88,7 +91,10 @@ export function WorkspacePage({ id }: { id: string }) {
           <DropdownMenu>
             <DropdownMenuTrigger asChild><Button size="sm" data-testid="button-export"><Download /> Export</Button></DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={exportPdf} data-testid="button-export-pdf"><FileDown className="h-4 w-4 mr-2" />PDF report</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => exportPdf("report")} data-testid="button-export-pdf"><FileDown className="h-4 w-4 mr-2" />Full report (PDF)</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => exportPdf("summary")} data-testid="button-export-summary-pdf"><FileDown className="h-4 w-4 mr-2" />Manager summary (PDF)</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => exportPdf("statements")} data-testid="button-export-statements-pdf"><FileDown className="h-4 w-4 mr-2" />Pay statements (PDF)</DropdownMenuItem>
+              <DropdownMenuSeparator />
               <DropdownMenuItem onClick={async () => downloadBlob((await import("@/lib/pdf")).payrollSummaryCsv(result), `${base}_summary.csv`, "text/csv")} data-testid="button-export-csv">Summary CSV</DropdownMenuItem>
               <DropdownMenuItem onClick={() => downloadBlob(shiftsToCsv(doc.shifts), `${base}_shifts.csv`, "text/csv")} data-testid="button-export-shifts">Shifts CSV (re-importable)</DropdownMenuItem>
             </DropdownMenuContent>

@@ -95,7 +95,10 @@ export type Category = z.infer<typeof categorySchema>;
 // ─────────────────────────────────────────────────────────────────────────────
 // App preferences
 // ─────────────────────────────────────────────────────────────────────────────
-export const DATE_FORMATS = ["M/D/YY", "MM/DD/YYYY", "D/M/YY", "YYYY-MM-DD", "MMM D, YYYY"] as const;
+/** 300 KB of image bytes ≈ 400K base64 characters (+ data-URL prefix). */
+export const PDF_LOGO_MAX_BYTES = 300 * 1024;
+export const PDF_LOGO_MAX_CHARS = Math.ceil(PDF_LOGO_MAX_BYTES / 3) * 4 + 32;
+export const DATE_FORMATS =["M/D/YY", "MM/DD/YYYY", "D/M/YY", "YYYY-MM-DD", "MMM D, YYYY"] as const;
 export const prefsSchema = z.object({
   appName: z.string().min(1).max(60).default("Payroll Admin"),
   businessName: z.string().max(80).default(""),
@@ -110,6 +113,11 @@ export const prefsSchema = z.object({
   pdfShowShiftTimes: z.boolean().default(true),
   pdfPagePerEmployee: z.boolean().default(false),
   pdfFooter: z.string().max(120).default("Confidential — for internal use only"),
+  pdfOrientation: z.enum(["portrait", "landscape"]).default("landscape").catch("landscape"),
+  pdfPageSize: z.enum(["letter", "a4"]).default("letter").catch("letter"),
+  /** PNG/JPEG data URL (≤ ~300 KB image) drawn top-left on PDFs; "" = none. Invalid values are dropped, never fatal. */
+  pdfLogoDataUrl: z.string().max(PDF_LOGO_MAX_CHARS).regex(/^data:image\/(png|jpe?g);base64,[A-Za-z0-9+/=\s]+$/).or(z.literal("")).default("").catch(""),
+  pdfSignatureLine: z.boolean().default(false).catch(false),
   defaultSiteId: z.string().default(""),
 });
 export type Prefs = z.infer<typeof prefsSchema>;

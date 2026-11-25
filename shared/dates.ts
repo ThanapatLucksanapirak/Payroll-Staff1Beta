@@ -7,6 +7,8 @@ const MONTHS: Record<string, number> = {
   jan: 1, feb: 2, mar: 3, apr: 4, may: 5, jun: 6, jul: 7, aug: 8, sep: 9, sept: 9, oct: 10, nov: 11, dec: 12,
 };
 
+const MONTHS_SHORT = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"] as const;
+
 export const WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"] as const;
 export const WEEKDAYS_SHORT = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] as const;
 
@@ -153,7 +155,7 @@ export function formatDate(iso: string | null | undefined, fmt: DateFormat = "M/
     case "MM/DD/YYYY": return `${pad(m)}/${pad(d)}/${y}`;
     case "D/M/YY": return `${d}/${m}/${String(y).slice(2)}`;
     case "YYYY-MM-DD": return iso;
-    case "MMM D, YYYY": return `${Object.keys(MONTHS)[m - 1][0].toUpperCase()}${Object.keys(MONTHS)[m - 1].slice(1)} ${d}, ${y}`;
+    case "MMM D, YYYY": return `${MONTHS_SHORT[m - 1]} ${d}, ${y}`;
     default: return `${m}/${d}/${String(y).slice(2)}`;
   }
 }
