@@ -500,10 +500,20 @@ cmd_tunnel_hosts() {
 }
 
 # ── admin accounts ────────────────────────────────────────────────────────────
+# List accounts (exact usernames, roles, active/disabled).
+admin_list() {
+  [[ -f "$PAYROLL_CURRENT/dist/index.cjs" ]] || die "The app is not installed yet."
+  grep -q -- "--password-stdin" "$PAYROLL_CURRENT/dist/index.cjs" 2>/dev/null \
+    || die "This version of the app cannot list accounts from the command line yet."
+  # shellcheck disable=SC1090
+  ( set -a; . "$PAYROLL_ENV_FILE"; set +a; cd "$PAYROLL_CURRENT" \
+      && as_payroll timeout 60 "$(node_bin)" dist/index.cjs admin list )
+}
+
 cmd_admin() {
   local sub="${1:-}" user="" pw="" pw2="" rc=0 out
   shift || true
-  case "$sub" in create|reset-password) ;; disable-2fa) ;; *) die "Usage: sudo payroll admin create|reset-password|disable-2fa [--username NAME]" ;; esac
+  case "$sub" in create|reset-password) ;; disable-2fa) ;; list) admin_list; return $? ;; *) die "Usage: sudo payroll admin list|create|reset-password|disable-2fa [--username NAME]" ;; esac
   while (( $# )); do
     case "$1" in
       --username) [[ $# -ge 2 ]] || die "--username needs a value."; user="$2"; shift ;;
@@ -713,6 +723,7 @@ cmd_help() {
   t "Server"
   h "start | stop | restart" "Control the app service"
   h "admin create|reset-password" "Administrator account  [--username NAME]"
+  h "admin list" "Show every account's exact username and status"
   h "admin disable-2fa" "Turn off two-factor sign-in for an account  [--username NAME]"
   h "tunnel setup|status|remove" "Cloudflare Tunnel for access from anywhere"
   h "tunnel hosts" "Set the admin and kiosk web addresses"
