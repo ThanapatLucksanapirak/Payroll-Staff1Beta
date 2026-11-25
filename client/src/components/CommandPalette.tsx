@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState, type ComponentType } from "react"
 import { useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
-import { CalendarRange, CornerDownLeft, FileSpreadsheet, FileText, LogOut, Plus, Search, Table2, Tablet } from "lucide-react";
+import { CalendarRange, CornerDownLeft, FileSpreadsheet, FileText, LogOut, Plus, Search, Table2, Tablet, Wrench } from "lucide-react";
 import type { TimesheetSummary } from "@shared/schema";
 import { useApp } from "@/context/AppData";
 import { signOut } from "@/lib/api";
@@ -66,6 +66,7 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
     const out: Item[] = [
       ...actions,
       ...NAV_ITEMS.map((n) => ({ id: `nav-${n.href}`, group: "Go to" as const, label: n.label, icon: n.icon, keywords: n.keywords, run: go(n.href) })),
+      ...(timeSource !== "square" ? [{ id: "nav-fix-punches", group: "Go to" as const, label: "Fix punches", hint: "Missed clock-outs, approvals", icon: Wrench, keywords: "punch missed clock out forgot approve review auto closed", run: go("/live/fix") }] : []),
       ...visibleSettingsSections(app.user).map((s) => ({ id: `set-${s.id}`, group: "Settings" as const, label: s.label, hint: s.description, icon: s.icon, keywords: `settings ${s.keywords ?? ""}`, run: go(`/settings/${s.id}`) })),
       { id: "signout", group: "Actions", label: "Sign out", icon: LogOut, keywords: "logout lock", run: () => void signOut() },
     ];

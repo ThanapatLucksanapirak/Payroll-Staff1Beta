@@ -12,6 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Field, Section } from "@/components/workspace/fields";
+import { AutoClockOutSettings } from "@/components/timeclock/AutoClockOutSettings";
 import { cn } from "@/lib/utils";
 
 interface Device { id: string; name: string; createdAt: string; lastSeenAt: string | null; pairCodeExpiresAt: string | null }
@@ -65,6 +66,7 @@ export function TimeClockSection({ site, draft, onChange }: { site: Site; draft:
         )}
         <Devices site={site} enabled={site.timeSource !== "square"} />
         <ManagerPin site={site} />
+        {site.timeSource !== "square" && <AutoClockOutSettings site={site} />}
       </div>
     </Section>
   );

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "wouter";
-import { AlertTriangle, Banknote, Check, ChevronLeft, Circle, CloudOff, Download, FileDown, FileSpreadsheet, FileText, Files, Loader2, Lock, Redo2, RefreshCw, Save, Table2, Undo2 } from "lucide-react";
+import { AlertTriangle, Banknote, Check, ChevronLeft, Circle, CloudOff, Download, FileDown, FileSpreadsheet, FileText, Files, ListChecks, Loader2, Lock, Redo2, RefreshCw, Save, Table2, Undo2 } from "lucide-react";
 import { computePayroll } from "@shared/engine";
 import { useApp } from "@/context/AppData";
 import { useTimesheet, type SaveState } from "@/hooks/useTimesheet";
@@ -20,6 +20,7 @@ import { RatesTab } from "@/components/workspace/RatesTab";
 import { ShiftsTab } from "@/components/workspace/ShiftsTab";
 import { DetailsTab } from "@/components/workspace/DetailsTab";
 import { SiteDot } from "@/components/AppShell";
+import { PayrollChecklistDialog } from "@/components/timeclock/PayrollChecklist";
 
 export function WorkspacePage({ id }: { id: string }) {
   const app = useApp();
@@ -27,6 +28,7 @@ export function WorkspacePage({ id }: { id: string }) {
   const readOnly = !canEdit(app.user);
   const ts = useTimesheet(id, { autosave: app.prefs.autosave && !readOnly });
   const [tab, setTab] = useState("payroll");
+  const [checklist, setChecklist] = useState(false);
   const doc = ts.doc;
   const site = (doc && app.sites.find((s) => s.id === doc.siteId)) || app.site;
 
@@ -97,6 +99,8 @@ export function WorkspacePage({ id }: { id: string }) {
             <DropdownMenu>
               <DropdownMenuTrigger asChild><Button size="sm" className="ml-1" aria-label="Export" data-testid="button-export"><Download /><span className="hidden sm:inline">Export</span></Button></DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-56">
+                <DropdownMenuItem onClick={() => setChecklist(true)} data-testid="button-payroll-checklist"><ListChecks />Check before export…</DropdownMenuItem>
+                <DropdownMenuSeparator />
                 <DropdownMenuLabel>Export</DropdownMenuLabel>
                 <DropdownMenuItem onClick={() => exportPdf("report")} data-testid="button-export-pdf"><FileDown />Full report (PDF)</DropdownMenuItem>
                 <DropdownMenuItem onClick={() => exportPdf("summary")} data-testid="button-export-summary-pdf"><FileText />Manager summary (PDF)</DropdownMenuItem>
@@ -149,6 +153,7 @@ export function WorkspacePage({ id }: { id: string }) {
         <TabsContent value="shifts" className="mt-5"><ShiftsTab {...props} /></TabsContent>
         <TabsContent value="details" className="mt-5"><DetailsTab {...props} /></TabsContent>
       </Tabs>
+      {checklist && <PayrollChecklistDialog site={site} period={result.periodStart ? { start: result.periodStart, end: result.periodEnd } : null} result={result} onTab={setTab} onClose={() => setChecklist(false)} />}
     </div>
   );
 }
