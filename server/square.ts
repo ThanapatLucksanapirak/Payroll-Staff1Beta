@@ -7,6 +7,8 @@ const API = "https://connect.squareup.com/v2";
 const VERSION = "2025-05-21";
 
 export class SquareError extends Error {
+  /** Square's error code, e.g. INSUFFICIENT_SCOPES. */
+  code?: string;
   constructor(message: string, public status = 502) { super(message); }
 }
 
@@ -23,7 +25,11 @@ async function call(token: string, path: string, init: { method?: string; body?:
   }
   const data: any = await res.json().catch(() => ({}));
   if (res.status === 401) throw new SquareError("Square rejected the access token. Reconnect Square in Settings → Locations.", 400);
-  if (!res.ok || data.errors) throw new SquareError(data.errors?.[0]?.detail ?? `Square returned ${res.status}`);
+  if (!res.ok || data.errors) {
+    const e = new SquareError(data.errors?.[0]?.detail ?? `Square returned ${res.status}`);
+    e.code = data.errors?.[0]?.code ?? (res.status === 403 ? "FORBIDDEN" : undefined);
+    throw e;
+  }
   return data;
 }
 
@@ -98,4 +104,54 @@ export async function pullTimecards(token: string, opts: { locationId?: string; 
   });
   const warnings = open ? [`${open} timecard${open === 1 ? " is" : "s are"} still open (not clocked out) and were skipped.`] : [];
   return { shifts, warnings, locationId };
+}
+
+/** Currencies without minor units (Square amounts are already whole units). */
+const ZERO_DECIMAL = new Set(["JPY", "KRW", "VND", "CLP", "ISK", "UGX", "XAF", "XOF", "PYG"]);
+const moneyOf = (m: any) => {
+  const n = Number(m?.amount);
+  if (!Number.isFinite(n)) return 0;
+  return ZERO_DECIMAL.has(String(m?.currency ?? "").toUpperCase()) ? n : n / 100;
+};
+
+/**
+ * Net sales per local date (completed orders, after discounts and returns,
+ * without tax and tips), from the Orders API. Needs the ORDERS_READ permission.
+ */
+export async function pullDailySales(token: string, opts: { locationId?: string; start: string; end: string; timezone: string }): Promise<Record<string, number>> {
+  let locationId = opts.locationId;
+  if (!locationId) {
+    const locs = await listLocations(token);
+    if (!locs.length) throw new SquareError("No Square locations were found for this token.", 400);
+    locationId = locs[0].id;
+  }
+  const startAt = localToInstant(opts.start, 0, opts.timezone);
+  const endAt = localToInstant(addDays(opts.end, 1), 0, opts.timezone);
+  const out: Record<string, number> = {};
+  let cursor: string | undefined;
+  let guard = 0;
+  do {
+    const body: any = {
+      location_ids: [locationId],
+      limit: 500,
+      query: {
+        filter: { state_filter: { states: ["COMPLETED"] }, date_time_filter: { closed_at: { start_at: startAt, end_at: endAt } } },
+        sort: { sort_field: "CLOSED_AT", sort_order: "ASC" },
+      },
+    };
+    if (cursor) body.cursor = cursor;
+    const data = await call(token, "/orders/search", { method: "POST", body });
+    for (const o of data.orders ?? []) {
+      const at = o.closed_at ?? o.created_at;
+      if (!at) continue;
+      const a = o.net_amounts ?? {};
+      const total = a.total_money ? moneyOf(a.total_money) : moneyOf(o.total_money);
+      const tax = a.tax_money ? moneyOf(a.tax_money) : moneyOf(o.total_tax_money);
+      const tip = a.tip_money ? moneyOf(a.tip_money) : moneyOf(o.total_tip_money);
+      const date = instantToLocal(at, opts.timezone).date;
+      out[date] = Math.round(((out[date] ?? 0) + total - tax - tip) * 100) / 100;
+    }
+    cursor = data.cursor;
+  } while (cursor && ++guard < 200);
+  return out;
 }

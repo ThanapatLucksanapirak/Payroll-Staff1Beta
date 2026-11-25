@@ -20,6 +20,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Field } from "@/components/workspace/fields";
+import { ScheduleAlerts } from "@/components/schedule/ScheduleAlerts";
 import { cn } from "@/lib/utils";
 
 interface EmployeeNow {
@@ -106,6 +107,8 @@ export function LivePage() {
           {site.name} takes its hours from Square, so the time clock is off here.
         </Banner>
       )}
+
+      <ScheduleAlerts />
 
       {q.isLoading ? (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">{[0, 1, 2, 3].map((i) => <Skeleton key={i} className="h-28 rounded-xl" />)}</div>

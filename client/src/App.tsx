@@ -22,6 +22,7 @@ const SettingsPage = lazy(() => import("@/pages/Settings").then((m) => ({ defaul
 const ReportsPage = lazy(() => import("@/pages/Reports").then((m) => ({ default: m.ReportsPage })));
 const LivePage = lazy(() => import("@/pages/Live").then((m) => ({ default: m.LivePage })));
 const EmployeesPage = lazy(() => import("@/pages/Employees").then((m) => ({ default: m.EmployeesPage })));
+const SchedulePage = lazy(() => import("@/pages/Schedule").then((m) => ({ default: m.SchedulePage })));
 
 function PageFallback() {
   return (
@@ -92,6 +93,7 @@ function Gate() {
               <Route path="/timesheet/:id">{(p) => <WorkspacePage key={p.id} id={p.id} />}</Route>
               <Route path="/live"><LivePage /></Route>
               <Route path="/employees"><EmployeesPage /></Route>
+              <Route path="/schedule"><SchedulePage /></Route>
               <Route path="/reports"><ReportsPage /></Route>
               <Route path="/settings/:section?">{(p) => <SettingsPage section={p.section} />}</Route>
               <Route><HomePage /></Route>

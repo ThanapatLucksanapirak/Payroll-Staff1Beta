@@ -13,6 +13,7 @@ import { db } from "./db";
 import * as settings from "./settings";
 import { type StoredEmployee, getEmployee, listEmployees } from "./employees";
 import { broadcast } from "./live";
+import { applyScheduleRules } from "./schedule";
 
 const DAY = 86_400_000;
 export const PUNCH_ID_RE = /^[A-Za-z0-9_-]{8,64}$/;
@@ -205,7 +206,7 @@ export function registerPunchRoutes(app: Express) {
     const r = localRange(addDays(start, -1), addDays(end, 2), site.rules.timezone);
     const punches = await (await db()).listPunches({ siteId: site.id, from: r.from, to: r.to, limit: 50000 });
     const names = Object.fromEntries((await listEmployees(site.id)).map((e) => [e.id, e.name]));
-    res.json(punchesToShifts(punches, { timezone: site.rules.timezone, start, end, names }));
+    res.json(await applyScheduleRules(site, punchesToShifts(punches, { timezone: site.rules.timezone, start, end, names }), start, end));
   }));
 
   app.post("/api/sites/:siteId/punches", h(async (req, res) => {
