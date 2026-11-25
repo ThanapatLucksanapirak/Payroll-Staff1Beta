@@ -50,7 +50,7 @@ export function PortalSettingsCard({ site }: { site: Site }) {
       </div>
       {on && (
         <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border/80 px-3.5 py-2.5">
-          <span className="min-w-0 flex-1 truncate text-[13px] font-medium tabular" data-testid="text-portal-url">{url}</span>
+          <span className="w-full min-w-0 flex-1 truncate text-[13px] font-medium tabular sm:w-auto" data-testid="text-portal-url">{url}</span>
           <Button variant="outline" size="sm" onClick={copy}><Copy />Copy link</Button>
           <Button asChild variant="ghost" size="sm"><a href="/me" target="_blank" rel="noreferrer"><ExternalLink />Open</a></Button>
         </div>

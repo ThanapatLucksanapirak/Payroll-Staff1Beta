@@ -43,12 +43,12 @@ export function TimeOffRequests({ siteId, onChanged }: { siteId: string; onChang
           return (
             <li key={t.id} className="flex flex-wrap items-center gap-3 px-4 py-3 text-[13px]" data-testid={`timeoff-request-${t.id}`}>
               <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-warning-soft text-warning"><CalendarClock className="h-4 w-4" /></span>
-              <span className="min-w-0 flex-1">
+              <span className="min-w-[14rem] flex-1">
                 <span className="block font-semibold">{t.employeeName} · {t.start === t.end ? app.date(t.start) : `${app.date(t.start)} – ${app.date(t.end)}`} <span className="font-normal text-muted-foreground">({days} day{days === 1 ? "" : "s"})</span></span>
                 <span className="block text-xs text-muted-foreground">{[t.reason, t.requestedBy === "employee" ? `asked ${timeAgo(t.createdAt)} from the employee portal` : `added ${timeAgo(t.createdAt)}`].filter(Boolean).join(" · ")}</span>
               </span>
               {editable && (
-                <span className="flex items-center gap-2">
+                <span className="ml-auto flex items-center gap-2">
                   {busy === t.id && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
                   <Button variant="outline" size="sm" disabled={!!busy} onClick={() => decide(t, "declined")} data-testid={`button-decline-${t.id}`}><X />Decline</Button>
                   <Button size="sm" disabled={!!busy} onClick={() => decide(t, "approved")} data-testid={`button-approve-${t.id}`}><Check />Approve</Button>

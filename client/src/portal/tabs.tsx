@@ -118,7 +118,7 @@ export function HoursTab({ me }: { me: Me }) {
               })}
             </ul>
           )}
-          <p className="mt-4 px-1 text-[14px] text-neutral-500">Hours from the time clock, before breaks are paid or rounded. Your pay statement has the final numbers. Something wrong? Tell your manager.</p>
+          <p className="mt-4 px-1 text-[14px] text-neutral-500">Hours from the time clock. Your pay statement has the final numbers. Something wrong? Tell your manager.</p>
         </>
       )}
     </section>
@@ -161,7 +161,7 @@ export function PayTab({ me }: { me: Me }) {
               <button type="button" onClick={() => download(s)} disabled={!!busy} className="portal-tap flex w-full items-center gap-4 px-5 py-4 text-left active:bg-neutral-50 disabled:opacity-70" data-testid={`portal-statement-${s.id}`}>
                 <span className="min-w-0 flex-1">
                   <span className="block text-[18px] font-semibold">{range(s.periodStart, s.periodEnd)}</span>
-                  <span className="block truncate text-[14px] text-neutral-500">{s.label}</span>
+                  {s.label && s.label !== range(s.periodStart, s.periodEnd) && <span className="block truncate text-[14px] text-neutral-500">{s.label}</span>}
                 </span>
                 <span className="text-right">
                   <span className="tabular block text-[19px] font-semibold">{money(s.totalPay, me)}</span>
@@ -268,7 +268,7 @@ export function TimeOffTab({ me }: { me: Me }) {
     }
   };
 
-  const inputCls = "portal-input h-14 w-full rounded-2xl bg-neutral-100 px-4 text-[18px] outline-none";
+  const inputCls = "portal-input h-14 w-full min-w-0 rounded-2xl bg-neutral-100 px-3 text-[16px] outline-none";
   return (
     <section data-testid="portal-timeoff">
       <Title>Time off</Title>
