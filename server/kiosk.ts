@@ -12,7 +12,7 @@ import { z } from "zod";
 import type { Site } from "@shared/schema";
 import { todayISO } from "@shared/dates";
 import { PUNCH_TYPES, type Punch, type PunchMeta, allowedActions, clockState, localRange } from "@shared/punches";
-import { type KioskDeviceOptions, DEVICE_LOGIN_MODES, IDLE_MAX, IDLE_MIN, breakDue, checkAction, daySummary, matchStation, normalizeDeviceOptions, notesFor } from "@shared/kiosk";
+import { type KioskDeviceOptions, DEVICE_LOGIN_MODES, IDLE_MAX, IDLE_MIN, breakDue, checkAction, daySummary, matchStation, normalizeDeviceOptions, notesFor, weakPinReason } from "@shared/kiosk";
 import { getSiteConfig, listNotes } from "./kioskConfig";
 import { decodePhoto, deletePhoto, savePhoto } from "./kioskPhotos";
 import { registerKioskDeviceFeatureRoutes } from "./kioskFeatures";
@@ -20,7 +20,7 @@ import { getAuthSecret } from "./config";
 import { db } from "./db";
 import type { DataStore } from "./db/types";
 import * as settings from "./settings";
-import { type StoredEmployee, PIN_RE, findByPin, getEmployee, listEmployees, registerEmployeeRoutes } from "./employees";
+import { type StoredEmployee, PIN_RE, findByPin, getEmployee, listEmployees, pinInUse, registerEmployeeRoutes } from "./employees";
 import { PUNCH_ID_RE, PunchError, recordPunch, registerPunchRoutes } from "./punches";
 import { registerLiveRoutes } from "./live";
 import { hashPassword, verifyHash } from "./passwords";
@@ -296,18 +296,36 @@ export async function authenticateEmployee(req: Request, res: Response, body: { 
     if (e && e.active) return e;
     if (!body.pin) { res.status(401).json({ error: "That took too long. Enter your PIN again.", code: "ticket" }); return null; }
   }
-  const locked = pinLockedFor(device.id);
-  if (locked) { lockedResponse(res, locked); return null; }
-  const pin = String(body.pin ?? "");
-  const e = PIN_RE.test(pin) ? await findByPin(site.id, pin, body.employeeId || undefined) : null;
-  recordPin(device.id, !!e);
-  if (!e) {
-    const nowLocked = pinLockedFor(device.id);
-    if (nowLocked) { lockedResponse(res, nowLocked); return null; }
-    res.status(403).json({ error: "That PIN didn't match. Try again.", code: "pin" });
-    return null;
+  return withPinAttempt(device.id, async () => {
+    const locked = pinLockedFor(device.id);
+    if (locked) { lockedResponse(res, locked); return null; }
+    const pin = String(body.pin ?? "");
+    const e = PIN_RE.test(pin) ? await findByPin(site.id, pin, body.employeeId || undefined) : null;
+    recordPin(device.id, !!e);
+    if (!e) {
+      const nowLocked = pinLockedFor(device.id);
+      if (nowLocked) { lockedResponse(res, nowLocked); return null; }
+      res.status(403).json({ error: "That PIN didn't match. Try again.", code: "pin" });
+      return null;
+    }
+    return e;
+  });
+}
+
+/**
+ * PIN attempts for one lockout key are checked one at a time: the lock is
+ * checked, the PIN verified and the result recorded before the next attempt
+ * starts. Parallel guesses therefore can't slip past the lockout, and once the
+ * lock trips even the right PIN waits until it expires.
+ */
+async function withPinAttempt<T>(lockKey: string, fn: () => Promise<T>): Promise<T> {
+  const turn = acquireArrival(`attempt:${lockKey}`);
+  try {
+    await turn.ready;
+    return await fn();
+  } finally {
+    turn.done();
   }
-  return e;
 }
 
 /** Device-token endpoints. Register before the admin auth middleware. */
@@ -371,22 +389,25 @@ export function registerKioskRoutes(app: Express) {
   const managerGate = async (req: Request, res: Response): Promise<boolean> => {
     const { device, site } = ctx(res);
     const lockKey = `mgr:${device.id}`;
-    const locked = pinLockedFor(lockKey);
-    if (locked) { lockedResponse(res, locked); return false; }
     const { pin } = z.object({ pin: z.string().max(12).default("") }).parse(req.body ?? {});
-    if (!(await managerPinSet(site.id))) {
-      res.status(409).json({ error: "No manager PIN is set for this location. Set one in the admin app: Settings → Locations → Time clock.", code: "no_manager_pin" });
-      return false;
-    }
-    const ok = await checkManagerPin(site.id, pin);
-    recordPin(lockKey, ok);
-    if (!ok) {
-      const nowLocked = pinLockedFor(lockKey);
-      if (nowLocked) lockedResponse(res, nowLocked);
-      else res.status(403).json({ error: "That manager PIN isn't right.", code: "pin" });
-      return false;
-    }
-    return true;
+    // One attempt at a time per device (see withPinAttempt), so the lockout can't be raced.
+    return withPinAttempt(lockKey, async () => {
+      const locked = pinLockedFor(lockKey);
+      if (locked) { lockedResponse(res, locked); return false; }
+      if (!(await managerPinSet(site.id))) {
+        res.status(409).json({ error: "No manager PIN is set for this location. Set one in the admin app: Settings → Locations → Time clock.", code: "no_manager_pin" });
+        return false;
+      }
+      const ok = await checkManagerPin(site.id, pin);
+      recordPin(lockKey, ok);
+      if (!ok) {
+        const nowLocked = pinLockedFor(lockKey);
+        if (nowLocked) lockedResponse(res, nowLocked);
+        else res.status(403).json({ error: "That manager PIN isn't right.", code: "pin" });
+        return false;
+      }
+      return true;
+    });
   };
   app.post("/api/kiosk/manager-unlock", h(async (req, res) => {
     if (await managerGate(req, res)) res.json({ ok: true });
@@ -550,6 +571,11 @@ export function registerTimeClockAdminRoutes(app: Express) {
     const site = await settings.getSite(String(req.params.siteId));
     if (!site) return res.status(404).json({ error: "Location not found." });
     const { pin } = z.object({ pin: z.string().regex(MANAGER_PIN_RE, "Use 4 to 8 digits.").nullable() }).parse(req.body ?? {});
+    if (pin) {
+      const weak = weakPinReason(pin);
+      if (weak) return res.status(400).json({ error: weak, code: "weak_pin" });
+      if (await pinInUse(site.id, pin)) return res.status(409).json({ error: "An employee at this location uses that PIN. Choose a different manager PIN.", code: "pin_in_use" });
+    }
     await setManagerPin(site.id, pin);
     res.json({ set: !!pin });
   }));

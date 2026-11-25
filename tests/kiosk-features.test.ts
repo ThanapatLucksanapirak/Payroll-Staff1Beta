@@ -474,3 +474,53 @@ test("fix requests: kiosk asks, manager approves (creates the punch) or declines
   assert.ok(backup.body.settings.some((x: any) => x.key === `kiosk_fix_requests:${siteId}`));
   assert.ok(backup.body.settings.some((x: any) => x.key === `kiosk_notes:${siteId}`));
 });
+
+test("manager PIN: parallel guesses can't race the lockout, and a locked device refuses even the right PIN", async () => {
+  const { PIN_MAX_FAILS } = await import("../server/kiosk");
+  assert.equal((await A("PUT", `/api/sites/${siteId}/kiosk-manager-pin`, { pin: "2580" })).status, 200);
+  const dev = (await A("POST", `/api/sites/${siteId}/kiosk-devices`, { name: "Burst" })).body.token;
+  // 150 guesses at once, with the right PIN deep inside the burst.
+  const guesses = Array.from({ length: 150 }, (_, i) => String(3000 + i));
+  guesses[100] = "2580";
+  const results = await Promise.all(guesses.map((pin) => K("POST", "/api/kiosk/manager-unlock", { pin }, dev)));
+  const count = (s: number) => results.filter((r) => r.status === s).length;
+  assert.equal(count(200), 0, "the right PIN must not get through once the lock trips");
+  assert.equal(count(403), PIN_MAX_FAILS - 1);
+  assert.equal(count(429), 150 - (PIN_MAX_FAILS - 1));
+  const after = await K("POST", "/api/kiosk/manager-unlock", { pin: "2580" }, dev);
+  assert.equal(after.status, 429, "still locked: the correct PIN didn't clear the lockout");
+  // Manager guessing doesn't lock employees out of punching on that device
+  assert.equal((await K("POST", "/api/kiosk/identify", { pin: "1234" }, dev)).status, 200);
+  // Employee PINs: a burst can't find a PIN either
+  const dev2 = (await A("POST", `/api/sites/${siteId}/kiosk-devices`, { name: "Burst 2" })).body.token;
+  const emp = Array.from({ length: 120 }, (_, i) => String(6000 + i));
+  emp[80] = "5678";
+  const er = await Promise.all(emp.map((pin) => K("POST", "/api/kiosk/identify", { pin }, dev2)));
+  assert.equal(er.filter((r) => r.status === 200).length, 0);
+  // The normal path still works on a fresh device
+  const dev3 = (await A("POST", `/api/sites/${siteId}/kiosk-devices`, { name: "Fine" })).body.token;
+  assert.equal((await K("POST", "/api/kiosk/manager-unlock", { pin: "2580" }, dev3)).status, 200);
+});
+
+test("manager PIN: weak PINs refused, and it can't match an employee PIN (either way)", async () => {
+  const { weakPinReason } = await import("../shared/kiosk");
+  for (const p of ["0000", "1111", "1234", "4321", "9876", "8901", "1212", "123456", "13131313"]) assert.ok(weakPinReason(p), p);
+  for (const p of ["2580", "1357", "7391", "2468", "190452"]) assert.equal(weakPinReason(p), null, p);
+  for (const p of ["1234", "0000", "1212"]) {
+    const r = await A("PUT", `/api/sites/${siteId}/kiosk-manager-pin`, { pin: p });
+    assert.equal(r.status, 400, p);
+    assert.equal(r.body.code, "weak_pin");
+  }
+  const emp = await A("POST", `/api/sites/${siteId}/employees`, { name: "Dee Park", pin: "7391" });
+  assert.equal(emp.status, 200, JSON.stringify(emp.body));
+  const clash = await A("PUT", `/api/sites/${siteId}/kiosk-manager-pin`, { pin: "7391" });
+  assert.equal(clash.status, 409);
+  assert.equal(clash.body.code, "pin_in_use");
+  assert.equal((await A("PUT", `/api/sites/${siteId}/kiosk-manager-pin`, { pin: "8264" })).status, 200);
+  const back = await A("POST", `/api/sites/${siteId}/employees`, { name: "Eli Moss", pin: "8264" });
+  assert.equal(back.status, 409, "an employee PIN can't be the manager PIN");
+  assert.match(back.body.error, /manager PIN/);
+  assert.equal((await A("PUT", `/api/sites/${siteId}/employees/${emp.body.id}`, { pin: "8264" })).status, 409);
+  // The same PIN at another location is fine
+  assert.equal((await A("POST", `/api/sites/${site2}/employees`, { name: "Eli Moss", pin: "8264" })).status, 200);
+});

@@ -9,6 +9,7 @@ import { rowToDoc } from "@shared/legacy";
 import { db } from "./db";
 import type { DataStore } from "./db/types";
 import * as settings from "./settings";
+import { verifyHash } from "./passwords";
 
 const scrypt = promisify(nodeScrypt) as (pw: string, salt: string, len: number) => Promise<Buffer>;
 
@@ -93,7 +94,22 @@ export async function findByPin(siteId: string, pin: string, employeeId?: string
   return match ?? null;
 }
 
+/** Does any employee at the location (active or not) use this PIN? */
+export async function pinInUse(siteId: string, pin: string): Promise<boolean> {
+  if (!PIN_RE.test(pin)) return false;
+  const dir = await load(siteId);
+  const h = await hashPin(pin, dir.salt);
+  return dir.employees.some((e) => e.pinHash && sameHash(e.pinHash, h));
+}
+
+/** Is this the location's kiosk manager PIN? (Same key and hash input as kiosk.ts.) */
+async function isManagerPin(siteId: string, pin: string): Promise<boolean> {
+  const stored = await (await db()).getSetting(`kiosk_manager_pin:${siteId}`);
+  return !!stored && (await verifyHash(`kiosk-manager:${pin}`, stored));
+}
+
 const err = (status: number, message: string) => Object.assign(new Error(message), { status });
+const MANAGER_CLASH = "That's this location's kiosk manager PIN. Choose a different one.";
 
 async function checkUnique(dir: Directory, selfId: string | null, name: string, pinHash: string | null) {
   const k = employeeKey(name);
@@ -115,6 +131,7 @@ export async function createEmployee(siteId: string, input: z.input<typeof emplo
     const name = normalizeName(data.name);
     const pinHash = data.pin ? await hashPin(data.pin, dir.salt) : null;
     await checkUnique(dir, null, name, pinHash);
+    if (data.pin && (await isManagerPin(siteId, data.pin))) throw err(409, MANAGER_CLASH);
     const now = new Date().toISOString();
     const e: StoredEmployee = { id: `emp_${randomUUID().replace(/-/g, "").slice(0, 12)}`, name, role: data.role, active: data.active, pinHash, createdAt: now, updatedAt: now };
     await save(siteId, { ...dir, employees: [...dir.employees, e] });
@@ -134,6 +151,7 @@ export async function updateEmployee(siteId: string, id: string, patch: Partial<
     if (data.active !== undefined) next.active = data.active;
     if (data.pin !== undefined) next.pinHash = data.pin ? await hashPin(data.pin, dir.salt) : null;
     await checkUnique(dir, id, next.name, data.pin ? next.pinHash : null);
+    if (data.pin && (await isManagerPin(siteId, data.pin))) throw err(409, MANAGER_CLASH);
     await save(siteId, { ...dir, employees: dir.employees.map((e) => (e.id === id ? next : e)) });
     return next;
   });
