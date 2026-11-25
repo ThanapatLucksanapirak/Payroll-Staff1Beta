@@ -4,7 +4,8 @@ import { jsPDF } from "jspdf";
 import { autoTable, type CellHookData, type RowInput, type UserOptions } from "jspdf-autotable";
 import { DAY_LABELS, type AnalysisResult, type DayType, type EmployeeSummary, type Prefs, type Site } from "@shared/schema";
 import { formatDate, formatTime } from "@shared/dates";
-import { type Fmt, localStamp, makeFmt, pdfText } from "./format";
+import { type Fmt, THAI_RE, localStamp, makeFmt, pdfText, setThaiFont } from "./format";
+import { SARABUN_BOLD, SARABUN_REGULAR } from "./fonts/sarabun";
 
 export type RGB = [number, number, number];
 
@@ -63,6 +64,14 @@ export interface Ctx {
   /** Footer page label overrides (e.g. per-statement numbering). */
   pageLabels: Map<number, string>;
   periodText: string;
+  /** Font family: Helvetica, or Sarabun when the document has Thai text. */
+  family: string;
+}
+
+/** Does anything that ends up in the PDF contain Thai? */
+function needsThai(o: PdfOptions): boolean {
+  const { prefs, site } = o;
+  return THAI_RE.test(JSON.stringify(o.result)) || [o.title, o.notes, prefs.businessName, prefs.appName, prefs.currencySymbol, site.name, (site as any).address].some((v) => typeof v === "string" && THAI_RE.test(v));
 }
 
 export function people(o: PdfOptions): EmployeeSummary[] {
@@ -73,6 +82,18 @@ export function createCtx(o: PdfOptions, force?: { orientation?: "portrait" | "l
   const orientation = force?.orientation ?? o.orientation ?? o.prefs.pdfOrientation ?? "landscape";
   const format = o.pageSize ?? o.prefs.pdfPageSize ?? "letter";
   const pdf = new jsPDF({ orientation, unit: "mm", format, compress: true });
+  // Helvetica can't draw Thai. Only documents that need it embed Sarabun (~90 KB per weight).
+  const thai = needsThai(o);
+  setThaiFont(thai);
+  let family = "helvetica";
+  if (thai) {
+    pdf.addFileToVFS("Sarabun-Regular.ttf", SARABUN_REGULAR);
+    pdf.addFileToVFS("Sarabun-Bold.ttf", SARABUN_BOLD);
+    pdf.addFont("Sarabun-Regular.ttf", "sarabun", "normal");
+    pdf.addFont("Sarabun-Bold.ttf", "sarabun", "bold");
+    family = "sarabun";
+    pdf.setFont(family, "normal");
+  }
   pdf.setProperties({ title: pdfText(o.title), creator: pdfText(o.prefs.appName || "Payroll Admin") });
   pdf.setLineHeightFactor(1.2);
   const W = pdf.internal.pageSize.getWidth();
@@ -80,12 +101,12 @@ export function createCtx(o: PdfOptions, force?: { orientation?: "portrait" | "l
   const M = orientation === "landscape" ? 15 : 16;
   const fmt = makeFmt(o.prefs);
   const heading = pdfText(o.prefs.businessName || o.site.name || o.prefs.appName);
-  return { pdf, W, H, M, top: M + 13, bottom: H - 17, fmt, o, heading, running: new Map(), pageLabels: new Map(), periodText: fmt.period(o.result.periodStart, o.result.periodEnd) };
+  return { pdf, W, H, M, top: M + 13, bottom: H - 17, fmt, o, heading, running: new Map(), pageLabels: new Map(), periodText: fmt.period(o.result.periodStart, o.result.periodEnd), family };
 }
 
 // ── Low-level text helpers ───────────────────────────────────────────────────
 export function font(ctx: Ctx, size: number, style: "normal" | "bold" = "normal", color: RGB = C.ink) {
-  ctx.pdf.setFont("helvetica", style);
+  ctx.pdf.setFont(ctx.family, style);
   ctx.pdf.setFontSize(size);
   ctx.pdf.setTextColor(...color);
 }
@@ -347,7 +368,7 @@ export function tableBase(ctx: Ctx, fs = 8, padY = 1.9): Partial<UserOptions> {
     showHead: "everyPage",
     showFoot: "lastPage",
     styles: {
-      font: "helvetica", fontSize: fs, textColor: C.body, cellPadding: { top: padY, bottom: padY, left: 1.6, right: 1.6 },
+      font: ctx.family, fontSize: fs, textColor: C.body, cellPadding: { top: padY, bottom: padY, left: 1.6, right: 1.6 },
       lineColor: C.rule, lineWidth: { bottom: 0.15 }, valign: "middle", overflow: "linebreak", minCellHeight: 0,
     },
     headStyles: { fontSize: fs - 1, textColor: C.muted, fontStyle: "bold", lineColor: C.ruleStrong, lineWidth: { bottom: 0.3 }, cellPadding: { top: padY * 0.7, bottom: padY * 0.9, left: 1.6, right: 1.6 } },
@@ -364,13 +385,13 @@ export function fitColumns(ctx: Ctx, fs: number, head: string[], rows: unknown[]
   const avail = opts.avail ?? ctx.W - 2 * ctx.M;
   const gap = opts.gap ?? 4;
   const widths: number[] = head.map(() => 0);
-  pdf.setFont("helvetica", "bold"); pdf.setFontSize(fs - 1);
+  pdf.setFont(ctx.family, "bold"); pdf.setFontSize(fs - 1);
   head.forEach((h, i) => { widths[i] = pdf.getTextWidth(h); });
   for (const r of rows) {
     if (r.length !== head.length) continue; // spanning rows
     r.forEach((c, i) => {
       if (i === flex || typeof c !== "string") return;
-      pdf.setFont("helvetica", opts.bold?.includes(i) ? "bold" : "normal"); pdf.setFontSize(fs);
+      pdf.setFont(ctx.family, opts.bold?.includes(i) ? "bold" : "normal"); pdf.setFontSize(fs);
       widths[i] = Math.max(widths[i], pdf.getTextWidth(c));
     });
   }

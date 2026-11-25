@@ -10,9 +10,15 @@ import { WEEKDAYS_SHORT, dayOfWeek, formatDate, formatTime, isISODate } from "@s
 /** Characters 0x80–0x9F of Windows-1252 that map to Unicode outside Latin-1. */
 const WIN_ANSI_EXTRA = new Set("€‚ƒ„…†‡ˆ‰Š‹ŒŽ‘’“”•–—˜™š›œžŸ");
 
+/** Thai letters, vowels, tone marks, digits and ฿. */
+export const THAI_RE = /[\u0E01-\u0E5B]/;
+let thaiFont = false;
+/** Set by createCtx while a document is built with the Thai-capable font. */
+export function setThaiFont(on: boolean) { thaiFont = on; }
+
 export function isPdfSafeChar(ch: string): boolean {
   const c = ch.codePointAt(0)!;
-  return (c >= 0x20 && c <= 0x7e) || (c >= 0xa0 && c <= 0xff) || WIN_ANSI_EXTRA.has(ch) || ch === "\n";
+  return (c >= 0x20 && c <= 0x7e) || (c >= 0xa0 && c <= 0xff) || WIN_ANSI_EXTRA.has(ch) || ch === "\n" || (thaiFont && c >= 0x0e01 && c <= 0x0e5b);
 }
 
 const CHAR_MAP: Record<string, string> = {

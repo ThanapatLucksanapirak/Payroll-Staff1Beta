@@ -5,7 +5,7 @@ import type { jsPDF } from "jspdf";
 import { buildPayrollPdf } from "../client/src/lib/pdf/report";
 import { buildPayStatementsPdf, earningsLines } from "../client/src/lib/pdf/statements";
 import { buildSummaryPdf } from "../client/src/lib/pdf/summary";
-import { isPdfSafeChar, makeFmt, pdfCurrencyPrefix, pdfText } from "../client/src/lib/pdf/format";
+import { isPdfSafeChar, makeFmt, pdfCurrencyPrefix, pdfText, setThaiFont } from "../client/src/lib/pdf/format";
 import type { PdfOptions } from "../client/src/lib/pdf/kit";
 import { DATE_FORMATS, prefsSchema } from "../shared/schema";
 import { TINY_PNG, bigResult, edgeResult, emptyResult, prefs, realisticResult, site } from "./pdf-fixture";
@@ -195,9 +195,10 @@ test("currency symbols: drawable ones kept, others fall back to ISO codes", () =
   assert.equal(pdfCurrencyPrefix("₱"), "PHP ");
   assert.equal(pdfCurrencyPrefix("₹"), "INR ");
   assert.equal(pdfCurrencyPrefix("₩"), "KRW ");
+  setThaiFont(false); // Helvetica-only documents
   assert.equal(pdfCurrencyPrefix("฿"), "THB ");
   assert.equal(pdfCurrencyPrefix(""), "");
-  for (const [sym, expect] of [["€", "€1,268.67"], ["£", "£1,268.67"], ["¥", "¥1,268.67"], ["₱", "PHP 1,268.67"], ["₹", "INR 1,268.67"], ["₩", "KRW 1,268.67"], ["฿", "THB 1,268.67"]]) {
+  for (const [sym, expect] of [["€", "€1,268.67"], ["£", "£1,268.67"], ["¥", "¥1,268.67"], ["₱", "PHP 1,268.67"], ["₹", "INR 1,268.67"], ["₩", "KRW 1,268.67"]]) {
     const o = opts({ prefs: prefs({ currencySymbol: sym }) });
     for (const build of [buildPayrollPdf, buildSummaryPdf, buildPayStatementsPdf]) {
       const text = pdfStrings(build(o));
@@ -209,10 +210,15 @@ test("currency symbols: drawable ones kept, others fall back to ISO codes", () =
 });
 
 test("pdfText makes any string drawable", () => {
+  setThaiFont(false);
   assert.equal(pdfText("Zoë Ñúñez"), "Zoë Ñúñez");
   assert.equal(pdfText("Łukasz Čech"), "Lukasz Cech");
   assert.equal(pdfText("a − b → c"), "a - b -> c");
   assert.equal(pdfText("สม"), "??");
+  setThaiFont(true); // a document with Thai text embeds Sarabun
+  assert.equal(pdfText("สม ฿"), "สม ฿");
+  assert.equal(pdfText("田中"), "??", "other scripts still fall back");
+  setThaiFont(false);
   assert.equal(pdfText("€ — “quotes”"), "€ — “quotes”");
   const names = realisticResult();
   names.employees[0].name = "Nguyễn Văn Ánh 田中";

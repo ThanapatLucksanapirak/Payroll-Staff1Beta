@@ -248,7 +248,7 @@ test("PDF payout sheet: grand + per-method totals equal engine totals; names pre
   const r = bigMixed();
   const fmt = makeFmt(prefs);
   const pdf = buildPayoutSheetPdf(O(r));
-  const text = pdfStrings(pdf);
+  const text = (await pdfjsText(pdf)).pages.join("\n");
   for (const v of [r.totals.cash, r.totals.bank, r.totals.check, r.totals.totalPay]) {
     const s = fmt.money(v);
   }
@@ -264,7 +264,8 @@ test("PDF report/summary/statements: totals match engine, no off-page text", asy
   const fmt = makeFmt(prefs);
   for (const [name, b] of [["report", buildPayrollPdf], ["summary", buildSummaryPdf], ["statements", buildPayStatementsPdf]] as const) {
     const pdf = b(O(r) as any);
-    const text = pdfStrings(pdf);
+    // Thai names switch the document to an embedded font, whose text pdfjs decodes.
+    const text = (await pdfjsText(pdf)).pages.join("\n");
     if (name !== "statements") assert.ok(text.includes(fmt.money(r.totals.totalPay)), `${name} total ${fmt.money(r.totals.totalPay)}`);
     const { overflow, pages } = await pdfjsText(pdf);
     assert.deepEqual(overflow, [], name);
@@ -311,4 +312,19 @@ test("csv exports neutralise spreadsheet formulas and read back unchanged", asyn
   const back = parseCsvText(out).shifts[0];
   assert.equal(back.employee, "=cmd|' /C calc'!A0".replace(/\s+/g, " "));
   assert.equal(back.role, "+Cook");
+});
+
+test("PDF: Thai names print in Thai; Latin-only PDFs don't embed the Thai font", async () => {
+  const r = bigMixed();
+  const thai = buildPayoutSheetPdf(O(r));
+  const { pages } = await pdfjsText(thai);
+  const all = pages.join("\n").replace(/\s+/g, "");
+  assert.ok(all.includes("สมชายใจดี"), "Thai name readable");
+  assert.ok(all.includes("สมหญิงใจดี"), "second Thai name readable");
+  assert.ok(Buffer.from(thai.output("arraybuffer")).toString("latin1").includes("/BaseFont /sarabun"));
+
+  const latin = run([sh("Ana Ruiz", "2026-11-02", 600, 1260)], [emp("Ana Ruiz", { hourlyRate: 10 })]);
+  const plain = buildPayoutSheetPdf(O(latin));
+  assert.ok(!Buffer.from(plain.output("arraybuffer")).toString("latin1").includes("/BaseFont /sarabun"), "no font embedded when not needed");
+  assert.ok(plain.output("arraybuffer").byteLength < 60_000);
 });
