@@ -6,7 +6,7 @@ import { type ClockStatus, type Punch, type PunchType, PUNCH_LABELS, PUNCH_TYPES
 import { instantToLocal, localToInstant, minutesToInput, inputToMinutes, todayISO } from "@shared/dates";
 import { useApp } from "@/context/AppData";
 import { api, errorMessage, queryClient } from "@/lib/api";
-import { canEdit, isAdmin } from "@/lib/roles";
+import { can, isAdmin } from "@/lib/roles";
 import { useLiveEvents } from "@/lib/live";
 import { useToast } from "@/hooks/use-toast";
 import { SiteDot } from "@/components/AppShell";
@@ -20,11 +20,15 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Field } from "@/components/workspace/fields";
+import { ScheduleAlerts } from "@/components/schedule/ScheduleAlerts";
+import { LiveTimeclockPanel } from "@/components/timeclock/LiveTimeclockPanel";
 import { cn } from "@/lib/utils";
+import { BreakDueBadge, FixRequests, PunchPhoto, ShiftNotes, StationTag } from "@/components/live/KioskLive";
 
 interface EmployeeNow {
   id: string; name: string; role: string; active: boolean; inDirectory: boolean;
   status: ClockStatus; since: string | null; shiftStart: string | null; minutes: number; lastPunch: Punch | null;
+  station?: string | null; breakDue?: boolean;
 }
 interface DayData {
   site: { id: string; name: string; timezone: string; timeSource: string };
@@ -52,7 +56,7 @@ export function LivePage() {
   const app = useApp();
   const site = app.site;
   const tz = site.rules.timezone;
-  const editable = canEdit(app.user);
+  const editable = can(app.user, "punches.edit");
   const key = ["/api/sites", site.id, "timeclock"];
   const q = useQuery<DayData>({ queryKey: key, staleTime: 0, refetchInterval: 5 * 60_000 });
   const [fix, setFix] = useState<Punch | null>(null);
@@ -107,6 +111,8 @@ export function LivePage() {
         </Banner>
       )}
 
+      <ScheduleAlerts />
+
       {q.isLoading ? (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">{[0, 1, 2, 3].map((i) => <Skeleton key={i} className="h-28 rounded-xl" />)}</div>
       ) : q.error ? (
@@ -122,14 +128,18 @@ export function LivePage() {
             ) : (
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 {groups.on.map((e) => (
-                  <div key={e.id} className="rounded-xl border border-card-border bg-card p-4 shadow-card" data-testid={`card-live-${e.id}`}>
+                  <div key={e.id} className="min-w-0 rounded-xl border border-card-border bg-card p-4 shadow-card" data-testid={`card-live-${e.id}`}>
                     <div className="flex items-start gap-3">
                       <Initials name={e.name} status={e.status} />
                       <div className="min-w-0 flex-1">
                         <p className="truncate text-[15px] font-semibold tracking-tight">{e.name}</p>
                         <p className="truncate text-xs text-muted-foreground">{e.role || (e.inDirectory ? " " : "Not in the employee list")}</p>
+                        {e.station && <StationTag station={e.station} className="mt-1" />}
                       </div>
-                      <Badge variant={STATUS_VARIANT[e.status]} className="shrink-0">{e.status === "break" && <Coffee />}{STATUS_LABEL[e.status]}</Badge>
+                      <div className="flex shrink-0 flex-col items-end gap-1">
+                        <Badge variant={STATUS_VARIANT[e.status]} className="shrink-0">{e.status === "break" && <Coffee />}{STATUS_LABEL[e.status]}</Badge>
+                        <BreakDueBadge due={e.breakDue} />
+                      </div>
                     </div>
                     <div className="mt-4 flex items-end justify-between gap-2">
                       <span className="text-[13px] text-muted-foreground">{e.status === "break" ? "Break since" : "In since"} <b className="font-medium text-foreground">{t(e.status === "break" ? e.since : e.shiftStart)}</b></span>
@@ -142,14 +152,18 @@ export function LivePage() {
             {groups.off.length > 0 && (
               <div className="mt-4 flex flex-wrap gap-2">
                 {groups.off.map((e) => (
-                  <span key={e.id} className="inline-flex items-center gap-2 rounded-full border border-card-border bg-card px-3 py-1 text-xs text-muted-foreground shadow-card">
-                    <span className="font-medium text-foreground">{e.name}</span>
-                    {e.minutes > 0 ? <>out {t(e.lastPunch?.at)} · <span className="tabular">{hm(e.minutes)}</span></> : "not in today"}
+                  <span key={e.id} className="inline-flex min-w-0 max-w-full items-center gap-2 rounded-full border border-card-border bg-card px-3 py-1 text-xs text-muted-foreground shadow-card">
+                    <span className="min-w-0 truncate font-medium text-foreground" title={e.name}>{e.name}</span>
+                    <span className="shrink-0 whitespace-nowrap">{e.minutes > 0 ? <>out {t(e.lastPunch?.at)} · <span className="tabular">{hm(e.minutes)}</span></> : "not in today"}</span>
                   </span>
                 ))}
               </div>
             )}
           </section>
+
+          <LiveTimeclockPanel site={site} />
+          <FixRequests siteId={site.id} tz={tz} editable={editable} />
+          <ShiftNotes siteId={site.id} tz={tz} editable={editable} employees={data.employees.filter((e) => e.inDirectory)} />
 
           <section>
             <SectionLabel action={<span className="text-xs text-muted-foreground">{data.punches.length} punch{data.punches.length === 1 ? "" : "es"}</span>}>Today's punches</SectionLabel>
@@ -159,14 +173,19 @@ export function LivePage() {
               ) : (
                 <ul className="divide-y divide-border/70" data-testid="list-punches">
                   {data.punches.map((p) => (
-                    <li key={p.id} className="flex min-h-[3rem] items-center gap-3 px-4 py-2 text-[13px]">
-                      <span className="w-20 shrink-0 tabular font-semibold">{t(p.at)}</span>
-                      <span className="min-w-0 flex-1 truncate font-medium">{names[p.employeeId] ?? p.employeeName}</span>
+                    <li key={p.id} className="flex min-h-[3rem] min-w-0 items-center gap-2 px-3 py-2 text-[13px] sm:gap-3 sm:px-4">
+                      <span className="w-16 shrink-0 tabular font-semibold sm:w-20">{t(p.at)}</span>
+                      <PunchPhoto punch={p} canView={editable} label={`${names[p.employeeId] ?? p.employeeName} · ${PUNCH_LABELS[p.type]} at ${t(p.at)}`} />
+                      <span className="flex min-w-0 flex-1 flex-col">
+                        <span className="truncate font-medium" title={names[p.employeeId] ?? p.employeeName}>{names[p.employeeId] ?? p.employeeName}</span>
+                        {p.meta?.station && <StationTag station={p.meta.station} className="mt-0.5 self-start" />}
+                      </span>
                       <span className={cn("hidden w-28 shrink-0 font-medium sm:block", TYPE_CLS[p.type])}>{PUNCH_LABELS[p.type]}</span>
                       <span className="hidden w-24 shrink-0 items-center gap-1 text-xs text-muted-foreground md:flex">
                         {p.source === "kiosk" ? <><Tablet className="h-3.5 w-3.5" />Kiosk</> : <><UserRound className="h-3.5 w-3.5" />Admin</>}
                       </span>
                       {(p.editedAt || p.source === "admin") && p.note && <span className="hidden max-w-[14rem] truncate text-xs text-muted-foreground lg:block" title={p.note}>“{p.note}”</span>}
+                      {p.flags?.autoClosed && !p.editedAt && <Badge variant="warning" className="shrink-0">Auto-closed</Badge>}
                       {p.editedAt && <Badge variant="secondary" className="shrink-0">Edited</Badge>}
                       {editable && <Button variant="ghost" size="sm" className="text-muted-foreground" onClick={() => setFix(p)} data-testid={`button-fix-${p.id}`}><Pencil /> <span className="hidden sm:inline">Fix</span></Button>}
                     </li>

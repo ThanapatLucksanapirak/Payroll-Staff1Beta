@@ -6,7 +6,6 @@ import { useApp } from "@/context/AppData";
 import { api, errorMessage } from "@/lib/api";
 import { applyProfile, blankManual, updateEmployee, updateManual } from "@/lib/doc";
 import { useToast } from "@/hooks/use-toast";
-import { useConfirm } from "@/components/ConfirmDialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
@@ -14,6 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Field, NumberInput, Section } from "./fields";
 import { EmptyState } from "@/components/ui/empty-state";
 import type { WsProps } from "./types";
+import { SaveRatesDialog } from "@/components/pay/SaveRatesDialog";
 
 const CUSTOM = "custom";
 
@@ -46,10 +46,10 @@ export function PaymentPicker({ method, cash, defaultMethod, disabled, onChange,
 export function RatesTab(p: WsProps) {
   const app = useApp();
   const { toast } = useToast();
-  const confirm = useConfirm();
   const { doc, site, edit, locked } = p;
   const cats = app.categoriesFor(site.id);
   const [busy, setBusy] = useState<"load" | "save" | null>(null);
+  const [saving, setSaving] = useState(false);
   const active = new Set(shiftEmployeeNames(doc.shifts).map(employeeKey));
   const rows = doc.employees.filter((e) => active.has(employeeKey(e.name))).sort((a, b) => a.name.localeCompare(b.name));
   const setEmp = (name: string, patch: Partial<EmployeeConfig>, key?: string) => edit((d) => updateEmployee(d, name, site, (e) => ({ ...e, ...patch })), key);
@@ -67,20 +67,8 @@ export function RatesTab(p: WsProps) {
     } finally { setBusy(null); }
   };
 
-  const saveDefaults = async () => {
-    const ok = await confirm({ title: `Save rates as defaults for ${site.name}?`, description: "Future timesheets at this location will start with these rates. Employees not in this timesheet keep their saved rates.", confirmLabel: "Save defaults" });
-    if (!ok) return;
-    setBusy("save");
-    try {
-      const existing = await api<EmployeeConfig[]>("GET", `/api/sites/${site.id}/wages`).catch(() => []);
-      const map = new Map(existing.map((e) => [employeeKey(e.name), e]));
-      for (const e of rows) map.set(employeeKey(e.name), e);
-      const r = await api<{ saved: number }>("PUT", `/api/sites/${site.id}/wages`, [...map.values()]);
-      toast({ title: "Default rates saved", description: `${r.saved} employees stored for ${site.name}.` });
-    } catch (e) {
-      toast({ title: "Couldn't save rates", description: errorMessage(e), variant: "destructive" });
-    } finally { setBusy(null); }
-  };
+  // Saved with an effective date (rate history); see SaveRatesDialog.
+  const saveDefaults = () => setSaving(true);
 
   return (
     <div className="space-y-4">
@@ -142,6 +130,7 @@ export function RatesTab(p: WsProps) {
         )}
       </Section>
 
+      <SaveRatesDialog open={saving} onOpenChange={setSaving} siteId={site.id} siteName={site.name} rows={rows} defaultDate={p.result.periodStart || doc.periodStart || ""} />
       <Section
         title="Manual employees"
         description="People paid outside of timecards — a flat amount for the period or amounts on specific dates."

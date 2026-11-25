@@ -16,6 +16,7 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "
 import { cn } from "@/lib/utils";
 import { EmptyState } from "@/components/ui/empty-state";
 import { DayDialog, type DayEdit } from "./DayDialog";
+import { EmployeeExtras } from "@/components/pay/ExtrasTab";
 import { Field, NumberInput, TimeInput } from "./fields";
 import type { WsProps } from "./types";
 
@@ -230,6 +231,8 @@ function EmployeeCard(p: WsProps & { emp: EmployeeSummary; open: boolean; onTogg
             <ExtrasList title="Bonuses" items={generalBonuses} locked={locked} onChange={(b) => setExtras(b as BonusEntry[], null)} testid="bonus" />
             <ExtrasList title="Deductions" items={deductions} locked={locked} onChange={(dd) => setExtras(null, dd)} testid="deduction" />
           </div>
+
+          <EmployeeExtras emp={emp} locked={locked} editable={!locked} edit={edit} />
 
           <div className="flex flex-wrap items-center justify-end gap-x-4 gap-y-1 border-t border-border/70 pt-3 text-xs text-muted-foreground tabular">
             {!emp.excluded && <Button variant="tinted" size="sm" className="mr-auto h-7 px-2 text-xs" onClick={downloadStatement} data-testid={`button-statement-${employeeKey(emp.name)}`}><FileText className="h-3.5 w-3.5" /> Pay statement</Button>}

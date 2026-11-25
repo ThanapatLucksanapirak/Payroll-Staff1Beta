@@ -11,7 +11,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { CommandPalette, isMac } from "@/components/CommandPalette";
 import { NewTimesheetProvider } from "@/components/NewTimesheet";
-import { NAV_ITEMS } from "@/components/nav";
+import { visibleNav } from "@/components/nav";
 import { cn } from "@/lib/utils";
 
 export function SiteDot({ color, className }: { color: string; className?: string }) {
@@ -41,6 +41,7 @@ export function AppShell({ children }: { children: ReactNode }) {
 
 function Shell({ children }: { children: ReactNode }) {
   const [loc] = useLocation();
+  const { user } = useApp();
   const [collapsed, setCollapsed] = useState(() => safeStorage.get(COLLAPSE_KEY) === "1");
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -82,7 +83,7 @@ function Shell({ children }: { children: ReactNode }) {
       {/* Mobile bottom tab bar */}
       <nav aria-label="Sections" className="glass fixed inset-x-0 bottom-0 z-40 border-t border-border/70 pb-[env(safe-area-inset-bottom)] md:hidden">
         <ul className="mx-auto flex max-w-lg">
-          {NAV_ITEMS.filter((n) => n.tab).map((n) => {
+          {visibleNav(user).filter((n) => n.tab).map((n) => {
             const active = n.isActive(loc);
             return (
               <li key={n.href} className="flex-1">
@@ -156,7 +157,7 @@ function SidebarBody({ collapsed, onToggleCollapsed, onSearch }: { collapsed: bo
       {/* Primary navigation */}
       <nav aria-label="Main" className={cn("min-h-0 flex-1 overflow-y-auto px-3", collapsed && "px-2")} onKeyDown={onNavKeyDown}>
         <ul className="space-y-0.5">
-          {NAV_ITEMS.map((n) => {
+          {visibleNav(app.user).map((n) => {
             const active = n.isActive(loc);
             return (
               <li key={n.href}>

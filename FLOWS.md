@@ -64,3 +64,12 @@
 - Database selectable in Settings (local SQLite or any Supabase project), test connection, setup SQL, copy data across
 - Stability: one shared payroll engine (no duplicated math), autosave with status, undo/redo, ISO dates internally, overnight shifts, legacy record migration, no silent deletion of history
 - Delete dead code (unused sidebar, legacy analyzer endpoint, unused deps)
+
+# Brainstorm features (v3.1)
+Each area has a user guide in `docs/features/`:
+- Time clock review (`timeclock.md`): auto clock-out per location, Fix punches page `/live/fix`, shift approval, overtime watch on Live, payroll checklist (Home quick action and timesheet Export menu)
+- Kiosk (`kiosk.md`): photo on punch, confirmation screen, wrong-action guard, idle reset, per-device options, stations, shift notes, break reminders, fix requests (approved on Live)
+- Pay (`pay.md`): final timesheets are locked (Owner reopens with a reason), cash denominations, advances, standing bonuses/deductions, rate history, holidays, tips, year to date, variance card, accounting journal CSV
+- Schedule (`schedule.md`): Schedule page `/schedule`, late / no-show alerts on Live, time off, early clock-in rule, labor vs. sales, payroll forecast
+- Access (`access.md`): Settings → Users → Roles, two-factor sign-in, installable app, offsite backups
+- Employee portal (`portal.md`): `/me` for staff (hours, pay statements, schedule, time-off requests); off by default per location

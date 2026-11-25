@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { docPayExtrasSchema, rateSegmentSchema } from "./payTypes";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Core value types
@@ -200,6 +201,8 @@ export const employeeConfigSchema = z.object({
   paymentMethod: employeePaymentMethod,
   /** For "split": this much is paid in cash, the rest by bank transfer. */
   splitCashAmount: nonNegMoney.default(0),
+  /** Earlier saved rates by effective date (see shared/payTypes.ts). Absent = the rates above apply to every day. */
+  rateHistory: z.array(rateSegmentSchema).max(50).optional(),
 });
 export type EmployeeConfig = z.infer<typeof employeeConfigSchema>;
 
@@ -238,6 +241,8 @@ export const timesheetDocSchema = z.object({
   shifts: z.array(shiftSchema),
   employees: z.array(employeeConfigSchema),
   manualEmployees: z.array(manualEmployeeSchema),
+  /** Tips, holidays, standing items and advance repayments (shared/payExtras.ts). Absent on older timesheets. */
+  payExtras: docPayExtrasSchema.optional(),
 });
 export type TimesheetDoc = z.infer<typeof timesheetDocSchema>;
 
@@ -311,6 +316,19 @@ export interface EmployeeSummary {
   excluded: boolean;
   /** How this person's total is paid out. */
   payment: PaymentSplit;
+  /** Lines added by shared/payExtras.ts (already included in the bonus / deduction totals). */
+  extras?: PayExtrasSummary;
+}
+
+export type ExtraLineKind = "holiday" | "tips" | "recurring_bonus" | "recurring_deduction" | "advance";
+export interface ExtraLine { kind: ExtraLineKind; description: string; amount: number; date?: string; sourceId?: string }
+export interface PayExtrasSummary {
+  lines: ExtraLine[];
+  holiday: number;
+  tips: number;
+  recurringBonus: number;
+  recurringDeduction: number;
+  advance: number;
 }
 
 export interface PayrollWarning {
@@ -342,6 +360,12 @@ export interface AnalysisResult {
     cash: number;
     bank: number;
     check: number;
+    /** Set when pay extras are applied (shared/payExtras.ts). */
+    tips?: number;
+    holidayPremium?: number;
+    advanceRepayments?: number;
+    recurringBonuses?: number;
+    recurringDeductions?: number;
   };
 }
 

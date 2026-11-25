@@ -3,6 +3,7 @@ import type { jsPDF } from "jspdf";
 import { autoTable, type CellHookData, type RowInput } from "jspdf-autotable";
 import type { DayType, EmployeeSummary } from "@shared/schema";
 import { DAY_LABELS } from "@shared/schema";
+import { employeeKey } from "@shared/engine";
 import { type Fmt, dayNote, pdfText } from "./format";
 import {
   C, type Ctx, type PdfOptions, basisText, brandHeader, createCtx, daysText, eyebrow, finishPages, fitColumns, fitText, flushEdges, font,
@@ -161,6 +162,14 @@ function statement(ctx: Ctx, e: EmployeeSummary) {
     didDrawPage: () => { const pg = pdf.getCurrentPageInfo().pageNumber; if (pg > firstPage) ctx.running.set(pg, `${fitText(ctx, name, 50)} (continued)`); },
   });
   y = lastY(ctx, y) + 10;
+
+  // ── Year to date ──
+  const ytd = o.ytd?.[employeeKey(e.name)];
+  if (ytd) {
+    font(ctx, 8.5, "normal", C.muted);
+    pdf.text(`Year to date${o.ytdYear ? ` (${o.ytdYear})` : ""}:  gross ${fmt.money(ytd.gross)}   ·   net ${fmt.money(ytd.net)}`, M, y - 3.5);
+    y += 3;
+  }
 
   // ── Day-by-day ──
   if (e.days.length && !e.isManual) {

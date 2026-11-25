@@ -36,19 +36,21 @@ export async function setupVite(server: Server, app: Express) {
     // The time-clock kiosk is its own page (client/kiosk.html).
     const pathname = url.split("?")[0].split("#")[0];
     if (pathname.startsWith("/kiosk/")) return res.redirect(302, "/kiosk");
+    if (pathname.startsWith("/me/")) return res.redirect(302, "/me");
     const kiosk = pathname === "/kiosk";
+    const portal = pathname === "/me"; // employee portal (client/me.html)
 
     try {
       const clientTemplate = path.resolve(
         import.meta.dirname,
         "..",
         "client",
-        kiosk ? "kiosk.html" : "index.html",
+        kiosk ? "kiosk.html" : portal ? "me.html" : "index.html",
       );
 
       // always reload the index.html file from disk incase it changes
       let template = await fs.promises.readFile(clientTemplate, "utf-8");
-      const entry = kiosk ? "/src/kiosk/main.tsx" : "/src/main.tsx";
+      const entry = kiosk ? "/src/kiosk/main.tsx" : portal ? "/src/portal/main.tsx" : "/src/main.tsx";
       template = template.replace(
         `src="${entry}"`,
         `src="${entry}?v=${Date.now().toString(36)}"`,

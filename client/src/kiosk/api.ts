@@ -13,30 +13,49 @@ const QUEUE_KEY = "kiosk.queue";
 const OFFSET_KEY = "kiosk.clockOffset";
 
 export interface RosterEmployee { id: string; name: string; role: string; status: ClockStatus; since: string | null }
+/** Per-device options and location extras (older servers send none). */
+export interface KioskOptions { photo: boolean; idleSeconds: number; stations: string[]; breakReminderHours: number | null }
 export interface KioskState {
   device: { id: string; name: string };
   site: { id: string; name: string; color: string; timezone: string; loginMode: "pin" | "name_pin"; enabled: boolean; managerPinSet?: boolean };
+  options?: KioskOptions;
   serverTime: string;
   employees: RosterEmployee[];
 }
-export interface Identified {
-  employee: { id: string; name: string; role: string };
+/** Today's numbers for the person at the kiosk (no pay). */
+export interface DayInfo {
   status: ClockStatus;
   since: string | null;
   shiftStart?: string | null;
   todayMinutes: number;
+  breakMinutes?: number;
+  breaks?: number;
+  station?: string | null;
+  breakDue?: boolean;
+  minutesWithoutBreak?: number;
+}
+export interface Identified extends DayInfo {
+  employee: { id: string; name: string; role: string };
   actions: PunchType[];
   ticket?: string;
 }
-export interface PunchResult {
-  punch: { id: string; type: PunchType; at: string };
+export interface KioskNote { id: string; text: string; createdAt: string; createdBy: string }
+export interface PunchResult extends DayInfo {
+  punch: { id: string; type: PunchType; at: string; station?: string | null; photo?: "saved" | "none" | null };
   employee: { id: string; name: string };
-  status: ClockStatus;
-  since: string | null;
-  todayMinutes: number;
   duplicate: boolean;
+  notes?: KioskNote[];
+  ticket?: string;
 }
-export interface QueuedPunch { id: string; type: PunchType; employeeId: string; name: string; pin: string; at: string; tries: number }
+export interface QueuedPunch {
+  id: string; type: PunchType; employeeId: string; name: string; pin: string; at: string; tries: number;
+  station?: string | null;
+  /** JPEG data URL, null when the camera was unavailable, absent when photos are off. */
+  photo?: string | null;
+}
+
+/** Keep at most this many photos in the offline queue (browser storage is small). */
+export const MAX_QUEUED_PHOTOS = 20;
 
 export class KioskError extends Error {
   constructor(public status: number, message: string, public code?: string, public body?: any) { super(message); }
@@ -89,7 +108,14 @@ export const serverNow = () => Date.now() + clockOffset.get();
 export const queue = {
   all: () => safeStorage.getJSON<QueuedPunch[]>(QUEUE_KEY, []),
   save: (q: QueuedPunch[]) => safeStorage.setJSON(QUEUE_KEY, q),
-  add(p: QueuedPunch) { this.save([...this.all(), p]); },
+  add(p: QueuedPunch) {
+    const cur = this.all();
+    // Browser storage is limited: past a few photos, keep the punch and record "no photo".
+    const item = p.photo && cur.filter((x) => x.photo).length >= MAX_QUEUED_PHOTOS ? { ...p, photo: null } : p;
+    this.save([...cur, item]);
+    // If storage is full the write is silently dropped: never lose a punch over a photo.
+    if (!this.all().some((x) => x.id === item.id)) this.save([...cur, item].map((x) => (x.photo ? { ...x, photo: null } : x)));
+  },
 };
 
 /** A random v4 UUID. crypto.randomUUID needs HTTPS; getRandomValues works everywhere. */
@@ -118,7 +144,10 @@ export function flushQueue(): Promise<FlushResult> {
       const item = q[0];
       if (!item) break;
       try {
-        await request<PunchResult>("POST", "/api/kiosk/punch", { id: item.id, type: item.type, pin: item.pin, employeeId: item.employeeId, at: item.at });
+        await request<PunchResult>("POST", "/api/kiosk/punch", {
+          id: item.id, type: item.type, pin: item.pin, employeeId: item.employeeId, at: item.at,
+          ...(item.station ? { station: item.station } : {}), ...(item.photo !== undefined ? { photo: item.photo } : {}),
+        }, 15_000);
         out.sent++;
         queue.save(queue.all().filter((x) => x.id !== item.id));
       } catch (err) {

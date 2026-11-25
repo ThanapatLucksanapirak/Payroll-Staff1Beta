@@ -132,33 +132,67 @@ You can also put Cloudflare Access in front of the admin hostname only.
   that the table is missing; the rest of the app keeps working.
 * Employees and devices are stored in `app_settings` (`employees:<siteId>`,
   `kiosk_devices`). Backups and exports include punches.
+* Punch photos (optional, see `docs/features/kiosk.md`) are files under
+  `DATA_DIR/punch-photos` and are **not** included in backups.
 
 ## 10. Lock the tablet to the time clock
 
 Two layers keep the kiosk from being misused.
 
 **Manager PIN (in the app).** Set one per location in **Settings → Locations →
-Time clock → Manager PIN** (4 to 8 digits, stored hashed). On the kiosk, the
-manager PIN is required to open the device settings, unpair the device, or
-leave full screen. Unpairing from the kiosk also removes the device on the
-server. Until a PIN is set, those actions stay locked. Wrong manager PINs share
-the same lockout as employee PINs (5 tries, then 1 minute, doubling). The PIN
-is left out of backups unless you export with secrets.
+Time clock → Manager PIN** (4 to 8 digits, stored hashed). It can't be the
+same as any employee PIN at that location (and an employee PIN can't be set to
+the manager PIN), and easy PINs such as 1234, 9876, 0000 or 1212 are refused
+when a PIN is set (existing PINs keep working).
+
+With a manager PIN set, the kiosk asks for it before opening the device
+settings, unpairing the device, or using the app's leave-full-screen button.
+Unpairing from the kiosk removes the device on the server first; if the server
+can't be reached or refuses, the tablet stays paired and offers **Forget on this
+device anyway** (then remove the device in Settings so its old pairing stops
+working). The unlocked settings sheet closes by itself after the idle timeout
+(at least 20 seconds).
+
+**Without a manager PIN**, anyone at the tablet can open its settings sheet
+(device info only) and leave full screen; unpairing from the tablet is off, so
+remove the device in Settings instead. Both the admin app and the kiosk show a
+warning while no PIN is set.
+
+Wrong manager PINs have their own lockout per device, separate from employee
+PINs (5 tries, then 1 minute, doubling up to 15 minutes), so guessing the
+manager PIN never stops employees punching. Attempts are checked one at a time,
+so sending many guesses at once doesn't get around the lockout, and while
+locked even the right PIN is refused until the lock expires. Lockouts are kept
+in memory and reset when the server restarts. The PIN is left out of backups
+unless you export with secrets.
+
+The app's own full-screen guard only covers its button: Esc, F11 and system
+gestures can still leave full screen, so use the device lockdown below.
 
 **Device lockdown (on the tablet).** This stops people leaving the app:
 
 - **iPad: Guided Access.** Settings → Accessibility → Guided Access: on, and set
   a passcode. Open the kiosk in Safari, Share → Add to Home Screen, and open it
-  from the Home Screen. Triple-click the side (or Home) button → Start. To leave,
-  triple-click and enter the passcode.
-- **Android: screen pinning.** Settings → Security → App pinning: on, with "Ask
-  for PIN before unpinning". In Chrome, ⋮ → Add to Home screen → Install, then
-  open it. Recent apps → tap the app icon → Pin. To leave, hold Back and
-  Overview (or swipe up and hold) and enter the device PIN.
+  from the Home Screen. **Pair it from inside the Home Screen app**: Home Screen
+  web apps keep their own storage, so a pairing made in Safari doesn't carry
+  over. Triple-click the side (or Home) button → Start. To leave, triple-click
+  and enter the passcode.
+- **Android: screen pinning.** Turn on App pinning with "Ask for PIN before
+  unpinning" (Pixel: Settings → Security & privacy → More security settings →
+  App pinning; Samsung: Settings → Security and privacy → More security
+  settings → Pin app). In Chrome, ⋮ → Add to Home screen / Install app, then
+  open it from the Home screen. Recent apps → tap the app icon → Pin. To leave,
+  hold Back and Overview (or swipe up and hold) and enter the device PIN.
 - **Windows / Linux PC: Chrome kiosk mode.** Run
   `chrome --kiosk --app=https://YOUR-ADDRESS/kiosk` from a startup shortcut
-  (Windows: `shell:startup`; Linux: your desktop's autostart). For a fully
-  locked Windows PC use Assigned Access (Settings → Accounts → Other users →
-  Set up a kiosk). Leave with Alt+F4 / Ctrl+Shift+Q.
+  (Windows: `shell:startup`; Linux: your desktop's autostart). Leave with
+  Alt+F4 / Ctrl+Shift+Q.
+- **Fully locked Windows PC: Assigned Access with Microsoft Edge.** On Windows
+  Pro or Enterprise, Settings → Accounts → Other users → Set up a kiosk creates
+  a separate account that runs a single app. Choose **Microsoft Edge** (Chrome
+  isn't offered), run it as a digital sign / interactive display with
+  `https://YOUR-ADDRESS/kiosk`, and pair the kiosk while signed in to that
+  account. Leave with Ctrl+Alt+Del and switch account. Not available on
+  Windows Home.
 
 Also turn off auto-lock/sleep while charging and keep the device plugged in.

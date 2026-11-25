@@ -19,6 +19,14 @@ export function exportPayload(settings: { key: string; value: string }[], timesh
   return { app: "payroll-admin", version: 2, exportedAt: new Date().toISOString(), settings, timesheets, punches };
 }
 
+/** Settings that never go into a backup export (offsite credentials and status). */
+export const NEVER_BACKED_UP = (key: string) => key.startsWith("offsite:");
+
+type BackupHook = (files: BackupFile[], reason: "auto" | "manual") => Promise<void> | void;
+const hooks: BackupHook[] = [];
+/** Run after each automatic or manual backup (e.g. the offsite copy). Never blocks or fails the backup. */
+export function onBackupWritten(fn: BackupHook) { hooks.push(fn); }
+
 let running: Promise<BackupFile[]> | null = null;
 
 /** Write a backup now. Concurrent calls share one run. */
@@ -29,14 +37,22 @@ export function runBackup(reason: "auto" | "manual" | "pre-restore" = "manual"):
     fs.mkdirSync(BACKUP_DIR, { recursive: true });
     const stamp = new Date().toISOString().slice(0, 19).replace(/:/g, "-");
     const base = path.join(BACKUP_DIR, `payroll-${stamp}-${reason}`);
-    const payload = exportPayload(await store.allSettings(), await store.allTimesheets(), await store.allPunches().catch(() => []));
+    const payload = exportPayload((await store.allSettings()).filter((s) => !NEVER_BACKED_UP(s.key)), await store.allTimesheets(), await store.allPunches().catch(() => []));
     const tmp = `${base}.json.gz.tmp`;
     fs.writeFileSync(tmp, gzipSync(JSON.stringify(payload)), { mode: 0o600 });
     fs.renameSync(tmp, `${base}.json.gz`);
     if (store.snapshotTo) await store.snapshotTo(`${base}.db`).catch((err) => console.warn("[backup] database copy failed:", err.message));
     prune();
     console.log(`[backup] ${reason} backup written (${payload.timesheets.length} timesheets)`);
-    return listBackups().filter((b) => b.name.startsWith(path.basename(base)));
+    const files = listBackups().filter((b) => b.name.startsWith(path.basename(base)));
+    if (reason !== "pre-restore") {
+      for (const fn of hooks) {
+        setImmediate(() => {
+          Promise.resolve().then(() => fn(files, reason)).catch((err) => console.error("[backup] after-backup step failed:", err?.message ?? err));
+        });
+      }
+    }
+    return files;
   })().finally(() => { running = null; });
   return running;
 }

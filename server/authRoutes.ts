@@ -10,6 +10,7 @@ import {
   passwordSchema, setUserPassword, setupRequired, toPublic, updateProfile, updateUser, updateUserSchema, usernameSchema, authenticate,
 } from "./users";
 import { verifyHash } from "./passwords";
+import { loginStep } from "./twofactor";
 
 type Handler = (req: Request, res: Response) => Promise<unknown>;
 const h = (fn: Handler) => (req: Request, res: Response, next: NextFunction) => { fn(req, res).catch(next); };
@@ -51,8 +52,11 @@ export function registerAuthRoutes(app: Express) {
       audit({ userId: null, userName: r.username || username.trim(), ip, action: "auth.login-failed", detail: r.reason === "username-required" ? "username missing" : "wrong username or password" });
       return res.status(401).json({ error: r.reason === "username-required" ? "Enter your username and password." : "Incorrect username or password." });
     }
+    // Two-factor sign-in: answer with a ticket for the second step instead of a session.
+    const step = await loginStep(req, r.user, remember !== false);
+    if (step) return res.json(step);
     const { expiresAt } = setSessionCookie(req, res, r.user, { days: await sessionDays(), remember: remember !== false });
-    audit({ ...actorOf(req, res, r.user), action: "auth.login", target: `user:${r.user.id}` });
+    audit({ ...actorOf(req, res, r.user), action: "auth.login", target: `user:${r.user.id}`, detail: r.user.twoFactor?.enabled ? "two-factor (remembered device)" : undefined });
     res.json({ user: toPublic(r.user), expiresAt });
   }));
 
