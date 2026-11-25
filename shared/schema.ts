@@ -82,7 +82,7 @@ export const siteSchema = z.object({
   address: z.string().default(""),
   notes: z.string().default(""),
   archived: z.boolean().default(false),
-  rules: siteRulesSchema.default({}),
+  rules: siteRulesSchema.prefault({}),
   squareLocationId: z.string().default(""),
   squareLocationName: z.string().default(""),
   // Where this location's hours come from: Square timecards, the time-clock kiosk, or both.

@@ -107,28 +107,34 @@ const restoreSchema = z.object({
   punches: z.array(z.any()).default([]),
 });
 
-/** Restore an export. The current user accounts (and activity log) are always kept. */
+/**
+ * Restore an export: afterwards the data matches the backup exactly (timesheets
+ * and settings added since are removed, edited punches go back). The current
+ * user accounts, activity log and manager PINs are always kept.
+ */
 async function restoreFrom(raw: unknown) {
   const body = restoreSchema.parse(raw);
+  const hasPunches = !!raw && typeof raw === "object" && Array.isArray((raw as any).punches);
+  const punches: Punch[] = [];
+  for (const r of body.punches) {
+    const p = punchSchema.safeParse(r);
+    if (p.success) punches.push(p.data as Punch);
+  }
   await runBackup("pre-restore").catch((err) => {
     throw Object.assign(new Error(`Restore cancelled: could not back up the current data first (${err.message}).`), { status: 500 });
   });
   const store = await db();
-  const keep = new Set(["password_hash", USERS_KEY]);
+  const keepSetting = (k: string) => k === "password_hash" || k === USERS_KEY || k === "revoked_sessions" || k.startsWith(AUDIT_PREFIX) || k.startsWith("kiosk_manager_pin:");
   const result = await store.importAll({
-    settings: body.settings.filter((x) => !keep.has(x.key) && !x.key.startsWith(AUDIT_PREFIX)),
+    settings: body.settings,
     timesheets: body.timesheets.map(({ updated_at: _u, ...rest }: any) => rest),
-  });
-  // Time-clock punches: inserted by id, so restoring twice adds nothing.
-  let punches = 0;
-  for (const raw of body.punches) {
-    const p = punchSchema.safeParse(raw);
-    if (p.success && (await store.insertPunch(p.data as Punch)).created) punches++;
-  }
+    // Backups from before the time clock have no punches: leave today's alone.
+    punches: hasPunches ? punches : undefined,
+  }, { replace: true, keepSetting });
   settings.invalidateSettingsCache();
   invalidateEmployeeCache();
   resetTagCache();
-  return { ...result, punches };
+  return result;
 }
 
 export function registerRoutes(app: Express) {

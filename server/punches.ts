@@ -10,6 +10,7 @@ import {
   punchesToShifts, validateChange, workedMinutes,
 } from "@shared/punches";
 import { db } from "./db";
+import { MAX_PUNCH_QUERY } from "./db/types";
 import * as settings from "./settings";
 import { type StoredEmployee, getEmployee, listEmployees } from "./employees";
 import { broadcast } from "./live";
@@ -192,7 +193,10 @@ export function registerPunchRoutes(app: Express) {
     const { start, end } = z.object({ start: isoDate, end: isoDate }).parse(req.query);
     if (end < start) return res.status(400).json({ error: "The end date is before the start date." });
     const r = localRange(start, end, site.rules.timezone);
-    res.json(await (await db()).listPunches({ siteId: site.id, from: r.from, to: r.to }));
+    const LIST_MAX = 20000;
+    const list = await (await db()).listPunches({ siteId: site.id, from: r.from, to: r.to, limit: LIST_MAX + 1 });
+    if (list.length > LIST_MAX) return res.status(413).json({ error: `More than ${LIST_MAX.toLocaleString("en-US")} punches in that range. Choose a shorter date range.`, code: "too_many" });
+    res.json(list);
   }));
 
   /** Shifts built from punches, for creating a timesheet. */
@@ -203,7 +207,9 @@ export function registerPunchRoutes(app: Express) {
     if (Date.parse(end) - Date.parse(start) > 400 * DAY) return res.status(400).json({ error: "Choose a range of about a year or less." });
     // Widen the window so shifts that start in range but end after it (or the reverse) pair up.
     const r = localRange(addDays(start, -1), addDays(end, 2), site.rules.timezone);
-    const punches = await (await db()).listPunches({ siteId: site.id, from: r.from, to: r.to, limit: 50000 });
+    const punches = await (await db()).listPunches({ siteId: site.id, from: r.from, to: r.to, limit: MAX_PUNCH_QUERY + 1 });
+    // Never build a timesheet from a cut-off list: missing punches would mean missing pay.
+    if (punches.length > MAX_PUNCH_QUERY) return res.status(413).json({ error: `More than ${MAX_PUNCH_QUERY.toLocaleString("en-US")} punches in that range. Create the timesheet for a shorter date range.`, code: "too_many" });
     const names = Object.fromEntries((await listEmployees(site.id)).map((e) => [e.id, e.name]));
     res.json(punchesToShifts(punches, { timezone: site.rules.timezone, start, end, names }));
   }));

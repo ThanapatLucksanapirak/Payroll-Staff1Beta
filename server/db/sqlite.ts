@@ -4,7 +4,7 @@ import path from "node:path";
 import { randomUUID } from "node:crypto";
 import type { DatabaseHealth } from "@shared/schema";
 import type { Punch } from "@shared/punches";
-import { type DataStore, type PunchPatch, type PunchQuery, type TimesheetRow, type TimesheetWrite, patchToRow, punchToRow, rowToPunch, toSummary } from "./types";
+import { MAX_PUNCH_QUERY, type DataStore, type ImportData, type ImportOptions, type PunchPatch, type PunchQuery, type TimesheetRow, type TimesheetWrite, patchToRow, punchToRow, rowToPunch, toSummary } from "./types";
 
 const JSON_COLS = ["result_json", "wages_json", "manual_employees_json", "meta_json"] as const;
 const ROW_COLS = [
@@ -180,12 +180,28 @@ export class SqliteStore implements DataStore {
   async deleteTimesheet(id: string) {
     return this.db.prepare("delete from recent_uploads where id = ?").run(id).changes > 0;
   }
-  async importAll(data: { settings: { key: string; value: string }[]; timesheets: TimesheetWrite[] }) {
+  async importAll(data: ImportData, opts: ImportOptions = {}) {
+    const keep = opts.keepSetting ?? (() => false);
+    const settings = data.settings.filter((x) => !keep(x.key));
     this.db.transaction(() => {
-      for (const s of data.settings) this.setSettingSync(s.key, s.value);
+      if (opts.replace) {
+        const del = this.db.prepare("delete from app_settings where key = ?");
+        for (const r of this.db.prepare("select key from app_settings").all() as { key: string }[]) if (!keep(r.key)) del.run(r.key);
+        this.db.prepare("delete from recent_uploads").run();
+        if (data.punches) this.db.prepare("delete from punches").run();
+      }
+      for (const s of settings) this.setSettingSync(s.key, s.value);
       for (const t of data.timesheets) this.insertSync(t);
+      if (data.punches) {
+        const verb = opts.replace ? "insert or replace" : "insert or ignore";
+        for (const p of data.punches) {
+          const row = this.punchRow(p);
+          const cols = Object.keys(row);
+          this.db.prepare(`${verb} into punches (${cols.join(",")}) values (${cols.map((c) => "@" + c).join(",")})`).run(row);
+        }
+      }
     })();
-    return { settings: data.settings.length, timesheets: data.timesheets.length };
+    return { settings: settings.length, timesheets: data.timesheets.length, punches: data.punches?.length ?? 0 };
   }
   // ── Punches ────────────────────────────────────────────────────────────────
   private punchRow(p: Punch) {
@@ -200,7 +216,7 @@ export class SqliteStore implements DataStore {
     if (q.employeeId) { where.push("employee_id = ?"); args.push(q.employeeId); }
     if (q.from) { where.push("at >= ?"); args.push(q.from); }
     if (q.to) { where.push("at < ?"); args.push(q.to); }
-    const sql = `select * from punches ${where.length ? `where ${where.join(" and ")}` : ""} order by at, id limit ${Math.max(1, Math.min(q.limit ?? 20000, 50000))}`;
+    const sql = `select * from punches ${where.length ? `where ${where.join(" and ")}` : ""} order by at, id limit ${Math.max(1, Math.min(q.limit ?? 20000, MAX_PUNCH_QUERY + 1))}`;
     return (this.db.prepare(sql).all(...args) as any[]).map(rowToPunch);
   }
   async getPunch(id: string) {

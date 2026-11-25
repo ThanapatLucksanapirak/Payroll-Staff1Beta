@@ -182,7 +182,7 @@ choose_repo() {
 
 can_reach_repo() { git_anywhere ls-remote --exit-code -h "$REPO_URL" "$BRANCH" >/dev/null 2>&1; }
 
-https_to_ssh() { sed -E 's#^https://github.com/([^/]+)/([^/]+?)(\.git)?$#git@github.com:\1/\2.git#' <<<"$1"; }
+https_to_ssh() { sed -E -e 's#/+$##' -e 's#\.git$##' -e 's#^https://github.com/([^/]+)/([^/]+)$#git@github.com:\1/\2.git#' <<<"$1"; }
 
 setup_repo_access() {
   step "Connecting to the app's source code"
@@ -287,7 +287,10 @@ build_and_start() {
     install_deploy_tools "$(current_release)"
   else
     step "Building the app (${want:0:7})"
-    if [[ $INSTALLED == 1 ]]; then info "Saved a backup first: $(snapshot_data pre-install)"; fi
+    if [[ $INSTALLED == 1 ]]; then
+      snap="$(snapshot_data pre-install | tail -n1)" && [[ -n "$snap" ]] || die "Could not back up the current data, so nothing was changed."
+      info "Saved a backup first: $snap"
+    fi
     dir="$(build_release "$want" | tail -n1)"
     activate_release "$dir"
     ok "Built $(basename "$dir")"
