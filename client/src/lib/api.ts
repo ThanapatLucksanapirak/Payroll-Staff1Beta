@@ -3,29 +3,48 @@ import { safeStorage } from "./storage";
 
 // The API is always served from the same origin as the app.
 const API_BASE = "";
-const TOKEN_KEY = "payroll.session";
+/** Phase 1 kept a bearer token here. It is sent once more so the server can swap it for a cookie. */
+const LEGACY_TOKEN_KEY = "payroll.session";
+/** Sent on every request; the server refuses state changes without it (CSRF protection). */
+const CSRF_HEADERS = { "X-Requested-With": "payroll" };
 
-let token: string | null = safeStorage.get(TOKEN_KEY);
+let legacyToken: string | null = safeStorage.get(LEGACY_TOKEN_KEY);
+let epoch = 0;
 const listeners = new Set<() => void>();
+const notify = () => { epoch++; listeners.forEach((l) => l()); };
 
+/**
+ * The session itself is an httpOnly cookie the page can't read. This only
+ * tells the app when to re-check who is signed in.
+ */
 export const session = {
-  get: () => token,
-  set(t: string, persist = true) {
-    token = t;
-    if (persist) safeStorage.set(TOKEN_KEY, t);
-    else safeStorage.remove(TOKEN_KEY);
-    listeners.forEach((l) => l());
-  },
+  /** Changes whenever the sign-in state may have changed. */
+  get: () => epoch,
+  /** Call after signing in (the server has set the cookie). The argument is ignored. */
+  set(_ignored?: unknown, _persist?: boolean) { notify(); },
+  /** Forget the local session state (after a 401 or signing out). */
   clear() {
-    token = null;
-    safeStorage.remove(TOKEN_KEY);
-    listeners.forEach((l) => l());
+    legacyToken = null;
+    safeStorage.remove(LEGACY_TOKEN_KEY);
+    notify();
+  },
+  /** The server has confirmed a cookie session; the old stored token is no longer needed. */
+  dropLegacyToken() {
+    legacyToken = null;
+    safeStorage.remove(LEGACY_TOKEN_KEY);
   },
   subscribe(fn: () => void) {
     listeners.add(fn);
     return () => { listeners.delete(fn); };
   },
 };
+
+/** Sign out on this device, or on every device. */
+export async function signOut(everywhere = false) {
+  try { await api("POST", everywhere ? "/api/auth/logout-all" : "/api/auth/logout"); } catch { /* signed out locally anyway */ }
+  session.clear();
+  queryClient.clear();
+}
 
 export class ApiError extends Error {
   constructor(public status: number, message: string, public body?: any) {
@@ -41,8 +60,8 @@ export async function apiRequest(method: string, url: string, data?: unknown, op
   const timer = window.setTimeout(() => controller.abort(), opts.timeoutMs ?? 30000);
   const onAbort = () => controller.abort();
   opts.signal?.addEventListener("abort", onAbort, { once: true });
-  const headers: Record<string, string> = {};
-  if (token) headers.Authorization = `Bearer ${token}`;
+  const headers: Record<string, string> = { ...CSRF_HEADERS };
+  if (legacyToken) headers.Authorization = `Bearer ${legacyToken}`;
   let body: BodyInit | undefined;
   if (opts.raw) { body = opts.raw as BodyInit; headers["Content-Type"] = opts.contentType ?? "application/octet-stream"; }
   else if (data !== undefined) { body = JSON.stringify(data); headers["Content-Type"] = "application/json"; }
@@ -50,7 +69,7 @@ export async function apiRequest(method: string, url: string, data?: unknown, op
   try {
     for (let i = 0; ; i++) {
       try {
-        const res = await fetch(`${API_BASE}${url}`, { method, headers, body, signal: controller.signal });
+        const res = await fetch(`${API_BASE}${url}`, { method, headers, body, signal: controller.signal, credentials: "same-origin" });
         if (!res.ok) {
           const text = await res.text();
           let parsed: any = null;

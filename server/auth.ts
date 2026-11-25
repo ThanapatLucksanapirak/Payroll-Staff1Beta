@@ -1,102 +1,107 @@
-import { createHmac, randomBytes, scrypt as nodeScrypt, timingSafeEqual } from "node:crypto";
-import { promisify } from "node:util";
+// Sessions: an HMAC-signed token in an httpOnly cookie (a bearer header is
+// still accepted for one release). The token names the user and that user's
+// session version, so "sign out everywhere" and password changes end every
+// older session.
+import { createHmac, randomBytes } from "node:crypto";
 import type { NextFunction, Request, Response } from "express";
 import fs from "node:fs";
 import path from "node:path";
 import { DATA_DIR, getAuthSecret, loadConfig, saveConfig } from "./config";
-import { db } from "./db";
+import { safeEqual } from "./passwords";
+import { type UserRecord, getUser, invalidateUsersCache, listUsers, setupRequired } from "./users";
 
-const scrypt = promisify(nodeScrypt) as (pw: string, salt: Buffer, len: number) => Promise<Buffer>;
-
-function safeEqual(a: string, b: string) {
-  const x = Buffer.from(a), y = Buffer.from(b);
-  return x.length === y.length && timingSafeEqual(x, y);
-}
-
-async function hashPassword(pw: string): Promise<string> {
-  const salt = randomBytes(16);
-  const derived = await scrypt(pw, salt, 64);
-  return `scrypt$${salt.toString("base64url")}$${derived.toString("base64url")}`;
-}
-
-async function verifyHash(pw: string, stored: string): Promise<boolean> {
-  if (!stored.startsWith("scrypt$")) return safeEqual(pw, stored); // legacy plain value
-  const [, salt, hash] = stored.split("$");
-  if (!salt || !hash) return false;
-  try {
-    const expected = Buffer.from(hash, "base64url");
-    const derived = await scrypt(pw, Buffer.from(salt, "base64url"), expected.length);
-    return timingSafeEqual(expected, derived);
-  } catch {
-    return false;
-  }
-}
-
-/** Current password hash: database first, then the local cache (DB outage). */
-export async function currentPasswordHash(): Promise<string | null> {
-  try {
-    const store = await db();
-    const v = await store.getSetting("password_hash");
-    if (v && v !== loadConfig().passwordHashCache) saveConfig({ passwordHashCache: v });
-    if (v) return v;
-  } catch { /* fall back to cache */ }
-  return loadConfig().passwordHashCache ?? process.env.APP_PASSWORD ?? null;
-}
-
-export async function setPassword(pw: string) {
-  const h = await hashPassword(pw);
-  const store = await db();
-  await store.setSetting("password_hash", h);
-  saveConfig({ passwordHashCache: h });
-}
-
-export async function checkPassword(pw: string): Promise<boolean> {
-  const stored = await currentPasswordHash();
-  if (!stored) return false;
-  const ok = await verifyHash(pw, stored);
-  if (ok && !stored.startsWith("scrypt$")) await setPassword(pw).catch(() => undefined);
-  return ok;
-}
+export const SESSION_COOKIE = "payroll_session";
+const TOKEN_TAG = "payroll-admin";
 
 const sign = (payload: string) => createHmac("sha256", getAuthSecret()).update(payload).digest("base64url");
-const pwTag = (hash: string | null) => (hash ? createHmac("sha256", getAuthSecret()).update(hash).digest("base64url").slice(0, 10) : "none");
+/** Phase 1 tokens carried a tag of the single admin password hash. */
+const pwTag = (hash: string) => createHmac("sha256", getAuthSecret()).update(hash).digest("base64url").slice(0, 10);
 
-export async function issueToken(days: number): Promise<{ token: string; expiresAt: number }> {
+export function issueToken(user: Pick<UserRecord, "id" | "sessionVersion">, days: number): { token: string; expiresAt: number } {
   const expiresAt = Date.now() + days * 86400000;
-  const payload = Buffer.from(JSON.stringify({ p: "payroll-admin", exp: expiresAt, pw: pwTag(await currentPasswordHash()) })).toString("base64url");
+  const payload = Buffer.from(JSON.stringify({ p: TOKEN_TAG, v: 2, u: user.id, s: user.sessionVersion, exp: expiresAt })).toString("base64url");
   return { token: `${payload}.${sign(payload)}`, expiresAt };
 }
 
-let tagCache: { tag: string; at: number } | null = null;
-async function currentTag() {
-  if (tagCache && Date.now() - tagCache.at < 30000) return tagCache.tag;
-  const tag = pwTag(await currentPasswordHash());
-  tagCache = { tag, at: Date.now() };
-  return tag;
-}
-export function resetTagCache() { tagCache = null; }
-
-export async function verifyToken(token: string | undefined): Promise<boolean> {
-  if (!token) return false;
+/** The user a token belongs to, if the token is valid and still current. */
+export async function verifyToken(token: string | undefined): Promise<{ user: UserRecord; legacy: boolean } | null> {
+  if (!token) return null;
   try {
     const [payload, sig] = token.split(".");
-    if (!payload || !sig || !safeEqual(sig, sign(payload))) return false;
+    if (!payload || !sig || !safeEqual(sig, sign(payload))) return null;
     const data = JSON.parse(Buffer.from(payload, "base64url").toString("utf8"));
-    if (data.p !== "payroll-admin" || typeof data.exp !== "number" || data.exp < Date.now()) return false;
-    return data.pw === (await currentTag());
+    if (data.p !== TOKEN_TAG || typeof data.exp !== "number" || data.exp < Date.now()) return null;
+    if (data.v === 2 && typeof data.u === "string") {
+      const user = await getUser(data.u);
+      return user && user.active && user.sessionVersion === data.s ? { user, legacy: false } : null;
+    }
+    // Phase 1 token: valid while the owner's password is still the one it was issued for.
+    if (typeof data.pw === "string") {
+      const owner = (await listUsers()).find((u) => u.role === "owner" && u.active && pwTag(u.passwordHash) === data.pw);
+      return owner ? { user: owner, legacy: true } : null;
+    }
+    return null;
   } catch {
-    return false;
+    return null;
   }
 }
 
+function readCookie(req: Request, name: string): string | undefined {
+  const header = req.headers.cookie;
+  if (!header) return undefined;
+  for (const part of header.split(";")) {
+    const i = part.indexOf("=");
+    if (i < 0) continue;
+    if (part.slice(0, i).trim() === name) {
+      try { return decodeURIComponent(part.slice(i + 1).trim()); } catch { return undefined; }
+    }
+  }
+  return undefined;
+}
+
+export function requestToken(req: Request): string | undefined {
+  return readCookie(req, SESSION_COOKIE) || req.header("authorization")?.replace(/^Bearer\s+/i, "") || undefined;
+}
+
+/** Set the session cookie. `remember: false` makes a browser-session cookie. */
+export function setSessionCookie(req: Request, res: Response, user: Pick<UserRecord, "id" | "sessionVersion">, opts: { days: number; remember: boolean }) {
+  const { token, expiresAt } = issueToken(user, opts.remember ? opts.days : 1);
+  res.cookie(SESSION_COOKIE, token, {
+    httpOnly: true, sameSite: "lax", secure: req.secure, path: "/",
+    ...(opts.remember ? { maxAge: opts.days * 86400000 } : {}),
+  });
+  return { expiresAt };
+}
+
+export function clearSessionCookie(req: Request, res: Response) {
+  res.clearCookie(SESSION_COOKIE, { httpOnly: true, sameSite: "lax", secure: req.secure, path: "/" });
+}
+
+/** Signed-in user of this request (set by requireAuth). */
+export function currentUser(res: Response): UserRecord | null {
+  return (res.locals.user as UserRecord | undefined) ?? null;
+}
+
+/**
+ * Attach the signed-in user to `res.locals.user`; answer 401 for anything that
+ * is not public. A Phase 1 bearer token is swapped for a cookie session.
+ */
 export function requireAuth(publicPaths: Set<string>) {
   return async (req: Request, res: Response, next: NextFunction) => {
-    if (publicPaths.has(req.path)) return next();
-    const token = req.header("authorization")?.replace(/^Bearer\s+/i, "");
-    if (!(await verifyToken(token))) return res.status(401).json({ error: "Your session has expired. Please sign in again." });
-    next();
+    const isPublic = publicPaths.has(req.path);
+    let found: Awaited<ReturnType<typeof verifyToken>> = null;
+    try { found = await verifyToken(requestToken(req)); } catch { found = null; }
+    if (found) {
+      res.locals.user = found.user;
+      if (found.legacy) setSessionCookie(req, res, found.user, { days: 30, remember: true });
+    }
+    if (isPublic || found) return next();
+    return res.status(401).json({ error: "Your session has expired. Please sign in again." });
   };
 }
+
+/** Kept for callers from Phase 1: forget cached accounts after a restore or database switch. */
+export function resetTagCache() { invalidateUsersCache(); }
 
 // ── First-run setup code ─────────────────────────────────────────────────────
 // Until an administrator password exists, creating one requires a one-time code.
@@ -138,7 +143,7 @@ export function clearSetupCode() {
 
 /** On start-up: if no administrator exists yet, print the setup code. */
 export async function announceSetupCode() {
-  if (await currentPasswordHash()) { clearSetupCode(); return; }
+  if (!(await setupRequired())) { clearSetupCode(); return; }
   const code = getSetupCode();
   console.log("");
   console.log("  ┌──────────────────────────────────────────────────────┐");

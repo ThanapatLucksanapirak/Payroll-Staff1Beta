@@ -5,6 +5,7 @@ export function blankEmployee(name: string, site: Site): EmployeeConfig {
   return {
     name, categoryId: "custom", payBasis: "day_rate", fullDayRate: 0, halfDayRate: 0, hourlyRate: 0,
     isNetPay: site.rules.defaultNetPay, adjustments: {}, bonuses: [], deductions: [], excluded: false, note: "",
+    paymentMethod: "default", splitCashAmount: 0,
   };
 }
 
@@ -31,7 +32,7 @@ export function applyProfile(current: EmployeeConfig[], profile: EmployeeConfig[
     const p = prof.get(employeeKey(e.name));
     if (!p) return e;
     matched++;
-    return { ...e, categoryId: p.categoryId, payBasis: p.payBasis, fullDayRate: p.fullDayRate, halfDayRate: p.halfDayRate, hourlyRate: p.hourlyRate, isNetPay: p.isNetPay };
+    return { ...e, categoryId: p.categoryId, payBasis: p.payBasis, fullDayRate: p.fullDayRate, halfDayRate: p.halfDayRate, hourlyRate: p.hourlyRate, isNetPay: p.isNetPay, paymentMethod: p.paymentMethod ?? "default", splitCashAmount: p.splitCashAmount ?? 0 };
   });
   return { employees, matched };
 }
@@ -107,7 +108,7 @@ export function updateManual(doc: Doc, id: string, fn: (m: ManualEmployee) => Ma
 }
 
 export function blankManual(): ManualEmployee {
-  return { id: uid("m"), name: "", payMode: "lump_sum", lumpSum: 0, payDates: [], isNetPay: true, bonuses: [], deductions: [], excluded: false, categoryId: "custom" };
+  return { id: uid("m"), name: "", payMode: "lump_sum", lumpSum: 0, payDates: [], isNetPay: true, bonuses: [], deductions: [], excluded: false, categoryId: "custom", paymentMethod: "default", splitCashAmount: 0 };
 }
 
 export function setAdjustment(doc: Doc, name: string, key: string, site: Site, adj: DayAdjustment | null): Doc {

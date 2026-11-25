@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { FilePlus2, Pencil, Plus, Trash2 } from "lucide-react";
+import { Clock, FilePlus2, Pencil, Plus, Trash2 } from "lucide-react";
 import type { EmployeeConfig, Shift } from "@shared/schema";
 import { employeeKey, round2, shiftEmployeeNames } from "@shared/engine";
 import { todayISO } from "@shared/dates";
@@ -14,6 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Field, NumberInput, Section, TimeInput } from "./fields";
+import { EmptyState } from "@/components/ui/empty-state";
 import type { WsProps } from "./types";
 
 const ALL = "__all__";
@@ -75,8 +76,8 @@ export function ShiftsTab(p: WsProps) {
           {who !== ALL && !locked && <Button variant="outline" size="sm" onClick={() => setRenaming(who)} data-testid="button-rename-employee"><Pencil /> Rename / merge</Button>}
         </div>
 
-        {rows.length === 0 ? <p className="text-sm text-muted-foreground">No shifts.</p> : (
-          <div className="overflow-x-auto -mx-4 px-4">
+        {rows.length === 0 ? <EmptyState compact icon={Clock} title="No shifts yet" description={locked ? "This timesheet has no shifts." : "Add a shift by hand or import more from Square, a CSV or a PDF."} /> : (
+          <div className="overflow-x-auto -mx-5 px-5">
             <table className="w-full text-sm min-w-[48rem]">
               <thead>
                 <tr className="text-left text-xs text-muted-foreground">
@@ -89,7 +90,7 @@ export function ShiftsTab(p: WsProps) {
                 {rows.slice(0, limit).map((s) => {
                   const hrs = round2((s.end - s.start - s.breakMinutes) / 60);
                   return (
-                    <tr key={s.id} className="border-t" data-testid={`row-shift-${s.id}`}>
+                    <tr key={s.id} className="border-t border-border/60" data-testid={`row-shift-${s.id}`}>
                       <td className="py-1.5 pr-2 font-medium whitespace-nowrap max-w-[12rem] truncate">{s.employee}</td>
                       <td className="py-1.5 pr-2 w-40"><Input type="date" className="h-8" value={s.date} disabled={locked} onChange={(e) => /^\d{4}-\d{2}-\d{2}$/.test(e.target.value) && setShift({ ...s, date: e.target.value })} /></td>
                       <td className="py-1.5 pr-2 w-32"><TimeInput className="h-8" value={s.start} disabled={locked} onChange={(m) => setShift({ ...s, start: m, end: rollEnd(m, s.end) })} /></td>
@@ -102,9 +103,9 @@ export function ShiftsTab(p: WsProps) {
                       <td className="py-1.5 pr-2 w-20"><NumberInput className="h-8" step="1" value={s.breakMinutes} disabled={locked} onChange={(n) => setShift({ ...s, breakMinutes: Math.round(n) }, `brk:${s.id}`)} /></td>
                       <td className={`py-1.5 pr-2 text-right tabular ${hrs <= 0 ? "text-destructive" : ""}`}>{hrs}</td>
                       <td className="py-1.5 pl-2 pr-2 w-32"><Input className="h-8" value={s.role} disabled={locked} onChange={(e) => setShift({ ...s, role: e.target.value }, `role:${s.id}`)} /></td>
-                      <td className="py-1.5 pr-2 text-xs text-muted-foreground capitalize">{s.source}</td>
+                      <td className="py-1.5 pr-2"><span className="rounded-full bg-foreground/[0.05] px-2 py-0.5 text-[11px] font-medium capitalize text-muted-foreground">{s.source}</span></td>
                       <td className="py-1.5 text-right">
-                        {!locked && <Button variant="ghost" size="icon" className="h-8 w-8" aria-label="Delete shift" onClick={() => edit((d) => deleteShifts(d, [s.id]))} data-testid={`button-delete-shift-${s.id}`}><Trash2 className="h-4 w-4" /></Button>}
+                        {!locked && <Button variant="ghost" size="icon" className="h-8 w-8" aria-label="Delete shift" onClick={() => edit((d) => deleteShifts(d, [s.id]))} data-testid={`button-delete-shift-${s.id}`}><Trash2 /></Button>}
                       </td>
                     </tr>
                   );

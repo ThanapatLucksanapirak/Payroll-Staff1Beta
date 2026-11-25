@@ -13,6 +13,24 @@ export const DAY_LABELS: Record<DayType, string> = {
 };
 
 const money = z.coerce.number().finite().catch(0);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// How people are paid
+// ─────────────────────────────────────────────────────────────────────────────
+export const PAYMENT_METHODS = ["cash", "bank", "check", "split"] as const;
+export type PaymentMethod = (typeof PAYMENT_METHODS)[number];
+/** Single methods that can be a default (a split needs a per-person cash amount). */
+export const DEFAULT_PAYMENT_METHODS = ["cash", "bank", "check"] as const;
+export type DefaultPaymentMethod = (typeof DEFAULT_PAYMENT_METHODS)[number];
+export const PAYMENT_LABELS: Record<PaymentMethod, string> = {
+  cash: "Cash",
+  bank: "Bank transfer",
+  check: "Check",
+  split: "Cash + bank",
+};
+/** Per-person choice; "default" follows the pay run's default method. */
+const employeePaymentMethod = z.enum(["default", ...PAYMENT_METHODS]).catch("default").default("default");
+export interface PaymentSplit { method: PaymentMethod; cash: number; bank: number; check: number }
 const nonNegMoney = z.coerce.number().finite().min(0).catch(0);
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -46,9 +64,16 @@ export const siteRulesSchema = z.object({
   payPeriod: z.enum(["weekly", "biweekly", "semimonthly", "monthly"]).default("biweekly"),
   payPeriodAnchor: z.string().default(""),
   longShiftWarningHours: z.number().min(0).max(48).default(14),
+  /** Default payment method for this location's pay runs (each timesheet keeps its own copy of these rules). */
+  defaultPaymentMethod: z.enum(DEFAULT_PAYMENT_METHODS).catch("bank").default("bank"),
 });
 export type SiteRules = z.infer<typeof siteRulesSchema>;
 export const DEFAULT_RULES: SiteRules = siteRulesSchema.parse({});
+
+export const TIME_SOURCES = ["square", "kiosk", "both"] as const;
+export type TimeSource = (typeof TIME_SOURCES)[number];
+export const KIOSK_LOGIN_MODES = ["pin", "name_pin"] as const;
+export type KioskLoginMode = (typeof KIOSK_LOGIN_MODES)[number];
 
 export const siteSchema = z.object({
   id: z.string().min(1),
@@ -60,6 +85,10 @@ export const siteSchema = z.object({
   rules: siteRulesSchema.default({}),
   squareLocationId: z.string().default(""),
   squareLocationName: z.string().default(""),
+  // Where this location's hours come from: Square timecards, the time-clock kiosk, or both.
+  timeSource: z.enum(TIME_SOURCES).default("square"),
+  // Kiosk sign-in: PIN only, or tap your name and then enter the PIN.
+  kioskLoginMode: z.enum(KIOSK_LOGIN_MODES).default("pin"),
   createdAt: z.string().default(() => new Date().toISOString()),
 });
 export type Site = z.infer<typeof siteSchema>;
@@ -86,7 +115,10 @@ export type Category = z.infer<typeof categorySchema>;
 // ─────────────────────────────────────────────────────────────────────────────
 // App preferences
 // ─────────────────────────────────────────────────────────────────────────────
-export const DATE_FORMATS = ["M/D/YY", "MM/DD/YYYY", "D/M/YY", "YYYY-MM-DD", "MMM D, YYYY"] as const;
+/** 300 KB of image bytes ≈ 400K base64 characters (+ data-URL prefix). */
+export const PDF_LOGO_MAX_BYTES = 300 * 1024;
+export const PDF_LOGO_MAX_CHARS = Math.ceil(PDF_LOGO_MAX_BYTES / 3) * 4 + 32;
+export const DATE_FORMATS =["M/D/YY", "MM/DD/YYYY", "D/M/YY", "YYYY-MM-DD", "MMM D, YYYY"] as const;
 export const prefsSchema = z.object({
   appName: z.string().min(1).max(60).default("Payroll Admin"),
   businessName: z.string().max(80).default(""),
@@ -101,6 +133,11 @@ export const prefsSchema = z.object({
   pdfShowShiftTimes: z.boolean().default(true),
   pdfPagePerEmployee: z.boolean().default(false),
   pdfFooter: z.string().max(120).default("Confidential — for internal use only"),
+  pdfOrientation: z.enum(["portrait", "landscape"]).default("landscape").catch("landscape"),
+  pdfPageSize: z.enum(["letter", "a4"]).default("letter").catch("letter"),
+  /** PNG/JPEG data URL (≤ ~300 KB image) drawn top-left on PDFs; "" = none. Invalid values are dropped, never fatal. */
+  pdfLogoDataUrl: z.string().max(PDF_LOGO_MAX_CHARS).regex(/^data:image\/(png|jpe?g);base64,[A-Za-z0-9+/=\s]+$/).or(z.literal("")).default("").catch(""),
+  pdfSignatureLine: z.boolean().default(false).catch(false),
   defaultSiteId: z.string().default(""),
 });
 export type Prefs = z.infer<typeof prefsSchema>;
@@ -108,7 +145,7 @@ export type Prefs = z.infer<typeof prefsSchema>;
 // ─────────────────────────────────────────────────────────────────────────────
 // Timesheet document
 // ─────────────────────────────────────────────────────────────────────────────
-export const SHIFT_SOURCES = ["square", "csv", "toast", "manual", "legacy"] as const;
+export const SHIFT_SOURCES = ["square", "csv", "toast", "manual", "legacy", "kiosk"] as const;
 export type ShiftSource = (typeof SHIFT_SOURCES)[number];
 
 export const shiftSchema = z.object({
@@ -160,6 +197,9 @@ export const employeeConfigSchema = z.object({
   deductions: z.array(deductionSchema).default([]),
   excluded: z.boolean().default(false),
   note: z.string().default(""),
+  paymentMethod: employeePaymentMethod,
+  /** For "split": this much is paid in cash, the rest by bank transfer. */
+  splitCashAmount: nonNegMoney.default(0),
 });
 export type EmployeeConfig = z.infer<typeof employeeConfigSchema>;
 
@@ -179,6 +219,8 @@ export const manualEmployeeSchema = z.object({
   deductions: z.array(deductionSchema).default([]),
   excluded: z.boolean().default(false),
   categoryId: z.string().default("custom"),
+  paymentMethod: employeePaymentMethod,
+  splitCashAmount: nonNegMoney.default(0),
 });
 export type ManualEmployee = z.infer<typeof manualEmployeeSchema>;
 
@@ -267,6 +309,8 @@ export interface EmployeeSummary {
   generalDeductions: DeductionEntry[];
   isManual: boolean;
   excluded: boolean;
+  /** How this person's total is paid out. */
+  payment: PaymentSplit;
 }
 
 export interface PayrollWarning {
@@ -294,6 +338,10 @@ export interface AnalysisResult {
     flaggedDays: number;
     hours: number;
     overtimeHours: number;
+    /** Included employees' pay by payment method. */
+    cash: number;
+    bank: number;
+    check: number;
   };
 }
 
