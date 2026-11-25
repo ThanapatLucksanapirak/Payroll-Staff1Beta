@@ -19,11 +19,13 @@ export function securityHeaders(production: boolean) {
     "form-action 'self'",
     "object-src 'none'",
   ].join("; ");
-  return (_req: Request, res: Response, next: NextFunction) => {
+  return (req: Request, res: Response, next: NextFunction) => {
     res.setHeader("X-Content-Type-Options", "nosniff");
     res.setHeader("X-Frame-Options", "DENY");
     res.setHeader("Referrer-Policy", "same-origin");
-    res.setHeader("Permissions-Policy", "camera=(), microphone=(), geolocation=(), payment=()");
+    // The kiosk page may use the front camera (photo on punch); nothing else may.
+    const kioskPage = req.path === "/kiosk" || req.path === "/kiosk/" || req.path === "/kiosk.html";
+    res.setHeader("Permissions-Policy", `camera=${kioskPage ? "(self)" : "()"}, microphone=(), geolocation=(), payment=()`);
     res.setHeader("Cross-Origin-Opener-Policy", "same-origin");
     // Vite's dev server injects inline scripts, so the policy is production-only.
     if (production) res.setHeader("Content-Security-Policy", csp);

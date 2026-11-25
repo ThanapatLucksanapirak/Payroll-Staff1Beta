@@ -1,9 +1,11 @@
 import express, { type Express, type NextFunction, type Request, type Response } from "express";
+import { parsePatch } from "@shared/patch";
 import { z } from "zod";
 import {
   type TimesheetDoc, categorySchema, databaseConfigSchema, employeeConfigSchema, prefsSchema, siteInputSchema, siteRulesSchema, timesheetDocSchema,
 } from "@shared/schema";
 import { computePayroll } from "@shared/engine";
+import { computeTimesheet } from "@shared/payExtras";
 import { docToMeta, rowToDoc, shiftsToCsv } from "@shared/legacy";
 import { parseScheduleItems } from "@shared/importers/schedule";
 import { configIsPersistent, managedSupabase, loadConfig } from "./config";
@@ -15,12 +17,20 @@ import { authorize, csrfGuard } from "./access";
 import { AUDIT_PREFIX, auditTrail } from "./audit";
 import { registerAuthRoutes } from "./authRoutes";
 import { USERS_KEY, canAccessSite, toPublic } from "./users";
-import { backupPath, listBackups, readBackup, runBackup } from "./backup";
+import { NEVER_BACKED_UP, backupPath, listBackups, readBackup, runBackup } from "./backup";
 import { listLocations, pullTimecards } from "./square";
 import { extractPdfText } from "./pdf";
 import { invalidateEmployeeCache } from "./employees";
 import { type Punch, punchSchema } from "@shared/punches";
 import { kioskHostGuard, registerKioskRoutes, registerTimeClockAdminRoutes } from "./kiosk";
+import { registerScheduleRoutes } from "./schedule";
+import { registerTimeclockRoutes } from "./timeclock";
+import { registerKioskFeatureAdminRoutes } from "./kioskFeatures";
+import { registerPayRoutes } from "./pay";
+import { registerPermissionRoutes } from "./permissions";
+import { TWO_FACTOR_PUBLIC, registerTwoFactorRoutes } from "./twofactor";
+import { registerOffsiteRoutes } from "./offsite";
+import { registerPortalAdminRoutes, registerPortalRoutes } from "./portal";
 
 type Handler = (req: Request, res: Response) => Promise<unknown>;
 const h = (fn: Handler) => (req: Request, res: Response, next: NextFunction) => { fn(req, res).catch(next); };
@@ -33,7 +43,7 @@ function ctxFor(sites: Awaited<ReturnType<typeof settings.getSites>>, siteId: st
 
 async function rowFromDoc(doc: TimesheetDoc) {
   const categories = await settings.getCategories();
-  const result = computePayroll({ shifts: doc.shifts, employees: doc.employees, manualEmployees: doc.manualEmployees, categories, rules: doc.rules });
+  const result = computeTimesheet(doc, categories);
   return {
     filename: doc.filename || doc.label || "Timesheet",
     custom_label: doc.label || null,
@@ -124,9 +134,9 @@ async function restoreFrom(raw: unknown) {
     throw Object.assign(new Error(`Restore cancelled: could not back up the current data first (${err.message}).`), { status: 500 });
   });
   const store = await db();
-  const keepSetting = (k: string) => k === "password_hash" || k === USERS_KEY || k === "revoked_sessions" || k.startsWith(AUDIT_PREFIX) || k.startsWith("kiosk_manager_pin:");
+  const keepSetting = (k: string) => k === "password_hash" || k === USERS_KEY || k === "revoked_sessions" || k.startsWith(AUDIT_PREFIX) || k.startsWith("kiosk_manager_pin:") || NEVER_BACKED_UP(k);
   const result = await store.importAll({
-    settings: body.settings,
+    settings: body.settings.filter((x) => !NEVER_BACKED_UP(x.key)),
     timesheets: body.timesheets.map(({ updated_at: _u, ...rest }: any) => rest),
     // Backups from before the time clock have no punches: leave today's alone.
     punches: hasPunches ? punches : undefined,
@@ -139,16 +149,21 @@ async function restoreFrom(raw: unknown) {
 
 export function registerRoutes(app: Express) {
   // /live checks its own short-lived ticket (EventSource cannot send headers).
-  const PUBLIC = new Set(["/health", "/auth/status", "/auth/login", "/auth/setup", "/auth/logout", "/live"]);
+  const PUBLIC = new Set(["/health", "/auth/status", "/auth/login", "/auth/setup", "/auth/logout", "/live", ...TWO_FACTOR_PUBLIC]);
   app.use(kioskHostGuard()); // KIOSK_HOST: serve only the kiosk on that hostname
   // Never cache API responses (payroll data) in browsers or at the Cloudflare edge.
   app.use("/api", (_req, res, next) => { res.setHeader("Cache-Control", "no-store"); next(); });
   // /api/kiosk/*: device-token auth (a custom header, so not exposed to CSRF), never the admin session
   registerKioskRoutes(app);
+  registerPortalRoutes(app); // /api/portal/*: employee self-service with its own cookie and guard, never the admin session
   app.use("/api", csrfGuard());
   app.use("/api", requireAuth(PUBLIC));
   app.use("/api", authorize(PUBLIC));
   app.use("/api", auditTrail());
+  registerPermissionRoutes(app); // role permissions; adds them to bootstrap/me and hides pay when needed
+  registerPayRoutes(app, { rowFromDoc }); // pay extras, lock on finalized timesheets (before the timesheet routes)
+  registerTwoFactorRoutes(app);
+  registerOffsiteRoutes(app);
 
   // ── Public ──────────────────────────────────────────────────────────────────
   app.get("/api/health", h(async (_req, res) => {
@@ -172,7 +187,7 @@ export function registerRoutes(app: Express) {
   }));
 
   app.put("/api/prefs", h(async (req, res) => {
-    res.json(await settings.savePrefs(prefsSchema.partial().parse(req.body)));
+    res.json(await settings.savePrefs(parsePatch(prefsSchema, req.body)));
   }));
 
   // ── Sites ───────────────────────────────────────────────────────────────────
@@ -420,7 +435,7 @@ export function registerRoutes(app: Express) {
     const all = await store.allSettings();
     res.json({
       app: "payroll-admin", version: 2, exportedAt: new Date().toISOString(),
-      settings: all.filter((s) => includeSecrets || !secret(s.key)),
+      settings: all.filter((s) => !NEVER_BACKED_UP(s.key) && (includeSecrets || !secret(s.key))),
       timesheets: await store.allTimesheets(),
       punches: await store.allPunches(),
     });
@@ -446,6 +461,10 @@ export function registerRoutes(app: Express) {
   }));
 
   registerTimeClockAdminRoutes(app); // employees, punches, kiosk devices, live updates
+  registerScheduleRoutes(app); // schedule, time off, late alerts, labor vs. sales, forecast
+  registerTimeclockRoutes(app); // auto clock-out, fix punches, approvals, overtime watch, pre-payroll checklist
+  registerKioskFeatureAdminRoutes(app); // kiosk extras: stations, shift notes, fix requests, punch photos
+  registerPortalAdminRoutes(app); // employee portal on/off per location
 
   // ── Errors ──────────────────────────────────────────────────────────────────
   app.use("/api", (_req: Request, res: Response) => res.status(404).json({ error: "Not found." }));

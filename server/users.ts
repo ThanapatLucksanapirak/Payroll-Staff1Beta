@@ -29,9 +29,28 @@ export interface UserRecord {
   lastLoginAt: string | null;
   /** Bumped by "sign out everywhere" and password changes; older sessions stop working. */
   sessionVersion: number;
+  /** Two-factor sign-in (server/twofactor.ts). Missing on accounts that never set it up. */
+  twoFactor?: TwoFactorState | null;
 }
 
-export type PublicUser = Omit<UserRecord, "passwordHash" | "sessionVersion">;
+/** Stored two-factor state. The secret never leaves the server after enrollment. */
+export interface TwoFactorState {
+  enabled: boolean;
+  /** Base32 TOTP secret (set once enabled). */
+  secret: string | null;
+  /** Secret shown during enrollment, until the first code confirms it. */
+  pendingSecret: string | null;
+  pendingAt: string | null;
+  /** Last accepted 30-second step: a code can't be used twice. */
+  lastStep: number;
+  /** SHA-256 hashes of unused recovery codes. */
+  recovery: string[];
+  enabledAt: string | null;
+  /** Bumped to forget every "remembered" device. */
+  deviceVersion: number;
+}
+
+export type PublicUser = Omit<UserRecord, "passwordHash" | "sessionVersion" | "twoFactor"> & { twoFactorEnabled: boolean };
 
 export const USERS_KEY = "users";
 /** The account created from a v1/Phase 1 single admin password. */
@@ -48,6 +67,16 @@ const recordSchema = z.object({
   createdAt: z.string().default(() => new Date().toISOString()),
   lastLoginAt: z.string().nullable().default(null),
   sessionVersion: z.number().int().default(0),
+  twoFactor: z.object({
+    enabled: z.boolean().default(false),
+    secret: z.string().nullable().default(null),
+    pendingSecret: z.string().nullable().default(null),
+    pendingAt: z.string().nullable().default(null),
+    lastStep: z.number().default(0),
+    recovery: z.array(z.string()).default([]),
+    enabledAt: z.string().nullable().default(null),
+    deviceVersion: z.number().int().default(0),
+  }).nullable().optional().catch(null),
 });
 
 export const usernameSchema = z.string().trim()
@@ -60,7 +89,7 @@ export class UserError extends Error {
   constructor(message: string, public status = 400) { super(message); }
 }
 
-export const toPublic = ({ passwordHash: _p, sessionVersion: _s, ...u }: UserRecord): PublicUser => u;
+export const toPublic = ({ passwordHash: _p, sessionVersion: _s, twoFactor, ...u }: UserRecord): PublicUser => ({ ...u, twoFactorEnabled: !!twoFactor?.enabled });
 const sameName = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase();
 const activeOwners = (users: UserRecord[]) => users.filter((u) => u.role === "owner" && u.active);
 
@@ -164,7 +193,9 @@ export async function setupRequired(): Promise<boolean> {
 async function mutate<T>(fn: (users: UserRecord[]) => T | Promise<T>): Promise<T> {
   return locked(async () => {
     const store = await db();
-    const users = (await loadUnlocked(store)).map((u) => ({ ...u, siteIds: [...u.siteIds] }));
+    const users = (await loadUnlocked(store)).map((u) => ({
+      ...u, siteIds: [...u.siteIds], twoFactor: u.twoFactor ? { ...u.twoFactor, recovery: [...u.twoFactor.recovery] } : u.twoFactor,
+    }));
     const result = await fn(users);
     await store.setSetting(USERS_KEY, JSON.stringify(users));
     remember(store, users);
@@ -309,6 +340,15 @@ export async function setUserPassword(actor: Actor, id: string, password: string
     u.sessionVersion++;
     if (opts.reactivate) u.active = true;
     return { ...u };
+  });
+}
+
+/** Change one account under the lock (used by two-factor sign-in). Throws 404 when it no longer exists. */
+export async function mutateUser<T>(id: string, fn: (u: UserRecord) => T | Promise<T>): Promise<T> {
+  return mutate(async (users) => {
+    const u = users.find((x) => x.id === id);
+    if (!u) throw new UserError("That user no longer exists.", 404);
+    return fn(u);
   });
 }
 

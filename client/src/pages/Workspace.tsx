@@ -1,13 +1,14 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "wouter";
-import { AlertTriangle, Banknote, Check, ChevronLeft, Circle, CloudOff, Download, FileDown, FileSpreadsheet, FileText, Files, Loader2, Lock, Redo2, RefreshCw, Save, Table2, Undo2 } from "lucide-react";
+import { AlertTriangle, Banknote, BookOpen, Check, ChevronLeft, Circle, CloudOff, Download, FileDown, FileSpreadsheet, FileText, Files, ListChecks, Loader2, Lock, Redo2, RefreshCw, Save, Table2, Undo2 } from "lucide-react";
 import { computePayroll } from "@shared/engine";
+import { computeTimesheet, journalCsv, ytdStatementMap } from "@shared/payExtras";
 import { useApp } from "@/context/AppData";
 import { useTimesheet, type SaveState } from "@/hooks/useTimesheet";
 import { downloadBlob, safeFilename, timeAgo } from "@/lib/doc";
 import { shiftsToCsv } from "@shared/importers/csv";
 import { errorMessage } from "@/lib/api";
-import { canEdit } from "@/lib/roles";
+import { can, canEdit } from "@/lib/roles";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -20,6 +21,12 @@ import { RatesTab } from "@/components/workspace/RatesTab";
 import { ShiftsTab } from "@/components/workspace/ShiftsTab";
 import { DetailsTab } from "@/components/workspace/DetailsTab";
 import { SiteDot } from "@/components/AppShell";
+import { PayrollChecklistDialog } from "@/components/timeclock/PayrollChecklist";
+import { usePaySync } from "@/hooks/usePaySync";
+import { invalidatePay, usePaySettings, useYtd } from "@/lib/pay";
+import { ExtrasTab } from "@/components/pay/ExtrasTab";
+import { ReopenDialog } from "@/components/pay/ReopenDialog";
+import { VarianceCard } from "@/components/pay/VarianceCard";
 
 export function WorkspacePage({ id }: { id: string }) {
   const app = useApp();
@@ -27,16 +34,31 @@ export function WorkspacePage({ id }: { id: string }) {
   const readOnly = !canEdit(app.user);
   const ts = useTimesheet(id, { autosave: app.prefs.autosave && !readOnly });
   const [tab, setTab] = useState("payroll");
+  const [checklist, setChecklist] = useState(false);
   const doc = ts.doc;
   const site = (doc && app.sites.find((s) => s.id === doc.siteId)) || app.site;
 
   // Follow the timesheet's location in the header switcher
   useEffect(() => { if (doc && doc.siteId !== app.site.id && app.sites.some((s) => s.id === doc.siteId)) app.setSiteId(doc.siteId); }, [doc?.siteId]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const result = useMemo(
-    () => (doc ? computePayroll({ shifts: doc.shifts, employees: doc.employees, manualEmployees: doc.manualEmployees, categories: app.categories, rules: doc.rules }) : null),
-    [doc, app.categories],
-  );
+  const result = useMemo(() => (doc ? computeTimesheet(doc, app.categories) : null), [doc, app.categories]);
+  // Pay extras: keep a draft in step with the location (holidays, standing items, advances, rate history).
+  const paySync = usePaySync({ id, doc, edit: ts.edit, enabled: !readOnly, categories: app.categories });
+  const pay = usePaySettings(doc?.siteId ?? app.site.id);
+  const ytdYear = Number((result?.periodEnd || new Date().toISOString()).slice(0, 4));
+  const ytd = useYtd(doc?.siteId ?? app.site.id, ytdYear, id, !!doc);
+  const [reopening, setReopening] = useState(false);
+  // After finalizing here, load the server's copy (it snapshots the extras and records advance repayments).
+  const finalizing = useRef(false);
+  const prevStatus = useRef<string | null>(null);
+  useEffect(() => {
+    if (!doc) return;
+    if (prevStatus.current === "draft" && doc.status === "final") finalizing.current = true;
+    prevStatus.current = doc.status;
+  }, [doc?.status]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (finalizing.current && ts.saveState === "saved" && !ts.dirty) { finalizing.current = false; invalidatePay(doc?.siteId ?? app.site.id); void ts.reload(); }
+  }, [ts.saveState, ts.dirty]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (ts.loadError) {
     return (
@@ -62,7 +84,8 @@ export function WorkspacePage({ id }: { id: string }) {
   const exportPdf = async (kind: "report" | "summary" | "statements" | "payout" = "report") => {
     try {
       const pdf = await import("@/lib/pdf");
-      const o = { result, prefs: app.prefs, site, title: doc.label || `Payroll ${periodTitle}`, notes: doc.notes };
+      // YTD on statements: finalized timesheets of the year (other than this one) plus this one.
+      const o = { result, prefs: app.prefs, site, title: doc.label || `Payroll ${periodTitle}`, notes: doc.notes, ytd: ytd.data ? ytdStatementMap(ytd.data.rows, result) : undefined, ytdYear, cash: pay.settings.cash };
       if (kind === "summary") pdf.downloadSummaryPdf({ ...o, fileBase: `${base}_summary` });
       else if (kind === "statements") pdf.downloadPayStatementsPdf({ ...o, fileBase: `${base}_pay_statements` });
       else if (kind === "payout") pdf.downloadPayoutSheetPdf({ ...o, fileBase: `${base}_payout` });
@@ -94,9 +117,11 @@ export function WorkspacePage({ id }: { id: string }) {
             {!readOnly && (!app.prefs.autosave || ts.saveState === "error" || ts.legacy) && (
               <Button variant="outline" size="sm" onClick={() => ts.save()} disabled={ts.saveState === "saving" || (!ts.dirty && !ts.legacy)} data-testid="button-save"><Save /> Save</Button>
             )}
-            <DropdownMenu>
+            {can(app.user, "export") && <DropdownMenu>
               <DropdownMenuTrigger asChild><Button size="sm" className="ml-1" aria-label="Export" data-testid="button-export"><Download /><span className="hidden sm:inline">Export</span></Button></DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-56">
+                <DropdownMenuItem onClick={() => setChecklist(true)} data-testid="button-payroll-checklist"><ListChecks />Check before export…</DropdownMenuItem>
+                <DropdownMenuSeparator />
                 <DropdownMenuLabel>Export</DropdownMenuLabel>
                 <DropdownMenuItem onClick={() => exportPdf("report")} data-testid="button-export-pdf"><FileDown />Full report (PDF)</DropdownMenuItem>
                 <DropdownMenuItem onClick={() => exportPdf("summary")} data-testid="button-export-summary-pdf"><FileText />Manager summary (PDF)</DropdownMenuItem>
@@ -105,8 +130,9 @@ export function WorkspacePage({ id }: { id: string }) {
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={async () => downloadBlob((await import("@/lib/pdf")).payrollSummaryCsv(result), `${base}_summary.csv`, "text/csv")} data-testid="button-export-csv"><FileSpreadsheet />Summary CSV</DropdownMenuItem>
                 <DropdownMenuItem onClick={() => downloadBlob(shiftsToCsv(doc.shifts), `${base}_shifts.csv`, "text/csv")} data-testid="button-export-shifts"><Table2 />Shifts CSV (re-importable)</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => downloadBlob(journalCsv(result, pay.settings.accounts, { date: result.periodEnd || doc.periodEnd, memo: `Payroll ${site.name} ${periodTitle}` }), `${base}_journal.csv`, "text/csv")} data-testid="button-export-journal"><BookOpen />Accounting journal (CSV)</DropdownMenuItem>
               </DropdownMenuContent>
-            </DropdownMenu>
+            </DropdownMenu>}
           </div>
         </div>
       </div>
@@ -126,13 +152,21 @@ export function WorkspacePage({ id }: { id: string }) {
             <span className="flex-1">Your account is view-only. You can look through and export this timesheet, but not change it.</span>
           </div>
         )}
-        {locked && !readOnly && (
-          <div className="flex flex-wrap items-center gap-3 rounded-xl border border-border/80 bg-card px-4 py-2.5 text-[13px] shadow-card">
+        {doc.status === "final" && (
+          <div className="flex flex-wrap items-center gap-3 rounded-xl border border-border/80 bg-card px-4 py-2.5 text-[13px] shadow-card" data-testid="banner-locked">
             <Lock className="h-4 w-4 shrink-0 text-muted-foreground" />
-            <span className="flex-1">This timesheet is finalized and read-only.</span>
-            <Button size="sm" variant="tinted" onClick={() => ts.edit((d) => ({ ...d, status: "draft" }))} data-testid="button-reopen">Reopen for editing</Button>
+            <span className="flex-1">This pay period is closed and the timesheet is locked.{app.user.role === "owner" ? "" : " Only an owner can reopen it."}</span>
+            {app.user.role === "owner" && <Button size="sm" variant="tinted" onClick={() => setReopening(true)} data-testid="button-reopen">Reopen…</Button>}
           </div>
         )}
+        {ts.saveState === "error" && ts.saveError && /finalized|locked/i.test(ts.saveError) && (
+          <div className="flex flex-wrap items-center gap-3 rounded-xl bg-warning-soft px-4 py-3 text-[13px]" role="alert">
+            <Lock className="h-4 w-4 shrink-0 text-warning" />
+            <span className="flex-1">{ts.saveError}</span>
+            <Button size="sm" variant="outline" onClick={ts.reload}>Reload</Button>
+          </div>
+        )}
+        <VarianceCard timesheetId={id} result={result} />
       </div>
 
       <Tabs value={tab} onValueChange={setTab} className="mt-4">
@@ -141,14 +175,18 @@ export function WorkspacePage({ id }: { id: string }) {
             <TabsTrigger value="payroll" data-testid="tab-payroll">Payroll</TabsTrigger>
             <TabsTrigger value="rates" data-testid="tab-rates">Rates</TabsTrigger>
             <TabsTrigger value="shifts" data-testid="tab-shifts">Shifts</TabsTrigger>
+            <TabsTrigger value="extras" data-testid="tab-extras">Tips & extras</TabsTrigger>
             <TabsTrigger value="details" data-testid="tab-details">Details</TabsTrigger>
           </TabsList>
         </div>
         <TabsContent value="payroll" className="mt-5"><PayrollTab {...props} /></TabsContent>
         <TabsContent value="rates" className="mt-5"><RatesTab {...props} /></TabsContent>
         <TabsContent value="shifts" className="mt-5"><ShiftsTab {...props} /></TabsContent>
+        <TabsContent value="extras" className="mt-5"><ExtrasTab {...props} pay={pay.settings} editable={!readOnly} resync={paySync.resync} /></TabsContent>
         <TabsContent value="details" className="mt-5"><DetailsTab {...props} /></TabsContent>
       </Tabs>
+      {checklist && <PayrollChecklistDialog site={site} period={result.periodStart ? { start: result.periodStart, end: result.periodEnd } : null} result={result} onTab={setTab} onClose={() => setChecklist(false)} />}
+      <ReopenDialog timesheet={reopening ? { id, siteId: doc.siteId, title } : null} onClose={() => setReopening(false)} onReopened={() => void ts.reload()} />
     </div>
   );
 }

@@ -28,8 +28,8 @@ export function DetailsTab(p: WsProps) {
               <SelectContent>{app.sites.filter((s) => !s.archived || s.id === doc.siteId).map((s) => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}</SelectContent>
             </Select>
           </Field>
-          <Field label="Status">
-            <Select value={doc.status} onValueChange={(v) => edit((d) => ({ ...d, status: v as any }))}>
+          <Field label="Status" hint={doc.status === "final" ? "Locked. An owner can reopen it from the banner above." : "Finalizing locks the timesheet and takes any advance repayments."}>
+            <Select value={doc.status} onValueChange={(v) => edit((d) => ({ ...d, status: v as any }))} disabled={doc.status === "final"}>
               <SelectTrigger data-testid="select-details-status"><SelectValue /></SelectTrigger>
               <SelectContent><SelectItem value="draft">Draft — still editing</SelectItem><SelectItem value="final">Final — locked</SelectItem></SelectContent>
             </Select>

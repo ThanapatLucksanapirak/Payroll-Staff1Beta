@@ -4,7 +4,7 @@ import type { Category, Prefs, Site } from "@shared/schema";
 import { formatDate, formatTime } from "@shared/dates";
 import { queryClient } from "@/lib/api";
 import { safeStorage } from "@/lib/storage";
-import type { SessionUser } from "@/lib/roles";
+import { type SessionUser, can } from "@/lib/roles";
 
 export interface Bootstrap {
   sites: Site[];
@@ -74,7 +74,8 @@ export function AppDataProvider({ children, fallback }: { children: ReactNode; f
       activeSites: activeSites.length ? activeSites : d.sites,
       setSiteId,
       refresh: () => queryClient.invalidateQueries({ queryKey: ["/api/bootstrap"] }),
-      money: (n: number) => `${n < 0 ? "-" : ""}${cur}${nf.format(Math.abs(n || 0))}`,
+      // Without "See pay rates and money totals" the server sends 0 for every amount; show a dash instead.
+      money: can(d.user, "pay.view") ? (n: number) => `${n < 0 ? "-" : ""}${cur}${nf.format(Math.abs(n || 0))}` : () => "—",
       date: (iso) => formatDate(iso, d.prefs.dateFormat),
       time: (m) => formatTime(m, d.prefs.timeFormat),
       categoriesFor: (sid: string) => d.categories.filter((c) => !c.siteId || c.siteId === sid),

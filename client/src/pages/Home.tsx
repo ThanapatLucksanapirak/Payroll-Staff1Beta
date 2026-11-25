@@ -1,7 +1,7 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { Link, useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
-import { AlertTriangle, ArrowDownRight, ArrowRight, ArrowUpRight, CalendarRange, CheckCircle2, ChevronRight, FileSpreadsheet, FileText, Flag, Link2, Plus, Radio, Table2, Tablet, Users, Wallet } from "lucide-react";
+import { AlertTriangle, ArrowDownRight, ArrowRight, ArrowUpRight, CalendarRange, CheckCircle2, ChevronRight, FileSpreadsheet, FileText, Flag, Link2, ListChecks, Plus, Radio, Table2, Tablet, Users, Wallet } from "lucide-react";
 import type { TimesheetDoc, TimesheetSummary } from "@shared/schema";
 import { computePayroll } from "@shared/engine";
 import { todayISO } from "@shared/dates";
@@ -17,7 +17,10 @@ import { Page, PageHeader, SectionLabel } from "@/components/ui/page";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
+import { PayrollChecklistDialog } from "@/components/timeclock/PayrollChecklist";
+import { AccessNotices } from "@/components/AccessNotices";
 import { cn } from "@/lib/utils";
+import { HomeLaborTiles } from "@/components/schedule/Labor";
 
 function greeting() {
   const h = new Date().getHours();
@@ -28,6 +31,7 @@ export function HomePage() {
   const app = useApp();
   const [, navigate] = useLocation();
   const newTimesheet = useNewTimesheet();
+  const [checklist, setChecklist] = useState(false);
   const site = app.site;
   const list = useQuery<TimesheetSummary[]>({ queryKey: ["/api/timesheets"] });
 
@@ -65,7 +69,8 @@ export function HomePage() {
     { icon: FileSpreadsheet, tint: "bg-[#30d158]", title: "Upload CSV", sub: "Square, Toast, Sling…", source: "csv" as const, testid: "csv" },
     { icon: FileText, tint: "bg-[#ff9f0a]", title: "Toast PDF", sub: "Schedule or time entries", source: "pdf" as const, testid: "pdf" },
     { icon: Plus, tint: "bg-[#8e8e93]", title: "New timesheet", sub: "Blank or any source", source: undefined, testid: "new" },
-  ];
+    ...(timeSource !== "square" ? [{ icon: ListChecks, tint: "bg-[#ff375f]", title: "Payroll checklist", sub: "What's left to fix", source: undefined, testid: "checklist", action: () => setChecklist(true) }] : []),
+  ] as { icon: any; tint: string; title: string; sub: string; source: Parameters<typeof newTimesheet>[0]; testid: string; action?: () => void }[];
   const today = new Date(`${todayISO(site.rules.timezone)}T12:00:00`).toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" });
 
   return (
@@ -78,12 +83,17 @@ export function HomePage() {
         actions={editable && <Button onClick={() => newTimesheet()} data-testid="button-new-timesheet"><Plus /> New timesheet</Button>}
       />
 
+      <AccessNotices />
+
       {/* Quick actions */}
       {editable && (
-        <div className={cn("mb-8 grid grid-cols-2 gap-3", quick.length > 4 ? "lg:grid-cols-5" : "lg:grid-cols-4")}>
-          {quick.map((a) => <QuickAction key={a.testid} icon={a.icon} tint={a.tint} title={a.title} sub={a.sub} onClick={() => newTimesheet(a.source)} testid={a.testid} />)}
+        <div className={cn("mb-8 grid grid-cols-2 gap-3", quick.length > 5 ? "sm:grid-cols-3 lg:grid-cols-6" : quick.length > 4 ? "lg:grid-cols-5" : "lg:grid-cols-4")}>
+          {quick.map((a) => <QuickAction key={a.testid} icon={a.icon} tint={a.tint} title={a.title} sub={a.sub} onClick={() => (a.action ? a.action() : newTimesheet(a.source))} testid={a.testid} />)}
         </div>
       )}
+      {checklist && <PayrollChecklistDialog site={site} onClose={() => setChecklist(false)} />}
+
+      <HomeLaborTiles />
 
       {list.isLoading ? (
         <div className="space-y-4"><div className="grid gap-4 sm:grid-cols-3">{[0, 1, 2].map((i) => <Skeleton key={i} className="h-32 rounded-xl" />)}</div><Skeleton className="h-64 rounded-xl" /></div>

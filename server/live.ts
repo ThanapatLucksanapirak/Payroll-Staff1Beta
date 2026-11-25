@@ -10,6 +10,12 @@ import { currentUser, requestToken, verifyToken } from "./auth";
 import { isAdmin } from "./users";
 
 export const HEARTBEAT_MS = 25_000;
+/**
+ * A client whose unsent data grows past this is stalled (asleep laptop, dead
+ * tunnel): it is disconnected instead of buffering events in memory forever.
+ * EventSource reconnects by itself and reloads the current state.
+ */
+export const MAX_BUFFERED_BYTES = Math.max(16 * 1024, Number.parseInt(process.env.LIVE_MAX_BUFFER_BYTES || "", 10) || 512 * 1024);
 const TICKET_MS = 60_000;
 
 export interface LiveEvent { type: string; siteId?: string; [k: string]: unknown }
@@ -19,12 +25,25 @@ interface Client { res: Response; timer: NodeJS.Timeout; sites: string[] | null 
 const clients = new Set<Client>();
 const listeners = new Set<(e: LiveEvent) => void>();
 
+function drop(c: Client) {
+  clearInterval(c.timer);
+  clients.delete(c);
+  try { c.res.destroy(); } catch { /* already gone */ }
+}
+
+/** Write to one client, dropping it when its backlog is too large (backpressure). */
+function send(c: Client, msg: string) {
+  if (c.res.destroyed || c.res.writableLength > MAX_BUFFERED_BYTES) return drop(c);
+  try { c.res.write(msg); } catch { return drop(c); }
+  if (c.res.writableLength > MAX_BUFFERED_BYTES) drop(c);
+}
+
 /** Send an event to every connected admin app (and in-process listeners). */
 export function broadcast(event: LiveEvent) {
   const msg = `event: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`;
-  for (const c of clients) {
+  for (const c of [...clients]) {
     if (c.sites && event.siteId && !c.sites.includes(event.siteId)) continue;
-    try { c.res.write(msg); } catch { /* closed */ }
+    send(c, msg);
   }
   for (const l of listeners) {
     try { l(event); } catch { /* ignore */ }
@@ -112,7 +131,7 @@ export function registerLiveRoutes(app: Express) {
     const client: Client = {
       res,
       sites,
-      timer: setInterval(() => { try { res.write(`: ping ${Date.now()}\n\n`); } catch { /* closed */ } }, HEARTBEAT_MS),
+      timer: setInterval(() => send(client, `: ping ${Date.now()}\n\n`), HEARTBEAT_MS),
     };
     client.timer.unref?.();
     clients.add(client);

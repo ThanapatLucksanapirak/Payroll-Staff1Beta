@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link } from "wouter";
 import { useQuery } from "@tanstack/react-query";
-import { Check, Copy, ExternalLink, KeyRound, Loader2, Plus, Tablet, Trash2 } from "lucide-react";
+import { Check, Copy, ExternalLink, KeyRound, Loader2, Plus, SlidersHorizontal, Tablet, Trash2 } from "lucide-react";
 import type { Site, TimeSource } from "@shared/schema";
 import { api, errorMessage, queryClient } from "@/lib/api";
 import { timeAgo } from "@/lib/doc";
@@ -12,9 +12,13 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Field, Section } from "@/components/workspace/fields";
+import { AutoClockOutSettings } from "@/components/timeclock/AutoClockOutSettings";
 import { cn } from "@/lib/utils";
+import { type KioskDeviceOptions, type KioskSiteConfig, weakPinReason } from "@shared/kiosk";
+import { DeviceOptionsPanel, KioskLocationExtras } from "./KioskExtrasSettings";
+import { PortalSettingsCard } from "./PortalSettings";
 
-interface Device { id: string; name: string; createdAt: string; lastSeenAt: string | null; pairCodeExpiresAt: string | null }
+interface Device { id: string; name: string; createdAt: string; lastSeenAt: string | null; pairCodeExpiresAt: string | null; options?: KioskDeviceOptions }
 interface Created { device: Device; token: string; pairCode: string; pairPath: string }
 
 const SOURCES: { id: TimeSource; title: string; desc: string }[] = [
@@ -65,6 +69,9 @@ export function TimeClockSection({ site, draft, onChange }: { site: Site; draft:
         )}
         <Devices site={site} enabled={site.timeSource !== "square"} />
         <ManagerPin site={site} />
+        {site.timeSource !== "square" && <AutoClockOutSettings site={site} />}
+        <KioskLocationExtras site={site} />
+        <PortalSettingsCard site={site} />
       </div>
     </Section>
   );
@@ -78,6 +85,8 @@ function Devices({ site, enabled }: { site: Site; enabled: boolean }) {
   const [name, setName] = useState("");
   const [busy, setBusy] = useState(false);
   const [created, setCreated] = useState<Created | null>(null);
+  const [openOptions, setOpenOptions] = useState<string | null>(null);
+  const cfg = useQuery<KioskSiteConfig>({ queryKey: ["/api/sites", site.id, "kiosk-config"] });
 
   const add = async () => {
     setBusy(true);
@@ -108,11 +117,18 @@ function Devices({ site, enabled }: { site: Site; enabled: boolean }) {
       ) : (
         <ul className="divide-y divide-border/70 overflow-hidden rounded-xl border border-border/80">
           {q.data!.map((d) => (
-            <li key={d.id} className="flex items-center gap-3 px-3 py-2 text-[13px]">
-              <Tablet className="h-4 w-4 text-muted-foreground" />
-              <span className="flex-1 min-w-0 truncate font-medium">{d.name}</span>
-              {d.pairCodeExpiresAt ? <Badge variant="warning">Waiting to pair</Badge> : <span className="text-xs text-muted-foreground">{d.lastSeenAt ? `Seen ${timeAgo(d.lastSeenAt)}` : "Not used yet"}</span>}
-              <Button variant="ghost" size="icon-sm" className="text-muted-foreground hover:text-destructive" aria-label={`Remove ${d.name}`} onClick={() => revoke(d)} data-testid={`button-revoke-${d.id}`}><Trash2 /></Button>
+            <li key={d.id} className="text-[13px]">
+              <div className="flex items-center gap-3 px-3 py-2">
+                <Tablet className="h-4 w-4 shrink-0 text-muted-foreground" />
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate font-medium">{d.name}</span>
+                  {d.options && <span className="block truncate text-xs text-muted-foreground">{[d.options.photo ? "Photo on" : "No photo", d.options.loginMode === "site" ? null : d.options.loginMode === "pin" ? "PIN only" : "Name list", `${d.options.idleSeconds}s idle`].filter(Boolean).join(" · ")}</span>}
+                </span>
+                {d.pairCodeExpiresAt ? <Badge variant="warning">Waiting to pair</Badge> : <span className="hidden text-xs text-muted-foreground sm:inline">{d.lastSeenAt ? `Seen ${timeAgo(d.lastSeenAt)}` : "Not used yet"}</span>}
+                <Button variant="ghost" size="sm" className="text-muted-foreground" aria-expanded={openOptions === d.id} onClick={() => setOpenOptions(openOptions === d.id ? null : d.id)} data-testid={`button-device-options-${d.id}`}><SlidersHorizontal /> Options</Button>
+                <Button variant="ghost" size="icon-sm" className="text-muted-foreground hover:text-destructive" aria-label={`Remove ${d.name}`} onClick={() => revoke(d)} data-testid={`button-revoke-${d.id}`}><Trash2 /></Button>
+              </div>
+              {openOptions === d.id && <DeviceOptionsPanel siteId={site.id} deviceId={d.id} options={d.options} hasStations={(cfg.data?.stations.length ?? 0) > 0} />}
             </li>
           ))}
         </ul>
@@ -129,21 +145,26 @@ function Devices({ site, enabled }: { site: Site; enabled: boolean }) {
 const LOCK_GUIDE: { title: string; steps: string[] }[] = [
   { title: "iPad (Guided Access)", steps: [
     "Settings → Accessibility → Guided Access: turn it on, then set a passcode under Passcode Settings (use a different code from the manager PIN).",
-    "Open the kiosk in Safari and tap Share → Add to Home Screen, then open it from the Home Screen so it runs without the address bar.",
+    "Open https://YOUR-ADDRESS/kiosk in Safari and tap Share → Add to Home Screen. Open it from the Home Screen so it runs without the address bar.",
+    "Pair it from inside the Home Screen app (type the pairing code there). Home Screen apps don't share Safari's storage, so pairing in Safari doesn't carry over.",
     "Triple-click the side (or Home) button and tap Start. The iPad now stays on the time clock.",
     "To leave, triple-click again and enter the Guided Access passcode.",
   ] },
   { title: "Android (screen pinning)", steps: [
-    "Settings → Security (or Security & privacy → More) → App pinning: turn it on, and turn on “Ask for PIN before unpinning”.",
-    "Open the kiosk in Chrome, tap ⋮ → Add to Home screen → Install, and open it from the Home screen.",
+    "Turn on App pinning with “Ask for PIN before unpinning” (Pixel: Settings → Security & privacy → More security settings → App pinning; Samsung: Settings → Security and privacy → More security settings → Pin app).",
+    "Open the kiosk in Chrome, tap ⋮ → Add to Home screen / Install app, and open it from the Home screen.",
     "Open Recent apps, tap the app's icon at the top of its card, and choose Pin.",
     "To leave, hold Back and Overview (or swipe up and hold), then enter the device PIN.",
   ] },
   { title: "Windows or Linux PC (Chrome kiosk mode)", steps: [
     "Make a shortcut that runs: chrome --kiosk --app=https://YOUR-ADDRESS/kiosk",
     "Windows: put the shortcut in the Startup folder (Win+R, shell:startup). Linux: add it to your desktop's autostart apps.",
-    "For a fully locked PC, use a separate Windows account with Assigned Access (Settings → Accounts → Other users → Set up a kiosk).",
     "To leave, press Alt+F4 (Windows) or Ctrl+Shift+Q (Linux).",
+  ] },
+  { title: "Fully locked Windows PC (Assigned Access with Microsoft Edge)", steps: [
+    "Windows Pro or Enterprise: Settings → Accounts → Other users → Set up a kiosk. It makes a separate account that runs one app; choose Microsoft Edge (Chrome isn't offered here).",
+    "Choose to run Edge as a digital sign or interactive display, enter https://YOUR-ADDRESS/kiosk, then pair the kiosk while signed in to that account.",
+    "To leave, press Ctrl+Alt+Del and switch to another account. Not available on Windows Home: use the Chrome shortcut above instead.",
   ] },
 ];
 
@@ -183,7 +204,8 @@ function ManagerPin({ site }: { site: Site }) {
   const [again, setAgain] = useState("");
   const [busy, setBusy] = useState(false);
   const [guide, setGuide] = useState(false);
-  const valid = /^\d{4,8}$/.test(pin);
+  const weak = /^\d{4,8}$/.test(pin) ? weakPinReason(pin) : null;
+  const valid = /^\d{4,8}$/.test(pin) && !weak;
   const match = pin === again;
 
   const save = async (value: string | null) => {
@@ -196,7 +218,7 @@ function ManagerPin({ site }: { site: Site }) {
     } catch (e) { toast({ title: "Couldn't save the PIN", description: errorMessage(e), variant: "destructive" }); } finally { setBusy(false); }
   };
   const remove = async () => {
-    if (!(await confirm({ title: "Remove the manager PIN?", description: "Kiosk settings will stay locked, and nobody can unpair a kiosk or leave full screen from the tablet until you set a new one.", confirmLabel: "Remove PIN", destructive: true }))) return;
+    if (!(await confirm({ title: "Remove the manager PIN?", description: "Without a manager PIN, anyone at a tablet can open its settings and leave full screen. Unpairing from the tablet is off until you set a new PIN (you can still remove devices here).", confirmLabel: "Remove PIN", destructive: true }))) return;
     await save(null);
   };
   const isSet = q.data?.set;
@@ -208,9 +230,14 @@ function ManagerPin({ site }: { site: Site }) {
         <div className="min-w-0 flex-1">
           <p className="flex items-center gap-2 text-[13px] font-semibold">Manager PIN {q.isLoading ? null : isSet ? <Badge variant="success">On</Badge> : <Badge variant="warning">Not set</Badge>}</p>
           <p className="mt-0.5 text-xs text-muted-foreground">
-            Asked for on the kiosk before anyone can open its settings, unpair it, or leave full screen. Keep it different from employee PINs.{" "}
+            Asked for on the kiosk before anyone can open its settings, unpair it, or leave full screen. It must differ from every employee PIN, and easy ones (1234, 0000, 1212) aren't allowed.{" "}
             <button type="button" onClick={() => setGuide(true)} className="font-medium text-primary hover:underline" data-testid="button-lock-guide">How to lock the tablet itself</button>
           </p>
+          {!q.isLoading && !isSet && (
+            <p className="mt-2 rounded-lg bg-warning-soft px-2.5 py-1.5 text-xs font-medium text-warning" role="status" data-testid="text-no-manager-pin">
+              No manager PIN set: anyone at a tablet can open its settings and leave full screen. Unpairing from the tablet is off until you set one.
+            </p>
+          )}
         </div>
         {!editing && (
           <div className="flex gap-1">
@@ -226,6 +253,7 @@ function ManagerPin({ site }: { site: Site }) {
           <Button type="submit" disabled={busy || !valid || !match} data-testid="button-manager-pin-save">{busy && <Loader2 className="animate-spin" />} Save PIN</Button>
           <Button type="button" variant="ghost" onClick={() => { setEditing(false); setPin(""); setAgain(""); }}>Cancel</Button>
           {again.length > 0 && !match && <p className="w-full text-xs text-destructive">The two PINs don't match.</p>}
+          {weak && <p className="w-full text-xs text-destructive" data-testid="text-weak-pin">{weak}</p>}
         </form>
       )}
       {guide && <LockGuide onClose={() => setGuide(false)} />}

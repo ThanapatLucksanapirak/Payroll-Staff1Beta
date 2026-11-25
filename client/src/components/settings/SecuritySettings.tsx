@@ -8,6 +8,7 @@ import { useConfirm } from "@/components/ConfirmDialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Field, NumberInput, Section } from "@/components/workspace/fields";
+import { TwoFactorSettings } from "@/components/settings/TwoFactorSettings";
 
 const MIN = 8;
 
@@ -63,6 +64,7 @@ export function SecuritySettings() {
           <div className="sm:col-span-3"><Button type="submit" disabled={busy || !current || next.length < MIN || next !== confirmPw} data-testid="button-pw-save">{busy && <Loader2 className="animate-spin" />}Change password</Button></div>
         </form>
       </Section>
+      <TwoFactorSettings />
       <Section title="Sessions">
         <div className="space-y-4">
           <div className="flex flex-wrap items-center gap-3">
