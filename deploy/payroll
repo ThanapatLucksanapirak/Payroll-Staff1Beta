@@ -429,7 +429,7 @@ cmd_restore() {
 
 # ── service control ───────────────────────────────────────────────────────────
 cmd_restart() { step "Restarting"; restart_app; wait_healthy 60 || true; health_line; }
-cmd_start()   { need_systemd; step "Starting"; systemctl start payroll.service; wait_healthy 60 || true; health_line; }
+cmd_start()   { need_systemd; step "Starting"; systemctl reset-failed payroll.service 2>/dev/null || true; systemctl start payroll.service; wait_healthy 60 || true; health_line; }
 cmd_stop()    { need_systemd; systemctl stop payroll.service; ok "Stopped. Start again with: sudo payroll start"; }
 
 cmd_auto_update() {

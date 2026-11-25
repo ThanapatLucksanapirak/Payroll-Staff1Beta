@@ -108,6 +108,12 @@ test("time source setting is saved on the location", async () => {
   assert.equal(r.body.timeSource, "both");
   assert.equal(r.body.kioskLoginMode, "name_pin");
   assert.equal((await A("PUT", `/api/sites/${siteId}`, { timeSource: "paper" })).status, 400);
+  // Changing one field leaves the others alone (zod 4 .partial() fills defaults)
+  await A("PUT", `/api/sites/${siteId}`, { rules: { clockInCutoff: 600 } });
+  const renamed = await A("PUT", `/api/sites/${siteId}`, { name: "Main Location" });
+  assert.equal(renamed.body.timeSource, "both");
+  assert.equal(renamed.body.kioskLoginMode, "name_pin");
+  assert.equal(renamed.body.rules.clockInCutoff, 600, "rules kept on rename");
   await A("PUT", `/api/sites/${site2}`, { timeSource: "kiosk" });
 });
 
