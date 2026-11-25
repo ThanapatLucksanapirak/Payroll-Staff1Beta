@@ -27,15 +27,15 @@ export function LocationsSettings() {
   const site = app.sites.find((s) => s.id === selected) ?? app.sites[0];
 
   return (
-    <div className="grid gap-4 md:grid-cols-[14rem_1fr]">
-      <div className="space-y-1">
+    <div className="grid gap-5 xl:grid-cols-[13rem_1fr]">
+      <div className="h-fit rounded-xl border border-card-border bg-card p-1.5 shadow-card" role="list" aria-label="Locations">
         {app.sites.map((s) => (
-          <button key={s.id} onClick={() => setSelected(s.id)} className={cn("flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm transition-colors hover:bg-accent", s.id === site.id && "bg-accent font-medium")} data-testid={`button-location-${s.id}`}>
+          <button key={s.id} role="listitem" aria-current={s.id === site.id ? "true" : undefined} onClick={() => setSelected(s.id)} className={cn("flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-[13px] transition-colors hover:bg-foreground/[0.04] focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/35", s.id === site.id && "bg-primary/10 font-semibold text-primary hover:bg-primary/10")} data-testid={`button-location-${s.id}`}>
             <SiteDot color={s.color} /><span className="truncate flex-1">{s.name}</span>
             {s.archived && <Archive className="h-3.5 w-3.5 text-muted-foreground" />}
           </button>
         ))}
-        <Button variant="outline" size="sm" className="mt-2 w-full" onClick={() => setCreating(true)} data-testid="button-new-location"><Plus /> Add location</Button>
+        <Button variant="ghost" size="sm" className="mt-1 w-full justify-start text-primary" onClick={() => setCreating(true)} data-testid="button-new-location"><Plus /> Add location</Button>
       </div>
       <SiteEditor key={site.id} site={site} onDeleted={() => setSelected(app.sites.find((s) => s.id !== site.id)?.id ?? "")} />
       <NewSiteDialog open={creating} onOpenChange={setCreating} onCreated={(s) => setSelected(s.id)} />
@@ -78,7 +78,7 @@ function SiteEditor({ site, onDeleted }: { site: Site; onDeleted: () => void }) 
   };
 
   return (
-    <div className="space-y-4 min-w-0">
+    <div className="min-w-0 space-y-5">
       <Section
         title="Location"
         actions={
@@ -94,7 +94,7 @@ function SiteEditor({ site, onDeleted }: { site: Site; onDeleted: () => void }) 
           <Field label="Color">
             <div className="flex flex-wrap gap-2">
               {COLORS.map((c) => (
-                <button key={c} onClick={() => setDraft({ ...draft, color: c })} className={cn("h-7 w-7 rounded-full border-2 transition-transform", draft.color === c ? "border-foreground scale-110" : "border-transparent")} style={{ background: c }} aria-label={`Color ${c}`}>
+                <button key={c} onClick={() => setDraft({ ...draft, color: c })} className={cn("h-7 w-7 rounded-full ring-offset-2 ring-offset-card transition-transform duration-150 hover:scale-110 focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50", draft.color === c && "scale-110 ring-2 ring-foreground/30")} style={{ background: c }} aria-label={`Color ${c}`} aria-pressed={draft.color === c}>
                   {draft.color === c && <Check className="mx-auto h-3.5 w-3.5 text-white" />}
                 </button>
               ))}
@@ -113,8 +113,8 @@ function SiteEditor({ site, onDeleted }: { site: Site; onDeleted: () => void }) 
 
       <TimeClockSection site={site} draft={draft} onChange={setDraft} />
 
-      <div className="sticky bottom-0 z-10 -mx-1 flex items-center justify-end gap-2 border-t bg-background/95 px-1 py-3 backdrop-blur">
-        {dirty && <span className="mr-auto text-xs text-muted-foreground">Unsaved changes</span>}
+      <div className={cn("z-10 -mx-1 flex items-center justify-end gap-2 rounded-xl border px-3 py-2.5 transition-shadow duration-200", dirty ? "glass sticky bottom-[calc(3.5rem+env(safe-area-inset-bottom))] border-border/70 shadow-float md:bottom-4" : "border-transparent")} data-testid="bar-save">
+        <span className="mr-auto text-xs text-muted-foreground">{dirty ? "Unsaved changes" : "All changes saved"}</span>
         <Button variant="outline" disabled={!dirty || saving} onClick={() => setDraft(site)}>Discard</Button>
         <Button disabled={!dirty || saving} onClick={save} data-testid="button-save-location">{saving && <Loader2 className="animate-spin" />}Save location</Button>
       </div>
@@ -163,7 +163,7 @@ function SquareSection({ site }: { site: Site }) {
   };
 
   return (
-    <Section title="Square" description="Pull closed timecards straight from Square for this location." actions={connected ? <Badge className="gap-1"><Link2 className="h-3 w-3" />Connected</Badge> : <Badge variant="secondary">Not connected</Badge>}>
+    <Section title="Square" description="Pull closed timecards straight from Square for this location." actions={connected ? <Badge variant="success"><Link2 />Connected</Badge> : <Badge variant="secondary">Not connected</Badge>}>
       {connected ? (
         <div className="flex flex-wrap items-end gap-3">
           <Field label="Square location" className="min-w-[16rem] flex-1">

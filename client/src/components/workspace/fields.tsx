@@ -1,6 +1,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 import { inputToMinutes, minutesToInput } from "@shared/dates";
 
@@ -53,27 +54,38 @@ export function TimeInput({ value, onChange, className, ...rest }: { value: numb
   );
 }
 
-export function Field({ label, hint, children, className }: { label: string; hint?: ReactNode; children: ReactNode; className?: string }) {
+export function Field({ label, hint, children, className, error }: { label: string; hint?: ReactNode; children: ReactNode; className?: string; error?: ReactNode }) {
   return (
     <div className={cn("space-y-1.5", className)}>
       <Label className="text-xs font-medium text-muted-foreground">{label}</Label>
       {children}
-      {hint && <p className="text-xs text-muted-foreground">{hint}</p>}
+      {error ? <p className="text-xs font-medium text-destructive" role="alert">{error}</p> : hint && <p className="text-xs leading-snug text-muted-foreground">{hint}</p>}
     </div>
   );
 }
 
-export function Section({ title, description, actions, children, className }: { title: string; description?: ReactNode; actions?: ReactNode; children: ReactNode; className?: string }) {
+/** White card with a quiet header. Used across the workspace and settings. */
+export function Section({ title, description, actions, children, className, bodyClassName }: { title: string; description?: ReactNode; actions?: ReactNode; children: ReactNode; className?: string; bodyClassName?: string }) {
   return (
-    <section className={cn("rounded-xl border bg-card", className)}>
-      <header className="flex flex-wrap items-start justify-between gap-2 border-b px-4 py-3">
-        <div>
-          <h2 className="text-sm font-semibold">{title}</h2>
-          {description && <p className="text-xs text-muted-foreground mt-0.5">{description}</p>}
+    <section className={cn("rounded-xl border border-card-border bg-card text-card-foreground shadow-card", className)}>
+      <header className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2 px-5 pb-1 pt-4">
+        <div className="min-w-0">
+          <h2 className="text-[15px] font-semibold tracking-tight">{title}</h2>
+          {description && <p className="mt-0.5 max-w-2xl text-[13px] leading-snug text-muted-foreground">{description}</p>}
         </div>
         {actions && <div className="flex flex-wrap gap-2">{actions}</div>}
       </header>
-      <div className="p-4">{children}</div>
+      <div className={cn("px-5 pb-5 pt-3", bodyClassName)}>{children}</div>
     </section>
+  );
+}
+
+/** A label + switch row with an optional hint; the whole row is clickable. */
+export function ToggleRow({ label, hint, checked, onChange, disabled, className, testid }: { label: ReactNode; hint?: ReactNode; checked: boolean; onChange: (v: boolean) => void; disabled?: boolean; className?: string; testid?: string }) {
+  return (
+    <label className={cn("flex cursor-pointer items-center justify-between gap-4 rounded-lg border border-border/80 px-3.5 py-2.5 transition-colors hover:bg-foreground/[0.02]", disabled && "cursor-not-allowed opacity-60", className)}>
+      <span className="min-w-0"><span className="block text-[13px] font-medium">{label}</span>{hint && <span className="mt-0.5 block text-xs text-muted-foreground">{hint}</span>}</span>
+      <Switch checked={checked} onCheckedChange={onChange} disabled={disabled} data-testid={testid} />
+    </label>
   );
 }

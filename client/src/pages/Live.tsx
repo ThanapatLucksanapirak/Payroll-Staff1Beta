@@ -1,13 +1,17 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "wouter";
 import { useQuery } from "@tanstack/react-query";
-import { AlertTriangle, Coffee, Loader2, Pencil, Plus, Tablet, Trash2, UserRound } from "lucide-react";
+import { AlertTriangle, Clock, Coffee, Loader2, Pencil, Plus, Tablet, Trash2, UserRound, Users } from "lucide-react";
 import { type ClockStatus, type Punch, type PunchType, PUNCH_LABELS, PUNCH_TYPES } from "@shared/punches";
 import { instantToLocal, localToInstant, minutesToInput, inputToMinutes, todayISO } from "@shared/dates";
 import { useApp } from "@/context/AppData";
 import { api, errorMessage, queryClient } from "@/lib/api";
+import { canEdit, isAdmin } from "@/lib/roles";
 import { useLiveEvents } from "@/lib/live";
 import { useToast } from "@/hooks/use-toast";
+import { SiteDot } from "@/components/AppShell";
+import { Page, PageHeader, SectionLabel } from "@/components/ui/page";
+import { EmptyState } from "@/components/ui/empty-state";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -28,20 +32,27 @@ interface DayData {
 }
 
 const STATUS_LABEL: Record<ClockStatus, string> = { in: "Working", break: "On break", out: "Not in" };
-const STATUS_CLS: Record<ClockStatus, string> = {
-  in: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/30",
-  break: "bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/30",
-  out: "bg-muted text-muted-foreground border-transparent",
-};
+const STATUS_VARIANT: Record<ClockStatus, "success" | "warning" | "secondary"> = { in: "success", break: "warning", out: "secondary" };
 const TYPE_CLS: Record<PunchType, string> = {
-  in: "text-emerald-700 dark:text-emerald-400", break_start: "text-amber-700 dark:text-amber-400", break_end: "text-sky-700 dark:text-sky-400", out: "text-foreground",
+  in: "text-success", break_start: "text-warning", break_end: "text-info", out: "text-foreground",
 };
 const hm = (min: number) => { const h = Math.floor(min / 60), m = Math.round(min % 60); return h ? `${h}h ${String(m).padStart(2, "0")}m` : `${m}m`; };
+
+function Banner({ children, action }: { children: React.ReactNode; action?: React.ReactNode }) {
+  return (
+    <div className="mb-6 flex flex-wrap items-center gap-3 rounded-xl bg-warning-soft px-4 py-3 text-[13px]" role="status">
+      <AlertTriangle className="h-4 w-4 shrink-0 text-warning" />
+      <span className="flex-1">{children}</span>
+      {action}
+    </div>
+  );
+}
 
 export function LivePage() {
   const app = useApp();
   const site = app.site;
   const tz = site.rules.timezone;
+  const editable = canEdit(app.user);
   const key = ["/api/sites", site.id, "timeclock"];
   const q = useQuery<DayData>({ queryKey: key, staleTime: 0, refetchInterval: 5 * 60_000 });
   const [fix, setFix] = useState<Punch | null>(null);
@@ -69,69 +80,69 @@ export function LivePage() {
   const names = useMemo(() => Object.fromEntries((data?.employees ?? []).map((e) => [e.id, e.name])), [data]);
 
   return (
-    <div className="mx-auto max-w-7xl px-3 sm:px-5 py-6 space-y-6">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h1 className="flex items-center gap-2 text-xl font-semibold tracking-tight" data-testid="text-page-title">
+    <Page>
+      <PageHeader
+        title={
+          <span className="inline-flex items-center gap-3">
             Live
-            <span className={cn("inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium", connected ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400" : "bg-muted text-muted-foreground")} data-testid="status-live">
-              <span className={cn("h-1.5 w-1.5 rounded-full", connected ? "bg-emerald-500 animate-pulse" : "bg-muted-foreground")} />
+            <span className={cn("inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold tracking-normal", connected ? "bg-success-soft text-success" : "bg-neutral-soft text-neutral")} data-testid="status-live">
+              <span className={cn("h-1.5 w-1.5 rounded-full", connected ? "animate-pulse bg-success" : "bg-neutral")} />
               {connected ? "Live" : "Reconnecting…"}
             </span>
-          </h1>
-          <p className="text-sm text-muted-foreground">{site.name} · {data ? app.date(data.date) : app.date(todayISO(tz))} · {tz}</p>
-        </div>
-        <div className="flex gap-2">
-          <Link href="/employees"><Button variant="outline"><UserRound /> Employees</Button></Link>
-          <Button onClick={() => setAdding({})} data-testid="button-add-punch"><Plus /> Add punch</Button>
-        </div>
-      </div>
+          </span>
+        }
+        titleTestId="text-page-title"
+        subtitle={<span className="inline-flex flex-wrap items-center gap-x-1.5"><SiteDot color={site.color} />{site.name}<span aria-hidden>·</span>{data ? app.date(data.date) : app.date(todayISO(tz))}<span aria-hidden>·</span><span className="text-[13px]">{tz}</span></span>}
+        actions={
+          <>
+            <Button asChild variant="ghost"><Link href="/employees"><UserRound /> Employees</Link></Button>
+            {editable && <Button onClick={() => setAdding({})} data-testid="button-add-punch"><Plus /> Add punch</Button>}
+          </>
+        }
+      />
 
       {site.timeSource === "square" && (
-        <div className="flex flex-wrap items-center gap-3 rounded-xl border border-amber-500/30 bg-amber-500/5 px-4 py-3 text-sm">
-          <AlertTriangle className="h-4 w-4 text-amber-600" />
-          <span className="flex-1">{site.name} takes its hours from Square, so the time clock is off here.</span>
-          <Link href="/settings/locations"><Button size="sm" variant="outline">Turn on the time clock</Button></Link>
-        </div>
+        <Banner action={isAdmin(app.user) ? <Button asChild size="sm" variant="outline"><Link href="/settings/locations">Turn on the time clock</Link></Button> : undefined}>
+          {site.name} takes its hours from Square, so the time clock is off here.
+        </Banner>
       )}
 
       {q.isLoading ? (
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">{[0, 1, 2, 3].map((i) => <Skeleton key={i} className="h-28 rounded-xl" />)}</div>
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">{[0, 1, 2, 3].map((i) => <Skeleton key={i} className="h-28 rounded-xl" />)}</div>
       ) : q.error ? (
-        <p className="rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">{errorMessage(q.error)}</p>
+        <EmptyState icon={AlertTriangle} title="Couldn't load the time clock" description={errorMessage(q.error)} action={<Button variant="outline" size="sm" onClick={() => q.refetch()}>Try again</Button>} />
       ) : data && (
-        <>
-          <section className="space-y-3">
-            <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
-              <h2 className="text-sm font-semibold">Who's working now</h2>
-              <span className="text-sm text-muted-foreground"><b className="tabular text-foreground">{groups.working}</b> working · <b className="tabular text-foreground">{groups.onBreak}</b> on break</span>
-            </div>
+        <div className="space-y-8">
+          <section>
+            <SectionLabel action={<span className="text-[13px] text-muted-foreground"><b className="tabular font-semibold text-foreground">{groups.working}</b> working · <b className="tabular font-semibold text-foreground">{groups.onBreak}</b> on break</span>}>
+              Who's working now
+            </SectionLabel>
             {groups.on.length === 0 ? (
-              <div className="rounded-xl border border-dashed p-8 text-center text-sm text-muted-foreground">Nobody is clocked in right now.</div>
+              <EmptyState icon={Users} title="Nobody is clocked in right now" description="Clock-ins from the kiosk appear here the moment they happen." />
             ) : (
-              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 {groups.on.map((e) => (
-                  <div key={e.id} className="rounded-xl border bg-card p-4" data-testid={`card-live-${e.id}`}>
+                  <div key={e.id} className="rounded-xl border border-card-border bg-card p-4 shadow-card" data-testid={`card-live-${e.id}`}>
                     <div className="flex items-start gap-3">
                       <Initials name={e.name} status={e.status} />
                       <div className="min-w-0 flex-1">
-                        <p className="truncate font-medium">{e.name}</p>
-                        <p className="truncate text-xs text-muted-foreground">{e.role || (e.inDirectory ? " " : "Not in the employee list")}</p>
+                        <p className="truncate text-[15px] font-semibold tracking-tight">{e.name}</p>
+                        <p className="truncate text-xs text-muted-foreground">{e.role || (e.inDirectory ? " " : "Not in the employee list")}</p>
                       </div>
-                      <Badge variant="outline" className={cn("shrink-0", STATUS_CLS[e.status])}>{e.status === "break" && <Coffee className="mr-1 h-3 w-3" />}{STATUS_LABEL[e.status]}</Badge>
+                      <Badge variant={STATUS_VARIANT[e.status]} className="shrink-0">{e.status === "break" && <Coffee />}{STATUS_LABEL[e.status]}</Badge>
                     </div>
-                    <div className="mt-3 flex items-end justify-between text-sm">
-                      <span className="text-muted-foreground">{e.status === "break" ? "Break since" : "In since"} <b className="text-foreground">{t(e.status === "break" ? e.since : e.shiftStart)}</b></span>
-                      <span className="tabular font-semibold">{hm(minutesNow(e))}</span>
+                    <div className="mt-4 flex items-end justify-between gap-2">
+                      <span className="text-[13px] text-muted-foreground">{e.status === "break" ? "Break since" : "In since"} <b className="font-medium text-foreground">{t(e.status === "break" ? e.since : e.shiftStart)}</b></span>
+                      <span className="tabular text-[20px] font-semibold leading-none tracking-tight">{hm(minutesNow(e))}</span>
                     </div>
                   </div>
                 ))}
               </div>
             )}
             {groups.off.length > 0 && (
-              <div className="flex flex-wrap gap-2 pt-1">
+              <div className="mt-4 flex flex-wrap gap-2">
                 {groups.off.map((e) => (
-                  <span key={e.id} className="inline-flex items-center gap-2 rounded-full border bg-card px-3 py-1 text-xs text-muted-foreground">
+                  <span key={e.id} className="inline-flex items-center gap-2 rounded-full border border-card-border bg-card px-3 py-1 text-xs text-muted-foreground shadow-card">
                     <span className="font-medium text-foreground">{e.name}</span>
                     {e.minutes > 0 ? <>out {t(e.lastPunch?.at)} · <span className="tabular">{hm(e.minutes)}</span></> : "not in today"}
                   </span>
@@ -140,46 +151,45 @@ export function LivePage() {
             )}
           </section>
 
-          <section className="rounded-xl border bg-card">
-            <header className="flex items-center justify-between gap-2 border-b px-4 py-3">
-              <h2 className="text-sm font-semibold">Today's punches</h2>
-              <span className="text-xs text-muted-foreground">{data.punches.length} punch{data.punches.length === 1 ? "" : "es"}</span>
-            </header>
-            {data.punches.length === 0 ? (
-              <p className="px-4 py-8 text-center text-sm text-muted-foreground">No punches yet today.</p>
-            ) : (
-              <ul className="divide-y" data-testid="list-punches">
-                {data.punches.map((p) => (
-                  <li key={p.id} className="flex items-center gap-3 px-4 py-2.5 text-sm">
-                    <span className="w-20 shrink-0 tabular font-medium">{t(p.at)}</span>
-                    <span className="min-w-0 flex-1 truncate">{names[p.employeeId] ?? p.employeeName}</span>
-                    <span className={cn("hidden w-28 shrink-0 font-medium sm:block", TYPE_CLS[p.type])}>{PUNCH_LABELS[p.type]}</span>
-                    <span className="hidden w-24 shrink-0 items-center gap-1 text-xs text-muted-foreground md:flex">
-                      {p.source === "kiosk" ? <><Tablet className="h-3.5 w-3.5" />Kiosk</> : <><UserRound className="h-3.5 w-3.5" />Admin</>}
-                    </span>
-                    {(p.editedAt || p.source === "admin") && p.note && <span className="hidden max-w-[14rem] truncate text-xs text-muted-foreground lg:block" title={p.note}>“{p.note}”</span>}
-                    {p.editedAt && <Badge variant="secondary" className="shrink-0">Edited</Badge>}
-                    <Button variant="ghost" size="sm" onClick={() => setFix(p)} data-testid={`button-fix-${p.id}`}><Pencil /> <span className="hidden sm:inline">Fix</span></Button>
-                  </li>
-                ))}
-              </ul>
-            )}
+          <section>
+            <SectionLabel action={<span className="text-xs text-muted-foreground">{data.punches.length} punch{data.punches.length === 1 ? "" : "es"}</span>}>Today's punches</SectionLabel>
+            <div className="overflow-hidden rounded-xl border border-card-border bg-card shadow-card">
+              {data.punches.length === 0 ? (
+                <EmptyState compact icon={Clock} title="No punches yet today" />
+              ) : (
+                <ul className="divide-y divide-border/70" data-testid="list-punches">
+                  {data.punches.map((p) => (
+                    <li key={p.id} className="flex min-h-[3rem] items-center gap-3 px-4 py-2 text-[13px]">
+                      <span className="w-20 shrink-0 tabular font-semibold">{t(p.at)}</span>
+                      <span className="min-w-0 flex-1 truncate font-medium">{names[p.employeeId] ?? p.employeeName}</span>
+                      <span className={cn("hidden w-28 shrink-0 font-medium sm:block", TYPE_CLS[p.type])}>{PUNCH_LABELS[p.type]}</span>
+                      <span className="hidden w-24 shrink-0 items-center gap-1 text-xs text-muted-foreground md:flex">
+                        {p.source === "kiosk" ? <><Tablet className="h-3.5 w-3.5" />Kiosk</> : <><UserRound className="h-3.5 w-3.5" />Admin</>}
+                      </span>
+                      {(p.editedAt || p.source === "admin") && p.note && <span className="hidden max-w-[14rem] truncate text-xs text-muted-foreground lg:block" title={p.note}>“{p.note}”</span>}
+                      {p.editedAt && <Badge variant="secondary" className="shrink-0">Edited</Badge>}
+                      {editable && <Button variant="ghost" size="sm" className="text-muted-foreground" onClick={() => setFix(p)} data-testid={`button-fix-${p.id}`}><Pencil /> <span className="hidden sm:inline">Fix</span></Button>}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
           </section>
-        </>
+        </div>
       )}
 
       {fix && <FixPunchDialog punch={fix} tz={tz} name={names[fix.employeeId] ?? fix.employeeName} onClose={() => setFix(null)} />}
       {adding && data && <AddPunchDialog siteId={site.id} tz={tz} employees={data.employees.filter((e) => e.inDirectory)} onClose={() => setAdding(null)} />}
-    </div>
+    </Page>
   );
 }
 
 function Initials({ name, status }: { name: string; status: ClockStatus }) {
   const init = name.split(" ").filter(Boolean).slice(0, 2).map((w) => w[0]!.toUpperCase()).join("");
   return (
-    <span className="relative inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-muted text-sm font-medium">
+    <span className="relative inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/10 text-sm font-semibold text-primary">
       {init}
-      <span className={cn("absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full ring-2 ring-card", status === "in" ? "bg-emerald-500" : status === "break" ? "bg-amber-400" : "bg-muted-foreground/40")} />
+      <span className={cn("absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full ring-2 ring-card", status === "in" ? "bg-success" : status === "break" ? "bg-warning" : "bg-muted-foreground/40")} />
     </span>
   );
 }
@@ -253,9 +263,9 @@ function FixPunchDialog({ punch, tz, name, onClose }: { punch: Punch; tz: string
             </details>
           )}
           {problem && (
-            <div className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive" role="alert">
+            <div className="rounded-lg bg-danger-soft px-3 py-2 text-[13px] font-medium text-danger" role="alert">
               {problem}
-              {conflict && <p className="mt-1 text-xs text-muted-foreground">You can save anyway; the payroll import will warn about any shift that doesn't pair up.</p>}
+              {conflict && <p className="mt-1 text-xs font-normal text-muted-foreground">You can save anyway; the payroll import will warn about any shift that doesn't pair up.</p>}
             </div>
           )}
         </div>
@@ -308,7 +318,7 @@ function AddPunchDialog({ siteId, tz, employees, onClose }: { siteId: string; tz
           <DialogDescription>For a missed clock-in, break or clock-out.</DialogDescription>
         </DialogHeader>
         {employees.length === 0 ? (
-          <p className="text-sm text-muted-foreground">Add employees first on the <Link href="/employees" className="underline">Employees</Link> page.</p>
+          <p className="text-sm text-muted-foreground">Add employees first on the <Link href="/employees" className="font-medium text-primary hover:underline">Employees</Link> page.</p>
         ) : (
           <div className="space-y-3">
             <Field label="Employee">
@@ -330,7 +340,7 @@ function AddPunchDialog({ siteId, tz, employees, onClose }: { siteId: string; tz
             <Field label="Note (required)">
               <Textarea rows={2} value={note} maxLength={300} onChange={(e) => setNote(e.target.value)} placeholder="e.g. Tablet was offline" />
             </Field>
-            {problem && <p className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive" role="alert">{problem}</p>}
+            {problem && <p className="rounded-lg bg-danger-soft px-3 py-2 text-[13px] font-medium text-danger" role="alert">{problem}</p>}
           </div>
         )}
         <DialogFooter>

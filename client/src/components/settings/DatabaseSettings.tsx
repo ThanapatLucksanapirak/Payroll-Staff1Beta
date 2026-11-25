@@ -89,14 +89,14 @@ export function DatabaseSettings() {
             <div className="flex flex-wrap items-center gap-2">
               <Database className="h-4 w-4 text-muted-foreground" />
               <span className="font-medium" data-testid="text-db-label">{d.status.label ?? d.current?.kind ?? "Not configured"}</span>
-              {d.health?.ok ? <Badge className="gap-1"><CheckCircle2 className="h-3 w-3" />Connected</Badge> : <Badge variant="destructive" className="gap-1"><XCircle className="h-3 w-3" />Problem</Badge>}
+              {d.health?.ok ? <Badge variant="success"><CheckCircle2 />Connected</Badge> : <Badge variant="destructive"><XCircle />Problem</Badge>}
               {h?.latencyMs != null && <span className="text-xs text-muted-foreground">{h.latencyMs} ms</span>}
               {h?.timesheetCount != null && <span className="text-xs text-muted-foreground">· {h.timesheetCount} timesheets</span>}
             </div>
             {d.current?.url && <p className="text-xs text-muted-foreground break-all">{d.current.url} · key {d.current.keyHint}</p>}
             {(d.health?.error || d.status.error) && <p className="text-xs text-destructive">{d.health?.error || d.status.error}</p>}
             {h?.missingColumns?.length ? (
-              <p className="text-xs text-amber-700 dark:text-amber-400">Optional columns missing: {h.missingColumns.join(", ")}. The app still works; run the setup SQL below to enable faster location filtering.</p>
+              <p className="text-xs text-warning">Optional columns missing: {h.missingColumns.join(", ")}. The app still works; run the setup SQL below to enable faster location filtering.</p>
             ) : null}
             {!d.persistent && <p className="text-xs text-muted-foreground">Note: this server's config folder is temporary, so a database choice made here may reset when the server restarts. Set it with environment variables for a permanent setup.</p>}
           </div>
@@ -107,7 +107,7 @@ export function DatabaseSettings() {
         <div className="space-y-4">
           <div className="grid gap-2 sm:grid-cols-3">
             {kinds.filter((k) => k.show).map((k) => (
-              <button key={k.id} onClick={() => { setKind(k.id); setTest(null); }} className={cn("rounded-lg border p-3 text-left transition-colors hover:border-primary/50", kind === k.id && "border-primary bg-primary/5")} data-testid={`button-db-kind-${k.id}`}>
+              <button key={k.id} onClick={() => { setKind(k.id); setTest(null); }} className={cn("rounded-xl border border-border/80 p-3.5 text-left transition-[border-color,box-shadow] duration-150 hover:border-primary/40 focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/35", kind === k.id && "border-primary ring-[3px] ring-primary/15")} aria-pressed={kind === k.id} data-testid={`button-db-kind-${k.id}`}>
                 <p className="text-sm font-medium">{k.title}</p><p className="text-xs text-muted-foreground">{k.desc}</p>
               </button>
             ))}
@@ -119,9 +119,9 @@ export function DatabaseSettings() {
             </div>
           )}
           {test && (
-            <div className={cn("rounded-lg border p-3 text-sm", test.ok ? "border-primary/40 bg-primary/5" : "border-destructive/40 bg-destructive/5")} data-testid="text-db-test">
+            <div className={cn("rounded-lg border p-3 text-sm", test.ok ? "border-transparent bg-success-soft" : "border-transparent bg-danger-soft")} data-testid="text-db-test">
               {test.ok ? (
-                <p className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4 text-primary" />Connected in {test.latencyMs} ms{test.timesheetCount != null ? ` · ${test.timesheetCount} timesheets already there` : ""}</p>
+                <p className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4 text-success" />Connected in {test.latencyMs} ms{test.timesheetCount != null ? ` · ${test.timesheetCount} timesheets already there` : ""}</p>
               ) : <p className="flex items-start gap-2"><XCircle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />{test.error}</p>}
               {test.missingTables.length > 0 && <p className="mt-1 text-xs">Missing tables: {test.missingTables.join(", ")} — run the setup SQL below in the Supabase SQL editor, then test again.</p>}
               {test.missingColumns.length > 0 && <p className="mt-1 text-xs">Optional columns missing: {test.missingColumns.join(", ")}.</p>}
@@ -142,7 +142,7 @@ export function DatabaseSettings() {
         <Section title="Supabase setup SQL" description="Run once in a new project (SQL editor). Safe to run again — it only adds what's missing." actions={
           <Button variant="outline" size="sm" onClick={() => navigator.clipboard?.writeText(d.setupSql).then(() => toast({ title: "SQL copied" }), () => toast({ title: "Select the text and copy it manually" }))} data-testid="button-copy-sql"><Copy /> Copy</Button>
         }>
-          <pre className="max-h-72 overflow-auto rounded-lg bg-muted p-3 text-xs leading-relaxed"><code>{d.setupSql}</code></pre>
+          <pre className="max-h-72 overflow-auto rounded-lg bg-foreground/[0.04] p-3 font-mono text-xs leading-relaxed"><code>{d.setupSql}</code></pre>
         </Section>
       )}
       <p className="text-xs text-muted-foreground">Active location: {app.site.name}</p>

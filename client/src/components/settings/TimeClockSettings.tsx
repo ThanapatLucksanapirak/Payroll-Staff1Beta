@@ -38,10 +38,10 @@ export function TimeClockSection({ site, draft, onChange }: { site: Site; draft:
                 role="radio"
                 aria-checked={draft.timeSource === s.id}
                 onClick={() => onChange({ ...draft, timeSource: s.id })}
-                className={cn("rounded-lg border p-3 text-left transition-colors hover:bg-accent/50", draft.timeSource === s.id && "border-primary bg-primary/5 ring-1 ring-primary")}
+                className={cn("rounded-xl border border-border/80 bg-card p-3 text-left shadow-card transition-[border-color,box-shadow] duration-150 hover:border-primary/40 focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/35", draft.timeSource === s.id && "border-primary ring-1 ring-primary")}
                 data-testid={`radio-time-source-${s.id}`}
               >
-                <span className="flex items-center justify-between text-sm font-medium">{s.title}{draft.timeSource === s.id && <Check className="h-4 w-4 text-primary" />}</span>
+                <span className="flex items-center justify-between text-[13px] font-semibold">{s.title}{draft.timeSource === s.id && <Check className="h-4 w-4 text-primary" />}</span>
                 <span className="mt-0.5 block text-xs text-muted-foreground">{s.desc}</span>
               </button>
             ))}
@@ -52,14 +52,14 @@ export function TimeClockSection({ site, draft, onChange }: { site: Site; draft:
             <Field label="Kiosk sign-in">
               <div className="flex flex-wrap gap-2">
                 {([["pin", "PIN only"], ["name_pin", "Tap name, then PIN"]] as const).map(([id, label]) => (
-                  <Button key={id} type="button" size="sm" variant={draft.kioskLoginMode === id ? "secondary" : "outline"} onClick={() => onChange({ ...draft, kioskLoginMode: id })} data-testid={`button-login-mode-${id}`}>
+                  <Button key={id} type="button" size="sm" variant={draft.kioskLoginMode === id ? "tinted" : "outline"} aria-pressed={draft.kioskLoginMode === id} onClick={() => onChange({ ...draft, kioskLoginMode: id })} data-testid={`button-login-mode-${id}`}>
                     {draft.kioskLoginMode === id && <Check />}{label}
                   </Button>
                 ))}
               </div>
             </Field>
             <p className="text-xs text-muted-foreground">
-              Set up who can clock in on the <Link href="/employees" className="underline underline-offset-2">Employees</Link> page, and watch punches arrive on the <Link href="/live" className="underline underline-offset-2">Live</Link> page.
+              Set up who can clock in on the <Link href="/employees" className="font-medium text-primary hover:underline">Employees</Link> page, and watch punches arrive on the <Link href="/live" className="font-medium text-primary hover:underline">Live</Link> page.
             </p>
           </>
         )}
@@ -103,15 +103,15 @@ function Devices({ site, enabled }: { site: Site; enabled: boolean }) {
         {!enabled && <span className="text-xs text-muted-foreground">Save with “Time clock” or “Both” selected to start using them.</span>}
       </div>
       {q.isLoading ? <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" /> : (q.data ?? []).length === 0 ? (
-        <p className="text-sm text-muted-foreground">No devices yet. Add one, then open its pairing link on the tablet or PC at the door.</p>
+        <p className="rounded-xl border border-dashed border-border px-4 py-5 text-center text-[13px] text-muted-foreground">No devices yet. Add one, then open its pairing link on the tablet or PC at the door.</p>
       ) : (
-        <ul className="divide-y rounded-lg border">
+        <ul className="divide-y divide-border/70 overflow-hidden rounded-xl border border-border/80">
           {q.data!.map((d) => (
-            <li key={d.id} className="flex items-center gap-3 px-3 py-2 text-sm">
+            <li key={d.id} className="flex items-center gap-3 px-3 py-2 text-[13px]">
               <Tablet className="h-4 w-4 text-muted-foreground" />
               <span className="flex-1 min-w-0 truncate font-medium">{d.name}</span>
-              {d.pairCodeExpiresAt ? <Badge variant="secondary">Waiting to pair</Badge> : <span className="text-xs text-muted-foreground">{d.lastSeenAt ? `Seen ${timeAgo(d.lastSeenAt)}` : "Not used yet"}</span>}
-              <Button variant="ghost" size="icon" aria-label={`Remove ${d.name}`} onClick={() => revoke(d)} data-testid={`button-revoke-${d.id}`}><Trash2 /></Button>
+              {d.pairCodeExpiresAt ? <Badge variant="warning">Waiting to pair</Badge> : <span className="text-xs text-muted-foreground">{d.lastSeenAt ? `Seen ${timeAgo(d.lastSeenAt)}` : "Not used yet"}</span>}
+              <Button variant="ghost" size="icon-sm" className="text-muted-foreground hover:text-destructive" aria-label={`Remove ${d.name}`} onClick={() => revoke(d)} data-testid={`button-revoke-${d.id}`}><Trash2 /></Button>
             </li>
           ))}
         </ul>
@@ -149,12 +149,12 @@ function PairDialog({ created, onClose }: { created: Created; onClose: () => voi
           </div>
           <div className="space-y-1.5">
             <p className="text-xs font-medium text-muted-foreground">Option 2: open <span className="font-mono">{window.location.origin}/kiosk</span> and enter</p>
-            <p className="rounded-lg bg-muted py-3 text-center font-mono text-3xl tracking-[0.25em]" data-testid="text-pair-code">{created.pairCode}</p>
+            <p className="rounded-xl bg-foreground/[0.04] py-3 text-center font-mono text-3xl font-semibold tracking-[0.25em]" data-testid="text-pair-code">{created.pairCode}</p>
             <p className="text-xs text-muted-foreground">The code works once and expires in 15 minutes.</p>
           </div>
         </div>
         <DialogFooter>
-          <a href={link} target="_blank" rel="noreferrer" className="mr-auto"><Button variant="ghost"><ExternalLink /> Use this browser as the kiosk</Button></a>
+          <Button asChild variant="ghost" className="mr-auto"><a href={link} target="_blank" rel="noreferrer"><ExternalLink /> Use this browser as the kiosk</a></Button>
           <Button onClick={onClose}>Done</Button>
         </DialogFooter>
       </DialogContent>

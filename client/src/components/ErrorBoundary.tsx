@@ -14,7 +14,7 @@ export class ErrorBoundary extends Component<{ children: ReactNode }, { error: E
     if (!this.state.error) return this.props.children;
     return (
       <div className="mx-auto max-w-md p-8 text-center space-y-3" role="alert">
-        <AlertTriangle className="mx-auto h-8 w-8 text-amber-500" />
+        <AlertTriangle className="mx-auto h-8 w-8 text-warning" />
         <h2 className="font-semibold">Something went wrong on this screen</h2>
         <p className="text-sm text-muted-foreground break-words">{this.state.error.message}</p>
         <p className="text-xs text-muted-foreground">Your saved work is safe. Reloading usually fixes this.</p>

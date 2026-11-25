@@ -48,7 +48,7 @@ export function SecuritySettings() {
   };
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
       <Section title="Your account" description={`Signed in as ${app.user.username} · ${ROLE_LABELS[app.user.role]}`}>
         <form className="flex flex-wrap items-end gap-3" onSubmit={(e) => { e.preventDefault(); void saveProfile(); }}>
           <Field label="Display name" className="w-full sm:w-72"><Input value={displayName} maxLength={100} onChange={(e) => setDisplayName(e.target.value)} data-testid="input-profile-name" /></Field>

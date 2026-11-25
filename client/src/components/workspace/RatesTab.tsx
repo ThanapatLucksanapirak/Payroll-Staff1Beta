@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Download, Loader2, Plus, Save, Trash2 } from "lucide-react";
+import { Download, Loader2, Plus, Save, Trash2, Users } from "lucide-react";
 import type { EmployeeConfig, ManualEmployee } from "@shared/schema";
 import { employeeKey, shiftEmployeeNames } from "@shared/engine";
 import { useApp } from "@/context/AppData";
@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Field, NumberInput, Section } from "./fields";
+import { EmptyState } from "@/components/ui/empty-state";
 import type { WsProps } from "./types";
 
 const CUSTOM = "custom";
@@ -67,12 +68,12 @@ export function RatesTab(p: WsProps) {
           </>
         )}
       >
-        {rows.length === 0 ? <p className="text-sm text-muted-foreground">No employees with shifts yet.</p> : (
-          <div className="overflow-x-auto -mx-4 px-4">
+        {rows.length === 0 ? <EmptyState compact icon={Users} title="No employees with shifts yet" description="Rates appear here once the timesheet has shifts. Add them on the Shifts tab." /> : (
+          <div className="overflow-x-auto -mx-5 px-5">
             <table className="w-full text-sm min-w-[46rem]">
               <thead>
                 <tr className="text-left text-xs text-muted-foreground">
-                  <th className="pb-2 font-medium sticky left-0 z-10 bg-card">Employee</th><th className="pb-2 font-medium">Category</th><th className="pb-2 font-medium">Pay basis</th>
+                  <th className="sticky left-0 z-10 bg-card pb-2 font-medium">Employee</th><th className="pb-2 font-medium">Category</th><th className="pb-2 font-medium">Pay basis</th>
                   <th className="pb-2 font-medium">Full day</th><th className="pb-2 font-medium">Half day</th><th className="pb-2 font-medium">Hourly</th>
                   <th className="pb-2 font-medium text-center">Net</th><th className="pb-2 font-medium text-center">Include</th>
                 </tr>
@@ -83,7 +84,7 @@ export function RatesTab(p: WsProps) {
                   const k = employeeKey(e.name);
                   const basis = cat?.payBasis ?? e.payBasis;
                   return (
-                    <tr key={k} className="border-t" data-testid={`row-rate-${k}`}>
+                    <tr key={k} className="border-t border-border/60" data-testid={`row-rate-${k}`}>
                       <td className="sticky left-0 z-10 max-w-[9rem] truncate bg-card py-2 pr-2 font-medium sm:max-w-none" title={e.name}>{e.name}</td>
                       <td className="py-2 pr-2 w-40">
                         <Select value={cat ? e.categoryId : CUSTOM} onValueChange={(v) => setEmp(e.name, { categoryId: v })} disabled={locked}>
@@ -119,7 +120,7 @@ export function RatesTab(p: WsProps) {
         description="People paid outside of timecards — a flat amount for the period or amounts on specific dates."
         actions={!locked && <Button variant="outline" size="sm" onClick={() => edit((d) => ({ ...d, manualEmployees: [...d.manualEmployees, blankManual()] }))} data-testid="button-add-manual"><Plus /> Add person</Button>}
       >
-        {doc.manualEmployees.length === 0 ? <p className="text-sm text-muted-foreground">None added.</p> : (
+        {doc.manualEmployees.length === 0 ? <p className="rounded-lg border border-dashed border-border px-4 py-6 text-center text-[13px] text-muted-foreground">No manual employees. Use <b className="font-medium text-foreground">Add person</b> for anyone paid outside of timecards.</p> : (
           <div className="space-y-3">
             {doc.manualEmployees.map((m) => <ManualRow key={m.id} m={m} locked={locked} onChange={(fn, key) => edit((d) => updateManual(d, m.id, fn), key)} onRemove={() => edit((d) => ({ ...d, manualEmployees: d.manualEmployees.filter((x) => x.id !== m.id) }))} />)}
           </div>
@@ -133,7 +134,7 @@ function ManualRow({ m, locked, onChange, onRemove }: { m: ManualEmployee; locke
   const app = useApp();
   const total = m.payMode === "lump_sum" ? m.lumpSum : m.payDates.reduce((s, d) => s + d.amount, 0);
   return (
-    <div className="rounded-lg border p-3 space-y-3" data-testid={`card-manual-${m.id}`}>
+    <div className="space-y-3 rounded-xl border border-border/80 p-4" data-testid={`card-manual-${m.id}`}>
       <div className="grid gap-3 sm:grid-cols-[1fr_10rem_auto_auto] items-end">
         <Field label="Name"><Input value={m.name} disabled={locked} placeholder="Full name" onChange={(e) => onChange((x) => ({ ...x, name: e.target.value }), `mname:${m.id}`)} data-testid={`input-manual-name-${m.id}`} /></Field>
         <Field label="Paid as">
@@ -143,7 +144,7 @@ function ManualRow({ m, locked, onChange, onRemove }: { m: ManualEmployee; locke
           </Select>
         </Field>
         <label className="flex items-center gap-2 text-sm pb-2"><Switch checked={m.isNetPay} disabled={locked} onCheckedChange={(v) => onChange((x) => ({ ...x, isNetPay: v }))} />Net</label>
-        {!locked && <Button variant="ghost" size="icon" onClick={onRemove} aria-label="Remove person" className="mb-0.5"><Trash2 className="h-4 w-4" /></Button>}
+        {!locked && <Button variant="ghost" size="icon" onClick={onRemove} aria-label="Remove person" className="mb-0.5"><Trash2 /></Button>}
       </div>
       {m.payMode === "lump_sum" ? (
         <Field label="Amount for the period" className="max-w-[12rem]"><NumberInput prefix={app.prefs.currencySymbol} value={m.lumpSum} disabled={locked} onChange={(n) => onChange((x) => ({ ...x, lumpSum: n }), `mlump:${m.id}`)} data-testid={`input-manual-lump-${m.id}`} /></Field>
@@ -154,7 +155,7 @@ function ManualRow({ m, locked, onChange, onRemove }: { m: ManualEmployee; locke
               <Input type="date" className="w-40" value={pd.date} disabled={locked} onChange={(e) => onChange((x) => ({ ...x, payDates: x.payDates.map((y, j) => (j === i ? { ...y, date: e.target.value } : y)) }))} />
               <NumberInput className="w-28" prefix={app.prefs.currencySymbol} value={pd.amount} disabled={locked} onChange={(n) => onChange((x) => ({ ...x, payDates: x.payDates.map((y, j) => (j === i ? { ...y, amount: n } : y)) }), `mpd:${m.id}:${i}`)} />
               <Input className="flex-1 min-w-[8rem]" placeholder="Note" value={pd.note} disabled={locked} onChange={(e) => onChange((x) => ({ ...x, payDates: x.payDates.map((y, j) => (j === i ? { ...y, note: e.target.value } : y)) }), `mpn:${m.id}:${i}`)} />
-              {!locked && <Button variant="ghost" size="icon" aria-label="Remove date" onClick={() => onChange((x) => ({ ...x, payDates: x.payDates.filter((_, j) => j !== i) }))}><Trash2 className="h-4 w-4" /></Button>}
+              {!locked && <Button variant="ghost" size="icon" aria-label="Remove date" onClick={() => onChange((x) => ({ ...x, payDates: x.payDates.filter((_, j) => j !== i) }))}><Trash2 /></Button>}
             </div>
           ))}
           {!locked && <Button variant="outline" size="sm" onClick={() => onChange((x) => ({ ...x, payDates: [...x.payDates, { date: "", amount: 0, note: "" }] }))}><Plus /> Add date</Button>}

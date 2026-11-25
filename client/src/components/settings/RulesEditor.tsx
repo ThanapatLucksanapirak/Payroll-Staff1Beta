@@ -5,7 +5,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Field, NumberInput, TimeInput } from "@/components/workspace/fields";
+import { Field, NumberInput, TimeInput, ToggleRow } from "@/components/workspace/fields";
+import { Disclosure } from "@/components/ui/disclosure";
 import { PERIOD_LABELS } from "@/lib/periods";
 
 type Props = { rules: SiteRules; onChange: (r: SiteRules) => void; disabled?: boolean; /** Show location-only fields (time zone, pay period). */ siteLevel?: boolean };
@@ -16,7 +17,7 @@ export function RulesEditor({ rules, onChange, disabled, siteLevel }: Props) {
   const freeDays = WEEKDAYS.map((_, i) => String(i)).filter((d) => !rules.weekdayOverrides?.[d]);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <Group title="How days are classified">
         <Field label="Method" className="sm:col-span-2">
           <Select value={rules.classificationMethod} onValueChange={(v) => set("classificationMethod", v as any)} disabled={disabled}>
@@ -32,7 +33,7 @@ export function RulesEditor({ rules, onChange, disabled, siteLevel }: Props) {
             <Field label="Arrive before" hint="Clocking in before this counts as on time"><TimeInput value={rules.clockInCutoff} onChange={(m) => set("clockInCutoff", m)} disabled={disabled} data-testid="input-rule-in" /></Field>
             <Field label="Stay until" hint="Clocking out at or after this counts as a full shift"><TimeInput value={rules.clockOutCutoff} onChange={(m) => set("clockOutCutoff", m)} disabled={disabled} data-testid="input-rule-out" /></Field>
             <Field label="Grace period (minutes)"><NumberInput step="1" value={rules.graceMinutes} onChange={(n) => set("graceMinutes", Math.min(180, Math.round(n)))} disabled={disabled} /></Field>
-            <p className="text-xs text-muted-foreground sm:col-span-2 self-center">Both on time and stayed late = full day. Only one = half day. Neither = flagged.</p>
+            <p className="self-center rounded-lg bg-foreground/[0.03] px-3 py-2 text-xs leading-snug text-muted-foreground sm:col-span-2"><span className="status-full_day mr-1 rounded-full px-1.5 py-px font-semibold">Full</span>on time and stayed late · <span className="status-half_day mx-1 rounded-full px-1.5 py-px font-semibold">Half</span>only one · <span className="status-flagged mx-1 rounded-full px-1.5 py-px font-semibold">Flagged</span>neither</p>
           </>
         ) : (
           <>
@@ -49,8 +50,8 @@ export function RulesEditor({ rules, onChange, disabled, siteLevel }: Props) {
       </Group>
 
       {rules.classificationMethod === "cutoffs" && (
+        <Disclosure title="Different hours on certain days" description={overrides.length ? `${overrides.length} day${overrides.length === 1 ? "" : "s"} with their own cutoffs` : "Every day uses the cutoffs above"} defaultOpen={overrides.length > 0} testid="disclosure-weekday">
         <div className="space-y-2">
-          <p className="text-sm font-medium">Different hours on certain days</p>
           {overrides.length === 0 && <p className="text-xs text-muted-foreground">Every day uses the cutoffs above.</p>}
           {overrides.map(([day, ov]) => (
             <div key={day} className="flex flex-wrap items-end gap-2">
@@ -67,9 +68,11 @@ export function RulesEditor({ rules, onChange, disabled, siteLevel }: Props) {
             </Select>
           )}
         </div>
+        </Disclosure>
       )}
 
-      <Group title="Punches">
+      <Disclosure title="Advanced: punches & rounding" description="Split shifts, breaks, short punches, rounding, long-shift warnings" testid="disclosure-punches">
+      <Group>
         <Toggle label="Combine split shifts on the same day" hint="Two punches on one day count as one day, not two" checked={rules.mergeSameDayShifts} onChange={(v) => set("mergeSameDayShifts", v)} disabled={disabled} />
         <Toggle label="Subtract unpaid breaks" checked={rules.deductUnpaidBreaks} onChange={(v) => set("deductUnpaidBreaks", v)} disabled={disabled} />
         <Field label="Ignore punches shorter than (minutes)"><NumberInput step="1" value={rules.minShiftMinutes} onChange={(n) => set("minShiftMinutes", Math.min(720, Math.round(n)))} disabled={disabled} /></Field>
@@ -77,8 +80,10 @@ export function RulesEditor({ rules, onChange, disabled, siteLevel }: Props) {
         <Field label="Warn about shifts longer than (hours)"><NumberInput step="1" value={rules.longShiftWarningHours} onChange={(n) => set("longShiftWarningHours", Math.min(48, n))} disabled={disabled} /></Field>
         <Toggle label="New employees are paid net" checked={rules.defaultNetPay} onChange={(v) => set("defaultNetPay", v)} disabled={disabled} />
       </Group>
+      </Disclosure>
 
-      <Group title="Overtime (hourly employees)">
+      <Disclosure title="Overtime (hourly employees)" description={rules.overtimeEnabled ? `On · after ${rules.overtimeWeeklyHours} h/week at ${rules.overtimeMultiplier}×` : "Off"} defaultOpen={rules.overtimeEnabled} testid="disclosure-overtime">
+      <Group>
         <Toggle label="Pay overtime" checked={rules.overtimeEnabled} onChange={(v) => set("overtimeEnabled", v)} disabled={disabled} className="sm:col-span-2" />
         {rules.overtimeEnabled && (
           <>
@@ -94,6 +99,7 @@ export function RulesEditor({ rules, onChange, disabled, siteLevel }: Props) {
           </Select>
         </Field>
       </Group>
+      </Disclosure>
 
       {siteLevel && (
         <Group title="Calendar">
@@ -118,20 +124,15 @@ export function RulesEditor({ rules, onChange, disabled, siteLevel }: Props) {
   );
 }
 
-function Group({ title, children }: { title: string; children: React.ReactNode }) {
+function Group({ title, children }: { title?: string; children: React.ReactNode }) {
   return (
     <div className="space-y-3">
-      <p className="text-sm font-medium">{title}</p>
+      {title && <p className="text-[13px] font-semibold">{title}</p>}
       <div className="grid gap-3 sm:grid-cols-2">{children}</div>
     </div>
   );
 }
 
 function Toggle({ label, hint, checked, onChange, disabled, className }: { label: string; hint?: string; checked: boolean; onChange: (v: boolean) => void; disabled?: boolean; className?: string }) {
-  return (
-    <label className={`flex items-center justify-between gap-3 rounded-lg border px-3 py-2.5 ${className ?? ""}`}>
-      <span><span className="block text-sm">{label}</span>{hint && <span className="block text-xs text-muted-foreground">{hint}</span>}</span>
-      <Switch checked={checked} onCheckedChange={onChange} disabled={disabled} />
-    </label>
-  );
+  return <ToggleRow label={label} hint={hint} checked={checked} onChange={onChange} disabled={disabled} className={className} />;
 }
