@@ -9,6 +9,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useConfirm } from "@/components/ConfirmDialog";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { OffsiteBackupSettings } from "@/components/settings/OffsiteBackupSettings";
 import { Field, NumberInput, Section } from "@/components/workspace/fields";
 
 export function DataSettings() {
@@ -57,6 +58,7 @@ export function DataSettings() {
         <Button variant="outline" onClick={() => file.current?.click()} disabled={!!busy} data-testid="button-restore">{busy === "restore" ? <Loader2 className="animate-spin" /> : <Upload />} Choose backup file</Button>
       </Section>
       <ServerBackups />
+      <OffsiteBackupSettings />
       <Section title="Keep history" description="When a location has more than this many draft timesheets, the oldest move to the Trash (kept 30 days). Finalized timesheets are never moved. 0 keeps everything.">
         <div className="flex flex-wrap items-end gap-3">
           <Field label="Timesheets per location" className="w-48"><NumberInput step="1" value={keep} onChange={(n) => setKeep(Math.max(0, Math.round(n)))} data-testid="input-retention" /></Field>

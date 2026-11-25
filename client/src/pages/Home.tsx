@@ -17,6 +17,7 @@ import { Page, PageHeader, SectionLabel } from "@/components/ui/page";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
+import { AccessNotices } from "@/components/AccessNotices";
 import { cn } from "@/lib/utils";
 
 function greeting() {
@@ -77,6 +78,8 @@ export function HomePage() {
         subtitle={<span className="inline-flex items-center gap-1.5"><SiteDot color={site.color} />{site.name}{site.address ? ` · ${site.address}` : ""}</span>}
         actions={editable && <Button onClick={() => newTimesheet()} data-testid="button-new-timesheet"><Plus /> New timesheet</Button>}
       />
+
+      <AccessNotices />
 
       {/* Quick actions */}
       {editable && (
