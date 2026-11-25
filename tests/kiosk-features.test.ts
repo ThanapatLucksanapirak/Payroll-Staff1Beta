@@ -338,6 +338,23 @@ test("wrong-action guard: the server refuses and suggests the right action", asy
   assert.equal(notOnBreak.body.suggest, "in");
 });
 
+test("two devices punching the same employee moments apart are handled in arrival order", async () => {
+  const other = (await A("POST", `/api/sites/${siteId}/kiosk-devices`, { name: "Back door" })).body.token;
+  for (let round = 0; round < 5; round++) {
+    const id = await K("POST", "/api/kiosk/identify", { pin: "5678" }, other);
+    assert.equal(id.body.status, "out");
+    // Device 1: clock in with the PIN (slow: hashing). Device 2, right after: clock out with a ticket (fast).
+    const a = K("POST", "/api/kiosk/punch", { id: randomUUID(), type: "in", pin: "5678", employeeId: ben });
+    await new Promise((r) => setTimeout(r, 2));
+    const b = K("POST", "/api/kiosk/punch", { id: randomUUID(), type: "out", ticket: id.body.ticket, employeeId: ben }, other);
+    const [ra, rb] = await Promise.all([a, b]);
+    assert.equal(ra.status, 200, JSON.stringify(ra.body));
+    assert.equal(rb.status, 200, `round ${round}: ${JSON.stringify(rb.body)}`);
+    assert.equal(rb.body.status, "out");
+    assert.ok(Date.parse(rb.body.punch.at) >= Date.parse(ra.body.punch.at), "stamped in arrival order");
+  }
+});
+
 test("break reminders: identify and Live flag a due break", async () => {
   // Cara clocked in 6 hours ago (offline replay), with a 5 hour rule
   const cara = (await A("POST", `/api/sites/${siteId}/employees`, { name: "Cara Diaz", pin: "2468" })).body.id;
