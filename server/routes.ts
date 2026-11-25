@@ -14,6 +14,9 @@ import { checkPassword, clearSetupCode, currentPasswordHash, issueToken, loginTh
 import { backupPath, listBackups, readBackup, runBackup } from "./backup";
 import { listLocations, pullTimecards } from "./square";
 import { extractPdfText } from "./pdf";
+import { invalidateEmployeeCache } from "./employees";
+import { type Punch, punchSchema } from "@shared/punches";
+import { kioskHostGuard, registerKioskRoutes, registerTimeClockAdminRoutes } from "./kiosk";
 
 type Handler = (req: Request, res: Response) => Promise<unknown>;
 const h = (fn: Handler) => (req: Request, res: Response, next: NextFunction) => { fn(req, res).catch(next); };
@@ -97,6 +100,7 @@ const restoreSchema = z.object({
     meta_json: z.any().default(null),
     created_at: z.string().optional(),
   }).passthrough()).default([]),
+  punches: z.array(z.any()).default([]),
 });
 
 /** Restore an export. The current admin password is always kept. */
@@ -111,15 +115,25 @@ async function restoreFrom(raw: unknown) {
     settings: body.settings.filter((x) => !keep.has(x.key)),
     timesheets: body.timesheets.map(({ updated_at: _u, ...rest }: any) => rest),
   });
+  // Time-clock punches: inserted by id, so restoring twice adds nothing.
+  let punches = 0;
+  for (const raw of body.punches) {
+    const p = punchSchema.safeParse(raw);
+    if (p.success && (await store.insertPunch(p.data as Punch)).created) punches++;
+  }
   settings.invalidateSettingsCache();
+  invalidateEmployeeCache();
   resetTagCache();
-  return result;
+  return { ...result, punches };
 }
 
 export function registerRoutes(app: Express) {
-  const PUBLIC = new Set(["/health", "/auth/status", "/auth/login", "/auth/setup"]);
+  // /live checks its own short-lived ticket (EventSource cannot send headers).
+  const PUBLIC = new Set(["/health", "/auth/status", "/auth/login", "/auth/setup", "/live"]);
+  app.use(kioskHostGuard()); // KIOSK_HOST: serve only the kiosk on that hostname
   // Never cache API responses (payroll data) in browsers or at the Cloudflare edge.
   app.use("/api", (_req, res, next) => { res.setHeader("Cache-Control", "no-store"); next(); });
+  registerKioskRoutes(app); // /api/kiosk/*: device-token auth, never the admin session
   app.use("/api", requireAuth(PUBLIC));
 
   // ── Public ──────────────────────────────────────────────────────────────────
@@ -430,6 +444,7 @@ export function registerRoutes(app: Express) {
       app: "payroll-admin", version: 2, exportedAt: new Date().toISOString(),
       settings: all.filter((s) => includeSecrets || !secret(s.key)),
       timesheets: await store.allTimesheets(),
+      punches: await store.allPunches(),
     });
   }));
   app.post("/api/backup/restore", express.json({ limit: "100mb" }), h(async (req, res) => {
@@ -451,6 +466,8 @@ export function registerRoutes(app: Express) {
   app.post("/api/backups/:name/restore", h(async (req, res) => {
     res.json(await restoreFrom(readBackup(String(req.params.name))));
   }));
+
+  registerTimeClockAdminRoutes(app); // employees, punches, kiosk devices, live updates
 
   // ── Errors ──────────────────────────────────────────────────────────────────
   app.use("/api", (_req: Request, res: Response) => res.status(404).json({ error: "Not found." }));

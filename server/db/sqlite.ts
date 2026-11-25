@@ -3,7 +3,8 @@ import fs from "node:fs";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import type { DatabaseHealth } from "@shared/schema";
-import { type DataStore, type TimesheetRow, type TimesheetWrite, toSummary } from "./types";
+import type { Punch } from "@shared/punches";
+import { type DataStore, type PunchPatch, type PunchQuery, type TimesheetRow, type TimesheetWrite, patchToRow, punchToRow, rowToPunch, toSummary } from "./types";
 
 const JSON_COLS = ["result_json", "wages_json", "manual_employees_json", "meta_json"] as const;
 const ROW_COLS = [
@@ -39,6 +40,20 @@ export const MIGRATIONS: { version: number; name: string; up: (db: Database.Data
       if (!cols.has("meta_json")) db.exec("alter table recent_uploads add column meta_json text");
       db.exec("create index if not exists recent_uploads_site_idx on recent_uploads (site_id, updated_at)");
     },
+  },
+  // Version 3 is reserved for user accounts (developed separately).
+  {
+    version: 4,
+    name: "time clock punches",
+    up: (db) => db.exec(`
+      create table if not exists punches (
+        id text primary key, site_id text not null, employee_id text not null, employee_name text not null,
+        type text not null, at text not null, source text not null default 'kiosk', device_id text, note text,
+        created_at text not null, edited_at text, meta_json text
+      );
+      create index if not exists punches_site_at_idx on punches (site_id, at);
+      create index if not exists punches_employee_at_idx on punches (employee_id, at);
+    `),
   },
 ];
 export const SCHEMA_VERSION = MIGRATIONS[MIGRATIONS.length - 1].version;
@@ -172,6 +187,47 @@ export class SqliteStore implements DataStore {
     })();
     return { settings: data.settings.length, timesheets: data.timesheets.length };
   }
+  // ── Punches ────────────────────────────────────────────────────────────────
+  private punchRow(p: Punch) {
+    const r: any = punchToRow(p);
+    r.meta_json = JSON.stringify(r.meta_json);
+    return r;
+  }
+  async listPunches(q: PunchQuery) {
+    const where: string[] = [];
+    const args: any[] = [];
+    if (q.siteId) { where.push("site_id = ?"); args.push(q.siteId); }
+    if (q.employeeId) { where.push("employee_id = ?"); args.push(q.employeeId); }
+    if (q.from) { where.push("at >= ?"); args.push(q.from); }
+    if (q.to) { where.push("at < ?"); args.push(q.to); }
+    const sql = `select * from punches ${where.length ? `where ${where.join(" and ")}` : ""} order by at, id limit ${Math.max(1, Math.min(q.limit ?? 20000, 50000))}`;
+    return (this.db.prepare(sql).all(...args) as any[]).map(rowToPunch);
+  }
+  async getPunch(id: string) {
+    const r = this.db.prepare("select * from punches where id = ?").get(id);
+    return r ? rowToPunch(r) : null;
+  }
+  async insertPunch(p: Punch) {
+    const row = this.punchRow(p);
+    const cols = Object.keys(row);
+    const res = this.db.prepare(`insert or ignore into punches (${cols.join(",")}) values (${cols.map((c) => "@" + c).join(",")})`).run(row);
+    if (res.changes) return { punch: rowToPunch(row), created: true };
+    return { punch: (await this.getPunch(p.id))!, created: false };
+  }
+  async updatePunch(id: string, patch: PunchPatch) {
+    const data: any = patchToRow(patch);
+    if ("meta_json" in data) data.meta_json = JSON.stringify(data.meta_json);
+    const cols = Object.keys(data);
+    if (cols.length) this.db.prepare(`update punches set ${cols.map((c) => `${c} = @${c}`).join(", ")} where id = @__id`).run({ ...data, __id: id });
+    return this.getPunch(id);
+  }
+  async deletePunch(id: string) {
+    return this.db.prepare("delete from punches where id = ?").run(id).changes > 0;
+  }
+  async allPunches() {
+    return (this.db.prepare("select * from punches order by at, id").all() as any[]).map(rowToPunch);
+  }
+
   async snapshotTo(file: string) {
     fs.mkdirSync(path.dirname(file), { recursive: true });
     await this.db.backup(file);

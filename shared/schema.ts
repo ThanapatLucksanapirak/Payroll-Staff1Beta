@@ -50,6 +50,11 @@ export const siteRulesSchema = z.object({
 export type SiteRules = z.infer<typeof siteRulesSchema>;
 export const DEFAULT_RULES: SiteRules = siteRulesSchema.parse({});
 
+export const TIME_SOURCES = ["square", "kiosk", "both"] as const;
+export type TimeSource = (typeof TIME_SOURCES)[number];
+export const KIOSK_LOGIN_MODES = ["pin", "name_pin"] as const;
+export type KioskLoginMode = (typeof KIOSK_LOGIN_MODES)[number];
+
 export const siteSchema = z.object({
   id: z.string().min(1),
   name: z.string().min(1).max(80),
@@ -60,6 +65,10 @@ export const siteSchema = z.object({
   rules: siteRulesSchema.default({}),
   squareLocationId: z.string().default(""),
   squareLocationName: z.string().default(""),
+  // Where this location's hours come from: Square timecards, the time-clock kiosk, or both.
+  timeSource: z.enum(TIME_SOURCES).default("square"),
+  // Kiosk sign-in: PIN only, or tap your name and then enter the PIN.
+  kioskLoginMode: z.enum(KIOSK_LOGIN_MODES).default("pin"),
   createdAt: z.string().default(() => new Date().toISOString()),
 });
 export type Site = z.infer<typeof siteSchema>;
@@ -108,7 +117,7 @@ export type Prefs = z.infer<typeof prefsSchema>;
 // ─────────────────────────────────────────────────────────────────────────────
 // Timesheet document
 // ─────────────────────────────────────────────────────────────────────────────
-export const SHIFT_SOURCES = ["square", "csv", "toast", "manual", "legacy"] as const;
+export const SHIFT_SOURCES = ["square", "csv", "toast", "manual", "legacy", "kiosk"] as const;
 export type ShiftSource = (typeof SHIFT_SOURCES)[number];
 
 export const shiftSchema = z.object({
