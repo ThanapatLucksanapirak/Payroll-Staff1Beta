@@ -304,13 +304,22 @@ export function KioskApp() {
       {cameraOn && <CameraPreview attach={camera.attach} status={camera.status} />}
       {showInfo && (
         <InfoSheet
-          state={state} options={options} pending={pending} online={online} canUnpair={!guarded || !!managerPin} guarded={guarded}
+          state={state} options={options} pending={pending} online={online} canUnpair={guarded && !!managerPin} guarded={guarded}
+          idleMs={Math.max(idleMs, 20_000)}
           onClose={closeInfo} onSync={sync}
           onUnpair={async () => {
-            // Revoke on the server as well, so the old pairing can't be reused.
-            if (managerPin) await request("POST", "/api/kiosk/unpair", { pin: managerPin }).catch(() => undefined);
+            // Revoke on the server first; only forget the pairing here once the server confirms.
+            await request("POST", "/api/kiosk/unpair", { pin: managerPin }).catch((err: KioskError) => {
+              if (err.code !== "device") throw err; // already removed on the server: fine
+            });
+            queue.save([]);
             closeInfo();
             unpair();
+          }}
+          onForget={() => {
+            queue.save([]);
+            closeInfo();
+            unpair("This tablet forgot its pairing, but the device may still be listed in the admin app. Remove it in Settings → Locations → Time clock.");
           }}
         />
       )}
@@ -609,7 +618,22 @@ function Splash({ online, onRetry }: { online: boolean; onRetry: () => void }) {
   );
 }
 
-function InfoSheet({ state, options, pending, online, canUnpair, guarded, onClose, onSync, onUnpair }: { state: KioskState; options: KioskOptions; pending: number; online: boolean; canUnpair: boolean; guarded: boolean; onClose: () => void; onSync: () => void; onUnpair: () => void }) {
+function InfoSheet({ state, options, pending, online, canUnpair, guarded, idleMs, onClose, onSync, onUnpair, onForget }: {
+  state: KioskState; options: KioskOptions; pending: number; online: boolean; canUnpair: boolean; guarded: boolean; idleMs: number;
+  onClose: () => void; onSync: () => void; onUnpair: () => Promise<void>; onForget: () => void;
+}) {
+  // An unlocked sheet must not stay open for the next person who walks up.
+  useIdle(idleMs, onClose);
+  const [busy, setBusy] = useState(false);
+  const [unpairError, setUnpairError] = useState<string | null>(null);
+  const unpairNow = async () => {
+    if (!window.confirm(pending ? `${pending} punches have not been sent yet and will be lost. Unpair anyway?` : "Unpair this device? You'll need a new pairing code from the admin app.")) return;
+    setBusy(true); setUnpairError(null);
+    try { await onUnpair(); } catch (err) {
+      const e = err as KioskError;
+      setUnpairError(e.offline ? "No connection, so the server still has this device." : `The server didn't remove this device: ${e.message}`);
+    } finally { setBusy(false); }
+  };
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/30 p-4 sm:items-center" onClick={onClose}>
       <div className="w-full max-w-md rounded-3xl bg-white p-6 shadow-2xl kiosk-fade-up" onClick={(e) => e.stopPropagation()}>
@@ -631,17 +655,26 @@ function InfoSheet({ state, options, pending, online, canUnpair, guarded, onClos
         <p className="mt-3 text-sm text-neutral-600">These options are changed in the admin app: Settings → Locations → Time clock.</p>
         <div className="mt-6 grid gap-3">
           {pending > 0 && <button onClick={onSync} className="kiosk-tap h-14 rounded-2xl bg-neutral-100 text-lg font-semibold">Send now</button>}
-          {!canUnpair && (
-            <p className="rounded-2xl bg-neutral-50 px-4 py-3 text-sm text-neutral-700">
-              {guarded ? "Unpairing needs the manager PIN, which needs a connection. Try again when online." : "Unpairing is locked until a manager PIN is set in the admin app: Settings → Locations → Time clock."}
+          {!guarded && (
+            <p className="rounded-2xl bg-amber-50 px-4 py-3 text-sm font-medium text-amber-950 ring-2 ring-amber-300" role="status" data-testid="kiosk-no-manager-pin">
+              No manager PIN is set, so anyone can open this screen and leave full screen. Unpairing is only possible from the admin app until a PIN is set: Settings → Locations → Time clock.
             </p>
           )}
-          {canUnpair && <button
-            onClick={() => { if (window.confirm(pending ? `${pending} punches have not been sent yet and will be lost. Unpair anyway?` : "Unpair this device? You'll need a new pairing code from the admin app.")) { queue.save([]); onUnpair(); } }}
-            className="kiosk-tap h-14 rounded-2xl text-lg font-semibold text-red-700 ring-2 ring-red-200"
-          >
-            Unpair this device
+          {guarded && !canUnpair && (
+            <p className="rounded-2xl bg-neutral-50 px-4 py-3 text-sm text-neutral-700">Unpairing needs the manager PIN, which needs a connection. Try again when online.</p>
+          )}
+          {canUnpair && <button onClick={() => void unpairNow()} disabled={busy} className="kiosk-tap h-14 rounded-2xl text-lg font-semibold text-red-700 ring-2 ring-red-200 disabled:opacity-60">
+            {busy ? "Unpairing…" : "Unpair this device"}
           </button>}
+          {unpairError && (
+            <div className="space-y-2 rounded-2xl bg-red-50 px-4 py-3 text-sm text-red-900 ring-2 ring-red-200" role="alert">
+              <p className="font-medium">{unpairError}</p>
+              <p>This tablet is still paired. You can try again, or forget the pairing on this tablet only; then remove the device in the admin app (Settings → Locations → Time clock) so its old pairing stops working.</p>
+              <button onClick={() => { if (window.confirm("Forget the pairing on this tablet only? Punches not yet sent will be lost.")) onForget(); }} className="kiosk-tap h-12 w-full rounded-xl bg-white font-semibold text-red-700 ring-2 ring-red-200" data-testid="kiosk-forget-anyway">
+                Forget on this device anyway
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </div>

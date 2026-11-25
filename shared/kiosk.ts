@@ -268,6 +268,22 @@ export const FIX_TYPE_LABELS: Record<PunchType, string> = {
 
 export const isPunchType = (t: unknown): t is PunchType => PUNCH_TYPES.includes(t as PunchType);
 
+// ── PIN strength ─────────────────────────────────────────────────────────────
+/**
+ * Why a new PIN is too easy to guess, or null when it's fine. Rejects one digit
+ * repeated (0000), straight runs up or down (1234, 9876, 8901) and a repeated
+ * pair (1212). Only applied when a PIN is set, so existing PINs keep working.
+ */
+export function weakPinReason(pin: string): string | null {
+  if (!/^\d+$/.test(pin)) return null;
+  const d = [...pin].map(Number);
+  if (d.every((x) => x === d[0])) return "That PIN is too easy to guess (one digit repeated). Choose another.";
+  const run = (step: number) => d.every((x, i) => i === 0 || x === (d[i - 1] + step + 10) % 10);
+  if (run(1) || run(-1)) return "That PIN is too easy to guess (digits in a row). Choose another.";
+  if (d.length % 2 === 0 && d.length >= 4 && d.every((x, i) => x === d[i % 2])) return "That PIN is too easy to guess (a repeated pair). Choose another.";
+  return null;
+}
+
 // ── Photos ───────────────────────────────────────────────────────────────────
 /** Largest photo accepted from a kiosk (bytes, after base64 decoding). */
 export const MAX_PHOTO_BYTES = 200_000;
