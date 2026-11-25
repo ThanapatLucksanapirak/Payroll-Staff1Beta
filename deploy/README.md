@@ -50,7 +50,7 @@ Running the installer again is safe: it repairs or upgrades the install and keep
 | `sudo payroll doctor` | Check for common problems and how to fix them |
 | `sudo payroll uninstall` | Remove the app (keeps your data unless `--purge`) |
 
-The app can also ask for an update itself (an **Update now** button): it writes `/var/lib/payroll/update-request`, which the `payroll-update.path` service picks up and runs `payroll update` as root. Progress is reported in `/var/lib/payroll/update-status.json`.
+Owners and admins can also update from the app: **Settings → Software update → Update now**. The button writes `/var/lib/payroll/update-request`, which the `payroll-update.path` service picks up and runs `payroll update` as root. Progress is reported in `/var/lib/payroll/update-status.json`.
 
 ## Where things live
 

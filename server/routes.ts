@@ -16,6 +16,7 @@ import { currentUser, requireAuth, resetTagCache } from "./auth";
 import { authorize, csrfGuard } from "./access";
 import { AUDIT_PREFIX, auditTrail } from "./audit";
 import { registerAuthRoutes } from "./authRoutes";
+import { registerUpdateRoutes } from "./updates";
 import { USERS_KEY, canAccessSite, toPublic } from "./users";
 import { NEVER_BACKED_UP, backupPath, listBackups, readBackup, runBackup } from "./backup";
 import { listLocations, pullTimecards } from "./square";
@@ -173,6 +174,7 @@ export function registerRoutes(app: Express) {
 
   // ── Sign-in, users, activity log ────────────────────────────────────────────
   registerAuthRoutes(app);
+  registerUpdateRoutes(app); // "Update now" (admin only: not in the access policy)
 
   // ── Bootstrap ───────────────────────────────────────────────────────────────
   app.get("/api/bootstrap", h(async (_req, res) => {

@@ -35,7 +35,7 @@ export function DataSettings() {
     try { data = JSON.parse(await f.text()); } catch { toast({ title: "That file isn't a valid backup", variant: "destructive" }); return; }
     if (data?.app !== "payroll-admin") { toast({ title: "That file isn't a Payroll Admin backup", variant: "destructive" }); return; }
     const n = Array.isArray(data.timesheets) ? data.timesheets.length : 0;
-    if (!(await confirm({ title: "Restore this backup?", description: `${n} timesheets and ${data.settings?.length ?? 0} settings will be written. Timesheets with the same ID are replaced; others are kept. A backup of the current data is taken first, and your current password is kept.`, confirmLabel: "Restore" }))) return;
+    if (!(await confirm({ title: "Restore this backup?", description: `Your data will be replaced with this backup (${n} timesheets). Anything added since the backup is removed. A backup of the current data is taken first, and user accounts and passwords are kept.`, confirmLabel: "Restore" }))) return;
     setBusy("restore");
     try {
       const r = await api<{ settings: number; timesheets: number }>("POST", "/api/backup/restore", data, { timeoutMs: 180_000 });
