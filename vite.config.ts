@@ -22,6 +22,7 @@ export default defineConfig({
       input: {
         main: path.resolve(import.meta.dirname, "client", "index.html"),
         kiosk: path.resolve(import.meta.dirname, "client", "kiosk.html"),
+        me: path.resolve(import.meta.dirname, "client", "me.html"),
       },
       output: {
         // Stable vendor chunks that cache well across releases. PDF/CSV libraries

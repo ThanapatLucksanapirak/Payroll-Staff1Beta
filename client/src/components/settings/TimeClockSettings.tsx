@@ -16,6 +16,7 @@ import { AutoClockOutSettings } from "@/components/timeclock/AutoClockOutSetting
 import { cn } from "@/lib/utils";
 import { type KioskDeviceOptions, type KioskSiteConfig, weakPinReason } from "@shared/kiosk";
 import { DeviceOptionsPanel, KioskLocationExtras } from "./KioskExtrasSettings";
+import { PortalSettingsCard } from "./PortalSettings";
 
 interface Device { id: string; name: string; createdAt: string; lastSeenAt: string | null; pairCodeExpiresAt: string | null; options?: KioskDeviceOptions }
 interface Created { device: Device; token: string; pairCode: string; pairPath: string }
@@ -70,6 +71,7 @@ export function TimeClockSection({ site, draft, onChange }: { site: Site; draft:
         <ManagerPin site={site} />
         {site.timeSource !== "square" && <AutoClockOutSettings site={site} />}
         <KioskLocationExtras site={site} />
+        <PortalSettingsCard site={site} />
       </div>
     </Section>
   );

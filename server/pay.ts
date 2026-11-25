@@ -152,7 +152,7 @@ async function resultOf(id: string, updatedAt: string | null): Promise<{ result:
   return { result, doc };
 }
 
-async function finalizedFor(siteId: string, excludeId?: string) {
+export async function finalizedFor(siteId: string, excludeId?: string) {
   const store = await db();
   const def = await settings.defaultSiteId();
   const list = (await store.listTimesheets()).filter((t) => !t.deletedAt && t.status === "final" && (t.siteId ?? def) === siteId && t.id !== excludeId);

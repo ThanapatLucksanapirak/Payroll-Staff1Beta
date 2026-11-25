@@ -77,6 +77,19 @@ export async function getTimeOff(siteId: string): Promise<TimeOff[]> {
   return parseTimeOff(parseJson(await (await db()).getSetting(timeOffKey(siteId))));
 }
 
+/**
+ * Change a location's time off under the same lock as the Schedule routes
+ * (used by the employee portal). `fn` returns the new list (or null to leave
+ * it unchanged) and a result.
+ */
+export async function updateTimeOff<T>(siteId: string, fn: (list: TimeOff[]) => { next: TimeOff[] | null; result: T }): Promise<T> {
+  return withLock(timeOffKey(siteId), async () => {
+    const { next, result } = fn(await getTimeOff(siteId));
+    if (next) await (await db()).setSetting(timeOffKey(siteId), JSON.stringify(next));
+    return result;
+  });
+}
+
 export async function getScheduleSettings(siteId: string): Promise<ScheduleSettings> {
   const p = scheduleSettingsSchema.safeParse(parseJson(await (await db()).getSetting(scheduleSettingsKey(siteId))) ?? {});
   return p.success ? p.data : DEFAULT_SCHEDULE_SETTINGS;

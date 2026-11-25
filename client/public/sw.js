@@ -1,13 +1,13 @@
 // Service worker for the installable app. It keeps only the static shell
-// (the two HTML pages, hashed scripts/styles, icons and manifests) so the app
+// (the HTML pages, hashed scripts/styles, icons and manifests) so the app
 // opens quickly and shows "can't reach the server" when offline. It never
 // touches /api/ (so payroll data and sign-in are never cached) or other sites.
 const VERSION = "1";
 const SHELL = `payroll-shell-v${VERSION}`;
 const ASSETS = `payroll-assets-v${VERSION}`;
 const MAX_ASSETS = 80;
-const STATIC = /^\/(icons\/[\w.-]+|manifest\.webmanifest|kiosk\.webmanifest|favicon\.svg)$/;
-const PAGES = new Set(["/", "/kiosk"]);
+const STATIC = /^\/(icons\/[\w.-]+|manifest\.webmanifest|kiosk\.webmanifest|me\.webmanifest|favicon\.svg)$/;
+const PAGES = new Set(["/", "/kiosk", "/me"]);
 
 self.addEventListener("install", (event) => {
   self.skipWaiting();
@@ -37,7 +37,7 @@ self.addEventListener("fetch", (event) => {
 
   // Pages: always from the network; the cached copy only when offline.
   if (req.mode === "navigate") {
-    const page = url.pathname === "/kiosk" || url.pathname.startsWith("/kiosk/") ? "/kiosk" : "/";
+    const page = url.pathname === "/kiosk" || url.pathname.startsWith("/kiosk/") ? "/kiosk" : url.pathname === "/me" || url.pathname.startsWith("/me/") ? "/me" : "/";
     event.respondWith((async () => {
       try {
         const res = await fetch(req);

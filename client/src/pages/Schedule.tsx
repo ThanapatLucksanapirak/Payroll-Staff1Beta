@@ -24,6 +24,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { type Person, type ShiftDraft, ScheduleSettingsDialog, ShiftDialog, TimeOffDialog } from "@/components/schedule/dialogs";
+import { TimeOffRequests } from "@/components/schedule/TimeOffRequests";
 import { cn } from "@/lib/utils";
 
 interface WeekData {
@@ -219,6 +220,7 @@ export function SchedulePage() {
         />
       ) : data && week && (
         <>
+          <TimeOffRequests siteId={site.id} onChanged={() => void q.refetch()} />
           <div className="mb-4 flex flex-wrap items-center gap-x-5 gap-y-2 px-1 text-[13px] text-muted-foreground" data-testid="schedule-status">
             {week.publishedAt
               ? <span className="inline-flex items-center gap-1.5"><CheckCircle2 className="h-4 w-4 text-success" /><span className="text-foreground">Published</span> {timeAgo(week.publishedAt)}{week.changedSincePublish && <Badge variant="warning" className="ml-1">Changed since</Badge>}</span>

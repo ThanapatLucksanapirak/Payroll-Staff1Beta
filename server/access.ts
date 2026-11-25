@@ -130,6 +130,10 @@ const POLICY: Rule[] = [
   { method: "POST", path: /^\/sites\/[^/]+\/kiosk-notes$/, need: "editor", perm: "punches.edit", sites: fromParam },
   { method: "DELETE", path: /^\/sites\/[^/]+\/kiosk-notes\/[^/]+$/, need: "editor", perm: "punches.edit", sites: fromParam },
   { method: "POST", path: /^\/sites\/[^/]+\/fix-requests\/[^/]+\/(approve|decline)$/, need: "editor", perm: "punches.edit", sites: fromParam },
+  // Employee portal on/off per location: owners and admins. (/api/portal/* itself is handled
+  // before this middleware by server/portal.ts with the employee's own session.)
+  { method: "GET", path: /^\/sites\/[^/]+\/portal$/, need: "admin", sites: fromParam },
+  { method: "PUT", path: /^\/sites\/[^/]+\/portal$/, need: "admin", sites: fromParam },
 ];
 
 const MESSAGES: Record<Need, string> = {

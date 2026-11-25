@@ -29,6 +29,7 @@ import { registerPayRoutes } from "./pay";
 import { registerPermissionRoutes } from "./permissions";
 import { TWO_FACTOR_PUBLIC, registerTwoFactorRoutes } from "./twofactor";
 import { registerOffsiteRoutes } from "./offsite";
+import { registerPortalAdminRoutes, registerPortalRoutes } from "./portal";
 
 type Handler = (req: Request, res: Response) => Promise<unknown>;
 const h = (fn: Handler) => (req: Request, res: Response, next: NextFunction) => { fn(req, res).catch(next); };
@@ -147,6 +148,7 @@ export function registerRoutes(app: Express) {
   app.use("/api", (_req, res, next) => { res.setHeader("Cache-Control", "no-store"); next(); });
   // /api/kiosk/*: device-token auth (a custom header, so not exposed to CSRF), never the admin session
   registerKioskRoutes(app);
+  registerPortalRoutes(app); // /api/portal/*: employee self-service with its own cookie and guard, never the admin session
   app.use("/api", csrfGuard());
   app.use("/api", requireAuth(PUBLIC));
   app.use("/api", authorize(PUBLIC));
@@ -451,6 +453,7 @@ export function registerRoutes(app: Express) {
   registerScheduleRoutes(app); // schedule, time off, late alerts, labor vs. sales, forecast
   registerTimeclockRoutes(app); // auto clock-out, fix punches, approvals, overtime watch, pre-payroll checklist
   registerKioskFeatureAdminRoutes(app); // kiosk extras: stations, shift notes, fix requests, punch photos
+  registerPortalAdminRoutes(app); // employee portal on/off per location
 
   // ── Errors ──────────────────────────────────────────────────────────────────
   app.use("/api", (_req: Request, res: Response) => res.status(404).json({ error: "Not found." }));
