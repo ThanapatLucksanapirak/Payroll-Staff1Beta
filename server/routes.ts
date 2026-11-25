@@ -196,11 +196,8 @@ export function registerRoutes(app: Express) {
     res.json(await settings.createSite(input));
   }));
   app.put("/api/sites/:id", h(async (req, res) => {
-    // zod 4 fills defaults even in .partial(): keep only the fields that were sent,
-    // or renaming a location would reset its rules, time clock and archive state.
-    const sent = req.body && typeof req.body === "object" ? Object.keys(req.body) : [];
-    const parsed: Record<string, unknown> = siteInputSchema.partial().parse(req.body);
-    const patch: any = Object.fromEntries(Object.entries(parsed).filter(([k]) => sent.includes(k)));
+    // Only the fields sent: renaming must not reset rules, time clock or archive state.
+    const patch: any = parsePatch(siteInputSchema, req.body);
     if (patch.rules) patch.rules = siteRulesSchema.parse({ ...((await settings.getSite(String(req.params.id)))?.rules ?? {}), ...patch.rules });
     const site = await settings.updateSite(String(req.params.id), patch as any);
     if (!site) return res.status(404).json({ error: "Location not found." });
