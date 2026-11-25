@@ -3,7 +3,8 @@
 import type { DatabaseHealth } from "@shared/schema";
 import { randomUUID } from "node:crypto";
 import { fetchWithTimeout } from "../http";
-import { type DataStore, type TimesheetRow, type TimesheetWrite, StoreError, toSummary } from "./types";
+import type { Punch } from "@shared/punches";
+import { type DataStore, type PunchPatch, type PunchQuery, type TimesheetRow, type TimesheetWrite, StoreError, patchToRow, punchToRow, rowToPunch, toSummary } from "./types";
 
 const EXT_COLS = ["site_id", "meta_json"] as const;
 const ROW_COLS = [
@@ -165,6 +166,52 @@ export class SupabaseStore implements DataStore {
     return (rows ?? []).length > 0;
   }
 
+  // ── Punches ────────────────────────────────────────────────────────────────
+  private async punchReq(method: string, path: string, body?: unknown, extra: Record<string, string> = {}): Promise<any> {
+    try {
+      return await this.req(method, path, body, extra);
+    } catch (err: any) {
+      if (err?.code === "42P01" || err?.code === "PGRST205" || /Could not find the table|relation .*punches.* does not exist/i.test(err?.raw ?? "")) {
+        throw new StoreError("The time clock needs the punches table. Open Settings → Database, copy the setup SQL and run it in Supabase.", 503);
+      }
+      throw err;
+    }
+  }
+  async listPunches(q: PunchQuery) {
+    const f: string[] = ["select=*"];
+    if (q.siteId) f.push(`site_id=eq.${encodeURIComponent(q.siteId)}`);
+    if (q.employeeId) f.push(`employee_id=eq.${encodeURIComponent(q.employeeId)}`);
+    if (q.from) f.push(`at=gte.${encodeURIComponent(q.from)}`);
+    if (q.to) f.push(`at=lt.${encodeURIComponent(q.to)}`);
+    f.push("order=at.asc,id.asc", `limit=${Math.max(1, Math.min(q.limit ?? 20000, 50000))}`);
+    return ((await this.punchReq("GET", `/punches?${f.join("&")}`)) ?? []).map(rowToPunch);
+  }
+  async getPunch(id: string) {
+    const rows = await this.punchReq("GET", `/punches?select=*&id=eq.${encodeURIComponent(id)}`);
+    return rows?.[0] ? rowToPunch(rows[0]) : null;
+  }
+  async insertPunch(p: Punch) {
+    const rows = await this.punchReq("POST", `/punches?on_conflict=id`, [punchToRow(p)], { Prefer: "resolution=ignore-duplicates,return=representation" });
+    if (rows?.[0]) return { punch: rowToPunch(rows[0]), created: true };
+    return { punch: (await this.getPunch(p.id))!, created: false };
+  }
+  async updatePunch(id: string, patch: PunchPatch) {
+    const rows = await this.punchReq("PATCH", `/punches?id=eq.${encodeURIComponent(id)}`, patchToRow(patch), { Prefer: "return=representation" });
+    return rows?.[0] ? rowToPunch(rows[0]) : null;
+  }
+  async deletePunch(id: string) {
+    const rows = await this.punchReq("DELETE", `/punches?id=eq.${encodeURIComponent(id)}&select=id`, undefined, { Prefer: "return=representation" });
+    return (rows ?? []).length > 0;
+  }
+  async allPunches() {
+    try {
+      return ((await this.punchReq("GET", `/punches?select=*&order=at.asc&limit=100000`)) ?? []).map(rowToPunch);
+    } catch (err: any) {
+      if (err instanceof StoreError && err.status === 503 && /punches table/.test(err.message)) return [];
+      throw err;
+    }
+  }
+
   /**
    * PostgREST runs each request in one transaction, so every table is written
    * with a single request: a bad row fails the whole batch. Timesheets go
@@ -210,9 +257,15 @@ export class SupabaseStore implements DataStore {
       } catch { /* ignore */ }
     }
     this.extended = !h.missingColumns.length;
+    // The time clock's table is optional: report it without failing the connection.
+    try { await this.req("GET", `/punches?select=id&limit=0`); } catch (err: any) {
+      if (err?.code === "42P01" || err?.code === "PGRST205" || /does not exist|Could not find the table/i.test(err?.raw ?? "")) h.missingTables.push("punches");
+    }
     h.latencyMs = Date.now() - t;
-    h.ok = !h.missingTables.length;
-    if (h.missingTables.length) h.error = `Missing tables: ${h.missingTables.join(", ")}. Run the setup SQL.`;
+    const core = h.missingTables.filter((x) => x !== "punches");
+    h.ok = !core.length;
+    if (core.length) h.error = `Missing tables: ${h.missingTables.join(", ")}. Run the setup SQL.`;
+    else if (h.missingTables.length) h.error = "The time clock's punches table is missing. Run the setup SQL to use the kiosk.";
     return h;
   }
   close() { /* stateless */ }

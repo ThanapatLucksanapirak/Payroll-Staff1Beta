@@ -15,13 +15,13 @@ delete process.env.SUPABASE_URL;
 
 let base = "";
 let server: Server;
-let token = "";
+let cookie = ""; // the session cookie ("payroll_session=...")
 let purgeTrash: (now?: number) => Promise<number>;
 
 async function call(method: string, url: string, body?: unknown, auth = true) {
-  const headers: Record<string, string> = {};
+  const headers: Record<string, string> = { "X-Requested-With": "payroll" };
   if (body !== undefined) headers["Content-Type"] = "application/json";
-  if (auth && token) headers.Authorization = `Bearer ${token}`;
+  if (auth && cookie) headers.Cookie = cookie;
   const res = await fetch(base + url, { method, headers, body: body === undefined ? undefined : JSON.stringify(body) });
   const text = await res.text();
   let json: any = null;
@@ -81,8 +81,14 @@ test("first-run setup requires the setup code", async () => {
   const code = fs.readFileSync(path.join(dir, "setup-code.txt"), "utf8").trim();
   const ok = await call("POST", "/api/auth/setup", { password: "correct horse", setupCode: code.toLowerCase() }, false);
   assert.equal(ok.status, 200);
-  token = ok.body.token;
-  assert.ok(token);
+  const set = ok.headers.get("set-cookie") ?? "";
+  assert.match(set, /payroll_session=/);
+  assert.match(set, /HttpOnly/i);
+  assert.match(set, /SameSite=Lax/i);
+  cookie = set.split(";")[0];
+  assert.ok(cookie);
+  assert.equal(ok.body.token, undefined, "the session is never handed to page scripts");
+  assert.equal(ok.body.user.role, "owner");
   assert.equal(fs.existsSync(path.join(dir, "setup-code.txt")), false, "setup code file is removed after use");
 
   const again = await call("POST", "/api/auth/setup", { password: "another one", setupCode: code }, false);
@@ -192,7 +198,8 @@ test("manual server backup can be listed, downloaded, and restored", async () =>
   const run = await call("POST", "/api/backups");
   assert.equal(run.status, 200);
   const name = run.body.find((b: any) => b.kind === "export").name;
-  const dl = await fetch(`${base}/api/backups/${name}`, { headers: { Authorization: `Bearer ${token}` } });
+  // A bearer header is still accepted for one release
+  const dl = await fetch(`${base}/api/backups/${name}`, { headers: { Authorization: `Bearer ${cookie.split("=")[1]}` } });
   assert.equal(dl.status, 200);
   assert.equal((await call("GET", "/api/backups/..%2Fconfig.json")).status, 404);
   const res = await call("POST", `/api/backups/${name}/restore`);

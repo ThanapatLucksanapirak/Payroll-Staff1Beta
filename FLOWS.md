@@ -1,14 +1,29 @@
 # Main flows (baseline from v1, must keep working)
 
+## Navigation (v3)
+- Sidebar on desktop (collapsible), bottom tab bar + slide-over menu on phones; ⌘K / Ctrl-K opens the command palette (pages, actions, settings sections, timesheets)
+- Location switcher at the top of the sidebar; account menu (name, role, Account & password, Sign out, Sign out everywhere) at the bottom
+- Home `/` · Timesheets `/timesheets` · Live `/live` · Employees `/employees` · Reports `/reports` · Settings `/settings/<section>`
+- Employee time clock (kiosk) is a separate page at `/kiosk`, paired per device from Settings → Locations & rules → Time clock
+
 ## Sign in
 - Start: app root
-- Steps: enter admin password, press Unlock
-- Expect: home dashboard with "Saved Timesheets"
+- First run: setup code, your name, username, password + confirm -> "Create owner account"
+- Steps: enter username and password (a single owner may leave the username blank), press Sign in
+- Expect: Home (greeting, quick actions, at a glance, recent timesheets, payroll by period)
 
-## Saved timesheets dashboard
-- Expect: grid of saved timesheets (filename / custom label, period, employee count, total pay, time ago)
-- Rename a timesheet inline (pencil), delete a timesheet (trash)
-- Click a card -> opens saved results
+## Home
+- Quick actions open the import flow: Time clock (when the location uses the kiosk), Pull from Square (when it uses Square), Upload CSV, Toast PDF, New timesheet. Hidden for viewers.
+
+## Timesheets (`/timesheets`)
+- Expect: grid or list of saved timesheets (name / custom label, period, employee count, total pay, status, time ago); search, status filter, sort
+- Card menu: rename, duplicate, mark final / reopen, move to location, delete (to Trash). Hidden for viewers.
+- Trash button: restore (editors), delete forever / empty Trash (owners and admins)
+- Click a card -> opens the timesheet workspace (Payroll, Rates, Shifts, Details tabs); Export menu: Full report (PDF), Manager summary (PDF), Pay statements (PDF), Summary CSV, Shifts CSV; per-employee "Pay statement" on the Payroll tab
+
+## Live (`/live`) and Employees (`/employees`)
+- Live: who is working / on break right now, updated in real time; today's punches; editors can add or fix punches (with a note)
+- Employees: the people who can use the time clock, each with a 4–6 digit PIN; owners and admins add, edit, import names and remove
 
 ## Pull from Square
 - Steps: "Pull from Square" -> pick From/To -> Fetch Timecards
@@ -32,10 +47,15 @@
 - Exclude / include employee
 - Save progress, CSV export, PDF export, Re-analyze, Edit wages, Home
 
+## Reports (`/reports`)
+- Totals and charts across saved timesheets for the current location
+
 ## Settings
-- Square token connect/replace/remove
-- Classification cutoffs (clock-in by / clock-out by) with preview
-- Change password
+- Payroll: Locations & rules (Square token connect/replace/remove, classification cutoffs with preview, time clock: hours from Square / Time clock / Both, kiosk sign-in mode, kiosk devices), Pay categories
+- App: Preferences (appearance, formats, PDF options and logo)
+- Access: Account & password (everyone), Users and Activity (owners and admins)
+- System: Database, Backup & history
+- Managers and viewers only see Account & password
 
 # Requested changes (v2 acceptance checks)
 - Multiple locations (sites), each with its own rules, Square connection, categories and saved wages; site switcher in header; timesheets belong to a site

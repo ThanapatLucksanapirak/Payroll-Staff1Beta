@@ -64,11 +64,16 @@ export function DayDialog({ open, onOpenChange, employee, day, adjustment, bonus
       <DialogContent className="max-w-md max-h-[92dvh] overflow-y-auto" data-testid="dialog-day">
         <DialogHeader>
           <DialogTitle>{employee} · {app.date(day.date)}</DialogTitle>
-          <DialogDescription>
-            {day.punches ? `${day.clockIn} – ${day.clockOut} · ${day.hours} h · auto: ${DAY_LABELS[day.originalDayType]}` : day.notes}
+          <DialogDescription className="flex flex-wrap items-center gap-x-2 gap-y-1">
+            {day.punches ? (
+              <>
+                <span className="tabular">{day.clockIn} – {day.clockOut} · {day.hours} h</span>
+                <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold status-${day.originalDayType}`}>Auto: {DAY_LABELS[day.originalDayType]}</span>
+              </>
+            ) : day.notes}
           </DialogDescription>
         </DialogHeader>
-        <div className="space-y-4">
+        <div className="space-y-5">
           {shift && (
             <div className="grid grid-cols-3 gap-2">
               <Field label="Clock in"><TimeInput value={shift.start} onChange={(m) => setShift({ ...shift, start: m, end: fixEnd(m, shift.end) })} data-testid="input-day-start" /></Field>
@@ -88,8 +93,8 @@ export function DayDialog({ open, onOpenChange, employee, day, adjustment, bonus
                   </SelectContent>
                 </Select>
               </Field>
-              <div className="flex items-center justify-between rounded-lg border px-3 py-2.5">
-                <div><p className="text-sm font-medium">Don't pay this day</p><p className="text-xs text-muted-foreground">Keeps the record but pays {app.money(0)}</p></div>
+              <div className="flex items-center justify-between gap-4 rounded-lg border border-border/80 px-3.5 py-2.5">
+                <div><p className="text-[13px] font-medium">Don't pay this day</p><p className="text-xs text-muted-foreground">Keeps the record but pays {app.money(0)}</p></div>
                 <Switch checked={cancelled} onCheckedChange={setCancelled} data-testid="switch-day-cancel" />
               </div>
               {!cancelled && <Field label="Dock amount" hint={`Base pay for this day is ${app.money(day.basePay)}`}><NumberInput prefix={app.prefs.currencySymbol} value={dock} onChange={setDock} data-testid="input-day-dock" /></Field>}
@@ -101,15 +106,15 @@ export function DayDialog({ open, onOpenChange, employee, day, adjustment, bonus
                 <div key={b.id} className="flex gap-2">
                   <Input placeholder="Description" value={b.description} onChange={(e) => setList(list.map((x, j) => (j === i ? { ...x, description: e.target.value } : x)))} />
                   <NumberInput className="w-28 shrink-0" prefix={app.prefs.currencySymbol} value={b.amount} onChange={(n) => setList(list.map((x, j) => (j === i ? { ...x, amount: n } : x)))} />
-                  <Button variant="ghost" size="icon" onClick={() => setList(list.filter((_, j) => j !== i))} aria-label="Remove bonus"><Trash2 className="h-4 w-4" /></Button>
+                  <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-destructive" onClick={() => setList(list.filter((_, j) => j !== i))} aria-label="Remove bonus"><Trash2 /></Button>
                 </div>
               ))}
-              <Button variant="outline" size="sm" onClick={() => setList([...list, { id: uid("b"), description: "", amount: 0, date: day.date }])} data-testid="button-add-day-bonus"><Plus /> Add bonus</Button>
+              <Button variant="tinted" size="sm" onClick={() => setList([...list, { id: uid("b"), description: "", amount: 0, date: day.date }])} data-testid="button-add-day-bonus"><Plus /> Add bonus</Button>
             </div>
           </Field>
           <Field label="Note"><Textarea rows={2} value={note} onChange={(e) => setNote(e.target.value)} placeholder="Shown on the PDF" /></Field>
         </div>
-        <DialogFooter className="gap-2 sm:justify-between">
+        <DialogFooter className="gap-2 border-t border-border/70 pt-4 sm:justify-between">
           {day.hasManualShift && day.punches === 1 ? (
             <Button variant="ghost" className="text-destructive" onClick={() => { onSave({ adjustment: null, bonuses: [], deleteShifts: true }); onOpenChange(false); }} data-testid="button-day-delete"><Trash2 /> Remove day</Button>
           ) : <span />}

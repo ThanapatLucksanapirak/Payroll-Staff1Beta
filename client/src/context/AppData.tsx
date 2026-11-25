@@ -4,6 +4,7 @@ import type { Category, Prefs, Site } from "@shared/schema";
 import { formatDate, formatTime } from "@shared/dates";
 import { queryClient } from "@/lib/api";
 import { safeStorage } from "@/lib/storage";
+import type { SessionUser } from "@/lib/roles";
 
 export interface Bootstrap {
   sites: Site[];
@@ -12,6 +13,8 @@ export interface Bootstrap {
   squareConnected: Record<string, boolean>;
   defaultSiteId: string;
   db: { connected: boolean; kind: string | null; label: string | null; error: string | null };
+  /** The signed-in user (locations above are already limited to what they may see). */
+  user: SessionUser;
 }
 
 interface AppData extends Bootstrap {

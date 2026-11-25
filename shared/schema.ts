@@ -50,6 +50,11 @@ export const siteRulesSchema = z.object({
 export type SiteRules = z.infer<typeof siteRulesSchema>;
 export const DEFAULT_RULES: SiteRules = siteRulesSchema.parse({});
 
+export const TIME_SOURCES = ["square", "kiosk", "both"] as const;
+export type TimeSource = (typeof TIME_SOURCES)[number];
+export const KIOSK_LOGIN_MODES = ["pin", "name_pin"] as const;
+export type KioskLoginMode = (typeof KIOSK_LOGIN_MODES)[number];
+
 export const siteSchema = z.object({
   id: z.string().min(1),
   name: z.string().min(1).max(80),
@@ -60,6 +65,10 @@ export const siteSchema = z.object({
   rules: siteRulesSchema.default({}),
   squareLocationId: z.string().default(""),
   squareLocationName: z.string().default(""),
+  // Where this location's hours come from: Square timecards, the time-clock kiosk, or both.
+  timeSource: z.enum(TIME_SOURCES).default("square"),
+  // Kiosk sign-in: PIN only, or tap your name and then enter the PIN.
+  kioskLoginMode: z.enum(KIOSK_LOGIN_MODES).default("pin"),
   createdAt: z.string().default(() => new Date().toISOString()),
 });
 export type Site = z.infer<typeof siteSchema>;
@@ -86,7 +95,10 @@ export type Category = z.infer<typeof categorySchema>;
 // ─────────────────────────────────────────────────────────────────────────────
 // App preferences
 // ─────────────────────────────────────────────────────────────────────────────
-export const DATE_FORMATS = ["M/D/YY", "MM/DD/YYYY", "D/M/YY", "YYYY-MM-DD", "MMM D, YYYY"] as const;
+/** 300 KB of image bytes ≈ 400K base64 characters (+ data-URL prefix). */
+export const PDF_LOGO_MAX_BYTES = 300 * 1024;
+export const PDF_LOGO_MAX_CHARS = Math.ceil(PDF_LOGO_MAX_BYTES / 3) * 4 + 32;
+export const DATE_FORMATS =["M/D/YY", "MM/DD/YYYY", "D/M/YY", "YYYY-MM-DD", "MMM D, YYYY"] as const;
 export const prefsSchema = z.object({
   appName: z.string().min(1).max(60).default("Payroll Admin"),
   businessName: z.string().max(80).default(""),
@@ -101,6 +113,11 @@ export const prefsSchema = z.object({
   pdfShowShiftTimes: z.boolean().default(true),
   pdfPagePerEmployee: z.boolean().default(false),
   pdfFooter: z.string().max(120).default("Confidential — for internal use only"),
+  pdfOrientation: z.enum(["portrait", "landscape"]).default("landscape").catch("landscape"),
+  pdfPageSize: z.enum(["letter", "a4"]).default("letter").catch("letter"),
+  /** PNG/JPEG data URL (≤ ~300 KB image) drawn top-left on PDFs; "" = none. Invalid values are dropped, never fatal. */
+  pdfLogoDataUrl: z.string().max(PDF_LOGO_MAX_CHARS).regex(/^data:image\/(png|jpe?g);base64,[A-Za-z0-9+/=\s]+$/).or(z.literal("")).default("").catch(""),
+  pdfSignatureLine: z.boolean().default(false).catch(false),
   defaultSiteId: z.string().default(""),
 });
 export type Prefs = z.infer<typeof prefsSchema>;
@@ -108,7 +125,7 @@ export type Prefs = z.infer<typeof prefsSchema>;
 // ─────────────────────────────────────────────────────────────────────────────
 // Timesheet document
 // ─────────────────────────────────────────────────────────────────────────────
-export const SHIFT_SOURCES = ["square", "csv", "toast", "manual", "legacy"] as const;
+export const SHIFT_SOURCES = ["square", "csv", "toast", "manual", "legacy", "kiosk"] as const;
 export type ShiftSource = (typeof SHIFT_SOURCES)[number];
 
 export const shiftSchema = z.object({

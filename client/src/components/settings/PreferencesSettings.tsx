@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Loader2 } from "lucide-react";
-import { DATE_FORMATS, type Prefs } from "@shared/schema";
+import { DATE_FORMATS, PDF_LOGO_MAX_BYTES, type Prefs } from "@shared/schema";
 import { formatDate, formatTime } from "@shared/dates";
 import { useApp, applyTheme } from "@/context/AppData";
 import { api, errorMessage } from "@/lib/api";
@@ -9,7 +9,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Field, Section } from "@/components/workspace/fields";
+import { Field, Section, ToggleRow } from "@/components/workspace/fields";
+import { cn } from "@/lib/utils";
 
 export function PreferencesSettings() {
   const app = useApp();
@@ -32,7 +33,7 @@ export function PreferencesSettings() {
   };
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
       <Section title="Branding">
         <div className="grid gap-3 sm:grid-cols-2">
           <Field label="App name"><Input value={p.appName} maxLength={60} onChange={(e) => set("appName", e.target.value)} data-testid="input-pref-appname" /></Field>
@@ -78,11 +79,27 @@ export function PreferencesSettings() {
         <div className="grid gap-3 sm:grid-cols-2">
           <Toggle label="Show clock-in and clock-out times" checked={p.pdfShowShiftTimes} onChange={(v) => set("pdfShowShiftTimes", v)} />
           <Toggle label="Start each employee on a new page" checked={p.pdfPagePerEmployee} onChange={(v) => set("pdfPagePerEmployee", v)} />
+          <Toggle label="Signature line on pay statements" hint="Adds “Received by” and date lines" checked={p.pdfSignatureLine} onChange={(v) => set("pdfSignatureLine", v)} />
           <Field label="Footer text"><Input value={p.pdfFooter} maxLength={120} onChange={(e) => set("pdfFooter", e.target.value)} /></Field>
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Orientation" hint="Pay statements are always portrait">
+              <Select value={p.pdfOrientation} onValueChange={(v) => set("pdfOrientation", v as Prefs["pdfOrientation"])}>
+                <SelectTrigger data-testid="select-pref-pdf-orientation"><SelectValue /></SelectTrigger>
+                <SelectContent><SelectItem value="landscape">Landscape</SelectItem><SelectItem value="portrait">Portrait</SelectItem></SelectContent>
+              </Select>
+            </Field>
+            <Field label="Paper size">
+              <Select value={p.pdfPageSize} onValueChange={(v) => set("pdfPageSize", v as Prefs["pdfPageSize"])}>
+                <SelectTrigger data-testid="select-pref-pdf-size"><SelectValue /></SelectTrigger>
+                <SelectContent><SelectItem value="letter">US Letter</SelectItem><SelectItem value="a4">A4</SelectItem></SelectContent>
+              </Select>
+            </Field>
+          </div>
+          <LogoField value={p.pdfLogoDataUrl} onChange={(v) => set("pdfLogoDataUrl", v)} />
         </div>
       </Section>
-      <div className="sticky bottom-0 flex items-center justify-end gap-2 border-t bg-background/95 py-3 backdrop-blur">
-        {dirty && <span className="mr-auto text-xs text-muted-foreground">Unsaved changes</span>}
+      <div className={cn("z-10 -mx-1 flex items-center justify-end gap-2 rounded-xl border px-3 py-2.5 transition-shadow duration-200", dirty ? "glass sticky bottom-[calc(3.5rem+env(safe-area-inset-bottom))] border-border/70 shadow-float md:bottom-4" : "border-transparent")} data-testid="bar-save">
+        <span className="mr-auto text-xs text-muted-foreground">{dirty ? "Unsaved changes" : "All changes saved"}</span>
         <Button variant="outline" disabled={!dirty || saving} onClick={() => { setP(app.prefs); applyTheme(app.prefs.theme); }}>Discard</Button>
         <Button disabled={!dirty || saving} onClick={save} data-testid="button-save-prefs">{saving && <Loader2 className="animate-spin" />}Save preferences</Button>
       </div>
@@ -90,11 +107,36 @@ export function PreferencesSettings() {
   );
 }
 
-function Toggle({ label, hint, checked, onChange }: { label: string; hint?: string; checked: boolean; onChange: (v: boolean) => void }) {
+/** PNG/JPEG logo stored as a data URL in prefs (≤ 300 KB). */
+function LogoField({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const { toast } = useToast();
+  const pick = async (file: File | undefined) => {
+    if (!file) return;
+    if (!/^image\/(png|jpeg)$/.test(file.type)) { toast({ title: "Use a PNG or JPEG image", variant: "destructive" }); return; }
+    if (file.size > PDF_LOGO_MAX_BYTES) { toast({ title: "Logo is too large", description: "Keep it under 300 KB.", variant: "destructive" }); return; }
+    const url = await new Promise<string>((res, rej) => { const r = new FileReader(); r.onload = () => res(String(r.result)); r.onerror = () => rej(r.error); r.readAsDataURL(file); });
+    const ok = await new Promise<boolean>((res) => { const img = new Image(); img.onload = () => res(img.width > 0 && img.height > 0); img.onerror = () => res(false); img.src = url; });
+    if (!ok || !/^data:image\/(png|jpe?g);base64,/.test(url)) { toast({ title: "Couldn't read that image", variant: "destructive" }); return; }
+    onChange(url.replace("data:image/jpg;", "data:image/jpeg;"));
+  };
   return (
-    <label className="flex items-center justify-between gap-3 rounded-lg border px-3 py-2.5">
-      <span><span className="block text-sm">{label}</span>{hint && <span className="block text-xs text-muted-foreground">{hint}</span>}</span>
-      <Switch checked={checked} onCheckedChange={onChange} />
-    </label>
+    <Field label="Logo" hint="PNG or JPEG, up to 300 KB. Shown top-left on PDFs.">
+      <div className="flex items-center gap-3">
+        <div className="flex h-12 w-24 items-center justify-center rounded-md border bg-white">
+          {value ? <img src={value} alt="Logo preview" className="max-h-10 max-w-[5.5rem] object-contain" data-testid="img-pref-logo" /> : <span className="text-xs text-muted-foreground">None</span>}
+        </div>
+        <Button variant="outline" size="sm" asChild>
+          <label className="cursor-pointer" data-testid="button-pref-logo-upload">
+            {value ? "Replace" : "Upload"}
+            <input type="file" accept="image/png,image/jpeg" className="sr-only" onChange={(e) => { void pick(e.target.files?.[0]); e.target.value = ""; }} />
+          </label>
+        </Button>
+        {value && <Button variant="ghost" size="sm" onClick={() => onChange("")} data-testid="button-pref-logo-remove">Remove</Button>}
+      </div>
+    </Field>
   );
+}
+
+function Toggle({ label, hint, checked, onChange }: { label: string; hint?: string; checked: boolean; onChange: (v: boolean) => void }) {
+  return <ToggleRow label={label} hint={hint} checked={checked} onChange={onChange} />;
 }

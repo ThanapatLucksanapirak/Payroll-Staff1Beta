@@ -10,10 +10,17 @@ import { configIsPersistent, managedSupabase, loadConfig } from "./config";
 import { db, dbStatus, retryInit, switchDatabase, testDatabase } from "./db";
 import { SETUP_SQL, type TimesheetRow } from "./db/types";
 import * as settings from "./settings";
-import { checkPassword, clearSetupCode, currentPasswordHash, issueToken, loginThrottle, recordLogin, requireAuth, resetTagCache, setPassword, setupCodeMatches, verifyToken } from "./auth";
+import { currentUser, requireAuth, resetTagCache } from "./auth";
+import { authorize, csrfGuard } from "./access";
+import { AUDIT_PREFIX, auditTrail } from "./audit";
+import { registerAuthRoutes } from "./authRoutes";
+import { USERS_KEY, canAccessSite, toPublic } from "./users";
 import { backupPath, listBackups, readBackup, runBackup } from "./backup";
 import { listLocations, pullTimecards } from "./square";
 import { extractPdfText } from "./pdf";
+import { invalidateEmployeeCache } from "./employees";
+import { type Punch, punchSchema } from "@shared/punches";
+import { kioskHostGuard, registerKioskRoutes, registerTimeClockAdminRoutes } from "./kiosk";
 
 type Handler = (req: Request, res: Response) => Promise<unknown>;
 const h = (fn: Handler) => (req: Request, res: Response, next: NextFunction) => { fn(req, res).catch(next); };
@@ -97,30 +104,45 @@ const restoreSchema = z.object({
     meta_json: z.any().default(null),
     created_at: z.string().optional(),
   }).passthrough()).default([]),
+  punches: z.array(z.any()).default([]),
 });
 
-/** Restore an export. The current admin password is always kept. */
+/** Restore an export. The current user accounts (and activity log) are always kept. */
 async function restoreFrom(raw: unknown) {
   const body = restoreSchema.parse(raw);
   await runBackup("pre-restore").catch((err) => {
     throw Object.assign(new Error(`Restore cancelled: could not back up the current data first (${err.message}).`), { status: 500 });
   });
   const store = await db();
-  const keep = new Set(["password_hash"]);
+  const keep = new Set(["password_hash", USERS_KEY]);
   const result = await store.importAll({
-    settings: body.settings.filter((x) => !keep.has(x.key)),
+    settings: body.settings.filter((x) => !keep.has(x.key) && !x.key.startsWith(AUDIT_PREFIX)),
     timesheets: body.timesheets.map(({ updated_at: _u, ...rest }: any) => rest),
   });
+  // Time-clock punches: inserted by id, so restoring twice adds nothing.
+  let punches = 0;
+  for (const raw of body.punches) {
+    const p = punchSchema.safeParse(raw);
+    if (p.success && (await store.insertPunch(p.data as Punch)).created) punches++;
+  }
   settings.invalidateSettingsCache();
+  invalidateEmployeeCache();
   resetTagCache();
-  return result;
+  return { ...result, punches };
 }
 
 export function registerRoutes(app: Express) {
-  const PUBLIC = new Set(["/health", "/auth/status", "/auth/login", "/auth/setup"]);
+  // /live checks its own short-lived ticket (EventSource cannot send headers).
+  const PUBLIC = new Set(["/health", "/auth/status", "/auth/login", "/auth/setup", "/auth/logout", "/live"]);
+  app.use(kioskHostGuard()); // KIOSK_HOST: serve only the kiosk on that hostname
   // Never cache API responses (payroll data) in browsers or at the Cloudflare edge.
   app.use("/api", (_req, res, next) => { res.setHeader("Cache-Control", "no-store"); next(); });
+  // /api/kiosk/*: device-token auth (a custom header, so not exposed to CSRF), never the admin session
+  registerKioskRoutes(app);
+  app.use("/api", csrfGuard());
   app.use("/api", requireAuth(PUBLIC));
+  app.use("/api", authorize(PUBLIC));
+  app.use("/api", auditTrail());
 
   // ── Public ──────────────────────────────────────────────────────────────────
   app.get("/api/health", h(async (_req, res) => {
@@ -128,60 +150,19 @@ export function registerRoutes(app: Express) {
     res.json({ ok: true, db: { connected: st.connected, kind: st.kind } });
   }));
 
-  app.get("/api/auth/status", h(async (req, res) => {
-    const hash = await currentPasswordHash();
-    let appName = "Payroll Admin";
-    try { appName = (await settings.getPrefs()).appName; } catch { /* db down */ }
-    const token = req.header("authorization")?.replace(/^Bearer\s+/i, "");
-    res.json({ setupRequired: !hash, authenticated: await verifyToken(token), appName, db: dbStatus() });
-  }));
+  // ── Sign-in, users, activity log ────────────────────────────────────────────
+  registerAuthRoutes(app);
 
-  app.post("/api/auth/login", h(async (req, res) => {
-    const ip = req.ip ?? "unknown";
-    const blocked = loginThrottle(ip);
-    if (blocked) return res.status(429).json({ error: blocked });
-    const { password, remember } = z.object({ password: z.string().min(1).max(200), remember: z.boolean().optional() }).parse(req.body);
-    const ok = await checkPassword(password);
-    recordLogin(ip, ok);
-    if (!ok) return res.status(401).json({ error: "Incorrect password." });
-    let days = 30;
-    try { days = (await settings.getPrefs()).sessionDays; } catch { /* default */ }
-    res.json(await issueToken(remember === false ? 1 : days));
-  }));
-
-  app.post("/api/auth/setup", h(async (req, res) => {
-    const ip = req.ip ?? "unknown";
-    const blocked = loginThrottle(ip);
-    if (blocked) return res.status(429).json({ error: blocked });
-    if (await currentPasswordHash()) return res.status(409).json({ error: "An administrator password is already set." });
-    const { password, setupCode } = z.object({
-      password: z.string().min(8, "Use at least 8 characters.").max(200),
-      setupCode: z.string().max(100).default(""),
-    }).parse(req.body);
-    if (!setupCodeMatches(setupCode)) {
-      recordLogin(ip, false);
-      return res.status(403).json({ error: "That setup code is not right. It was printed by the installer, and is saved on the server in the data folder as setup-code.txt." });
-    }
-    await setPassword(password);
-    clearSetupCode();
-    resetTagCache();
-    res.json(await issueToken(30));
-  }));
-
-  // ── Session & bootstrap ─────────────────────────────────────────────────────
-  app.post("/api/auth/change-password", h(async (req, res) => {
-    const { current, next } = z.object({ current: z.string().min(1), next: z.string().min(8, "Use at least 8 characters.").max(200) }).parse(req.body);
-    if (!(await checkPassword(current))) return res.status(400).json({ error: "Current password is incorrect." });
-    await setPassword(next);
-    resetTagCache();
-    res.json({ ...(await issueToken((await settings.getPrefs()).sessionDays)), message: "Password updated. Other devices have been signed out." });
-  }));
-
+  // ── Bootstrap ───────────────────────────────────────────────────────────────
   app.get("/api/bootstrap", h(async (_req, res) => {
-    const [sites, categories, prefs] = await Promise.all([settings.getSites(), settings.getCategories(), settings.getPrefs()]);
+    const user = currentUser(res)!;
+    const [allSites, allCategories, prefs] = await Promise.all([settings.getSites(), settings.getCategories(), settings.getPrefs()]);
+    const sites = allSites.filter((s) => canAccessSite(user, s.id));
+    const categories = allCategories.filter((c) => !c.siteId || canAccessSite(user, c.siteId));
     const squareConnected: Record<string, boolean> = {};
     await Promise.all(sites.map(async (s) => { squareConnected[s.id] = !!(await settings.getSquareToken(s.id)); }));
-    res.json({ sites, categories, prefs, squareConnected, defaultSiteId: await settings.defaultSiteId(), db: dbStatus() });
+    const def = await settings.defaultSiteId();
+    res.json({ sites, categories, prefs, squareConnected, defaultSiteId: sites.some((s) => s.id === def) ? def : sites[0]?.id ?? def, db: dbStatus(), user: toPublic(user) });
   }));
 
   app.put("/api/prefs", h(async (req, res) => {
@@ -272,7 +253,8 @@ export function registerRoutes(app: Express) {
     const store = await db();
     const def = await settings.defaultSiteId();
     const trash = req.query.trash === "1";
-    const list = (await store.listTimesheets()).filter((t) => (trash ? !!t.deletedAt : !t.deletedAt));
+    const user = currentUser(res)!;
+    const list = (await store.listTimesheets()).filter((t) => (trash ? !!t.deletedAt : !t.deletedAt) && canAccessSite(user, t.siteId ?? def));
     // Keep the cache to rows that still exist in their current version.
     const live = new Set(list.map((t) => `${t.id}|${t.updatedAt}`));
     for (const k of legacyCache.keys()) if (!live.has(k) && !trash) legacyCache.delete(k);
@@ -413,7 +395,7 @@ export function registerRoutes(app: Express) {
     settings.invalidateSettingsCache();
     resetTagCache();
     await settings.getSites();
-    res.json({ ...result, ...(await issueToken((await settings.getPrefs()).sessionDays)) });
+    res.json(result);
   }));
   app.post("/api/database/reconnect", h(async (_req, res) => {
     await retryInit();
@@ -424,12 +406,13 @@ export function registerRoutes(app: Express) {
   app.get("/api/backup", h(async (req, res) => {
     const includeSecrets = req.query.secrets === "1";
     const store = await db();
-    const secret = (k: string) => k === "password_hash" || k.startsWith("square_token:") || k === "square_access_token";
+    const secret = (k: string) => k === "password_hash" || k === USERS_KEY || k.startsWith("square_token:") || k === "square_access_token";
     const all = await store.allSettings();
     res.json({
       app: "payroll-admin", version: 2, exportedAt: new Date().toISOString(),
       settings: all.filter((s) => includeSecrets || !secret(s.key)),
       timesheets: await store.allTimesheets(),
+      punches: await store.allPunches(),
     });
   }));
   app.post("/api/backup/restore", express.json({ limit: "100mb" }), h(async (req, res) => {
@@ -451,6 +434,8 @@ export function registerRoutes(app: Express) {
   app.post("/api/backups/:name/restore", h(async (req, res) => {
     res.json(await restoreFrom(readBackup(String(req.params.name))));
   }));
+
+  registerTimeClockAdminRoutes(app); // employees, punches, kiosk devices, live updates
 
   // ── Errors ──────────────────────────────────────────────────────────────────
   app.use("/api", (_req: Request, res: Response) => res.status(404).json({ error: "Not found." }));

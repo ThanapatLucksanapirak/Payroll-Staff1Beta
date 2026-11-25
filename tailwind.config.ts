@@ -2,13 +2,27 @@ import type { Config } from "tailwindcss";
 
 export default {
   darkMode: ["class"],
-  content: ["./client/index.html", "./client/src/**/*.{js,jsx,ts,tsx}"],
+  content: ["./client/index.html", "./client/kiosk.html", "./client/src/**/*.{js,jsx,ts,tsx}"],
   theme: {
     extend: {
       borderRadius: {
-        lg: ".5625rem", /* 9px */
-        md: ".375rem", /* 6px */
-        sm: ".1875rem", /* 3px */
+        "2xl": "1.125rem", /* 18px — dialogs, hero cards */
+        xl: ".875rem", /* 14px — cards */
+        lg: ".75rem", /* 12px */
+        md: ".625rem", /* 10px — buttons, inputs */
+        sm: ".375rem", /* 6px */
+      },
+      boxShadow: {
+        card: "0 1px 2px 0 rgb(0 0 0 / 0.03)",
+        float: "0 10px 30px -10px rgb(0 0 0 / 0.18), 0 2px 6px -2px rgb(0 0 0 / 0.06)",
+        pop: "0 24px 64px -16px rgb(0 0 0 / 0.28), 0 4px 12px -4px rgb(0 0 0 / 0.08)",
+        segment: "0 1px 2px 0 rgb(0 0 0 / 0.10), 0 0 0 0.5px rgb(0 0 0 / 0.04)",
+      },
+      transitionDuration: { DEFAULT: "180ms" },
+      transitionTimingFunction: { DEFAULT: "cubic-bezier(0.2, 0, 0, 1)" },
+      fontSize: {
+        "2xs": ["0.6875rem", { lineHeight: "1rem" }],
+        "display": ["1.75rem", { lineHeight: "2.125rem", letterSpacing: "-0.022em", fontWeight: "700" }],
       },
       colors: {
         // Flat / base colors (regular buttons)
@@ -75,6 +89,12 @@ export default {
           foreground: "hsl(var(--sidebar-accent-foreground) / <alpha-value>)",
           border: "var(--sidebar-accent-border)"
         },
+        segment: "hsl(var(--segment) / <alpha-value>)",
+        success: { DEFAULT: "hsl(var(--success) / <alpha-value>)", soft: "hsl(var(--success-soft) / <alpha-value>)" },
+        warning: { DEFAULT: "hsl(var(--warning) / <alpha-value>)", soft: "hsl(var(--warning-soft) / <alpha-value>)" },
+        danger: { DEFAULT: "hsl(var(--danger) / <alpha-value>)", soft: "hsl(var(--danger-soft) / <alpha-value>)" },
+        neutral: { DEFAULT: "hsl(var(--neutral) / <alpha-value>)", soft: "hsl(var(--neutral-soft) / <alpha-value>)" },
+        info: { DEFAULT: "hsl(var(--info) / <alpha-value>)", soft: "hsl(var(--info-soft) / <alpha-value>)" },
         status: {
           online: "rgb(34 197 94)",
           away: "rgb(245 158 11)",

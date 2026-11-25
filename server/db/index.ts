@@ -101,9 +101,11 @@ export async function switchDatabase(cfg: DatabaseConfig, opts: { copyData: bool
         throw new StoreError(`Nothing was switched: copying data failed (${err.message}).`, 400);
       }
     } else {
-      // Always carry the admin password so the user is not locked out
-      const pw = settings.find((s) => s.key === "password_hash");
-      if (pw && !(await next.getSetting("password_hash"))) await next.setSetting("password_hash", pw.value);
+      // Always carry the sign-in accounts so nobody is locked out
+      for (const key of ["password_hash", "users"]) {
+        const v = settings.find((s) => s.key === key);
+        if (v && !(await next.getSetting(key))) await next.setSetting(key, v.value);
+      }
     }
   }
   active = next;
