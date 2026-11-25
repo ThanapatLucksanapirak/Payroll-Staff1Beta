@@ -345,8 +345,11 @@ create_admin() {
     # shellcheck disable=SC1090
     if (set -a; . "$PAYROLL_ENV_FILE"; set +a; cd "$PAYROLL_CURRENT" \
           && printf '%s\n' "$pw" | as_payroll timeout 60 "$(node_bin)" dist/index.cjs admin create --username "$user" --password-stdin) \
-          >>"$PAYROLL_LOGS/install.log" 2>&1 && ! setup_required; then
-      ok "Administrator '$user' created"; env_unset SETUP_CODE; return 0
+          >>"$PAYROLL_LOGS/install.log" 2>&1; then
+      env_unset SETUP_CODE
+      # The running app caches its user list; restart so it sees the new account.
+      systemctl restart payroll.service; wait_healthy 60 || true
+      ok "Administrator '$user' created"; return 0
     fi
   fi
   code="$(setup_code)"

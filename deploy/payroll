@@ -510,6 +510,8 @@ cmd_admin() {
   if [[ $rc == 0 ]]; then
     if [[ $sub == create ]]; then ok "Administrator '$user' created."; env_unset SETUP_CODE
     else ok "Password for '$user' changed."; fi
+    # The running app caches accounts; restart so the change takes effect now.
+    if has_systemd && systemctl is-active -q payroll.service; then systemctl restart payroll.service; wait_healthy 60 || warn "The app is slow to come back; check: payroll status"; fi
     return 0
   fi
   warn "The app could not do that (exit $rc):"
