@@ -1,9 +1,11 @@
 import { useMemo, useState } from "react";
-import { AlertTriangle, ChevronDown, ChevronRight, Info, Plus, Search, Trash2 } from "lucide-react";
+import { AlertTriangle, ChevronDown, ChevronRight, FileText, Info, Plus, Search, Trash2 } from "lucide-react";
 import { DAY_LABELS, type BonusEntry, type DayResult, type DeductionEntry, type EmployeeSummary } from "@shared/schema";
 import { employeeKey } from "@shared/engine";
 import { todayISO } from "@shared/dates";
 import { useApp } from "@/context/AppData";
+import { useToast } from "@/hooks/use-toast";
+import { errorMessage } from "@/lib/api";
 import { deleteShifts, newManualShift, setAdjustment, uid, updateEmployee, updateManual, upsertShift } from "@/lib/doc";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -88,6 +90,7 @@ function Kpi({ label, value, sub, strong, testid }: { label: string; value: stri
 
 function EmployeeCard(p: WsProps & { emp: EmployeeSummary; open: boolean; onToggle: () => void }) {
   const app = useApp();
+  const { toast } = useToast();
   const { emp, doc, site, locked, edit } = p;
   const [day, setDay] = useState<DayResult | null>(null);
   const [adding, setAdding] = useState(false);
@@ -105,6 +108,14 @@ function EmployeeCard(p: WsProps & { emp: EmployeeSummary; open: boolean; onTogg
   const setExcluded = (excluded: boolean) => {
     if (manualId) edit((d) => updateManual(d, manualId, (m) => ({ ...m, excluded })));
     else edit((d) => updateEmployee(d, emp.name, site, (c) => ({ ...c, excluded })));
+  };
+
+  const downloadStatement = async () => {
+    try {
+      const { downloadPayStatementsPdf } = await import("@/lib/pdf");
+      const period = p.result.periodStart ? `${app.date(p.result.periodStart)} – ${app.date(p.result.periodEnd)}` : "";
+      downloadPayStatementsPdf({ result: p.result, prefs: app.prefs, site, title: doc.label || `Payroll ${period}`, only: [emp.sourceId], fileBase: `${emp.name} pay statement ${p.result.periodStart}` });
+    } catch (e) { toast({ title: "PDF export failed", description: errorMessage(e), variant: "destructive" }); }
   };
 
   const applyDay = (dayRes: DayResult, e: DayEdit) => {
@@ -191,7 +202,8 @@ function EmployeeCard(p: WsProps & { emp: EmployeeSummary; open: boolean; onTogg
             <ExtrasList title="Deductions" items={deductions} locked={locked} onChange={(dd) => setExtras(null, dd)} testid="deduction" />
           </div>
 
-          <div className="flex flex-wrap justify-end gap-x-4 gap-y-1 border-t pt-3 text-xs text-muted-foreground">
+          <div className="flex flex-wrap items-center justify-end gap-x-4 gap-y-1 border-t pt-3 text-xs text-muted-foreground">
+            {!emp.excluded && <Button variant="ghost" size="sm" className="mr-auto h-7 px-2 text-xs" onClick={downloadStatement} data-testid={`button-statement-${employeeKey(emp.name)}`}><FileText className="h-3.5 w-3.5" /> Pay statement</Button>}
             <span>Base {app.money(emp.totalBasePay)}</span>
             {emp.totalDocked > 0 && <span>Docked −{app.money(emp.totalDocked)}</span>}
             {emp.totalBonuses > 0 && <span>Bonuses +{app.money(emp.totalBonuses)}</span>}
