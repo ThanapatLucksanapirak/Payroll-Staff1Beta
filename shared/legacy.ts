@@ -6,6 +6,7 @@ import {
 import { isISODate, parseDateToISO, parseTimeToMinutes } from "./dates";
 import { employeeKey, normalizeName } from "./engine";
 import { newShiftId, parseCsvText, shiftsToCsv } from "./importers/csv";
+import { docPayExtrasSchema } from "./payTypes";
 
 export interface StoredRow {
   id?: string;
@@ -108,7 +109,9 @@ export function rowToDoc(row: StoredRow, ctx: { defaultSiteId: string; rules: Si
   }
 
   const rules = siteRulesSchema.safeParse(meta?.rules ?? ctx.rules);
+  const payExtras = meta?.payExtras ? docPayExtrasSchema.safeParse(meta.payExtras) : null;
   return {
+    ...(payExtras?.success ? { payExtras: payExtras.data } : {}),
     siteId,
     label: row.custom_label ?? "",
     filename: row.filename ?? "",
@@ -125,7 +128,7 @@ export function rowToDoc(row: StoredRow, ctx: { defaultSiteId: string; rules: Si
 }
 
 export function docToMeta(doc: TimesheetDoc) {
-  return { version: 2, siteId: doc.siteId, source: doc.source, status: doc.status, notes: doc.notes, rules: doc.rules, shifts: doc.shifts };
+  return { version: 2, siteId: doc.siteId, source: doc.source, status: doc.status, notes: doc.notes, rules: doc.rules, shifts: doc.shifts, ...(doc.payExtras ? { payExtras: doc.payExtras } : {}) };
 }
 
 export { shiftsToCsv };

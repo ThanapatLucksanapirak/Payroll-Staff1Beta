@@ -42,6 +42,21 @@ export function resolveRates(cfg: EmployeeConfig | undefined, categories: Catego
   };
 }
 
+/**
+ * Rates in effect on `iso`. Without rate history this is resolveRates(cfg).
+ * A history segment covers every day before its `until` date (back to the
+ * previous segment); days on or after the last `until` use the current rates.
+ */
+export function ratesOnDate(cfg: EmployeeConfig | undefined, iso: string, categories: Category[], current?: ResolvedRates): ResolvedRates {
+  const base = current ?? resolveRates(cfg, categories);
+  const hist = cfg?.rateHistory;
+  if (!cfg || !hist?.length || !isISODate(iso)) return base;
+  let seg: (typeof hist)[number] | undefined;
+  for (const h of hist) if (iso < h.until && (!seg || h.until < seg.until)) seg = h;
+  if (!seg) return base;
+  return resolveRates({ ...cfg, categoryId: seg.categoryId, payBasis: seg.payBasis, fullDayRate: seg.fullDayRate, halfDayRate: seg.halfDayRate, hourlyRate: seg.hourlyRate }, categories);
+}
+
 export function cutoffsFor(rules: SiteRules, iso: string): { inCut: number; outCut: number } {
   const ov = rules.weekdayOverrides?.[String(dayOfWeek(iso))];
   const inCut = ov ? ov.clockInCutoff : rules.clockInCutoff;
@@ -209,9 +224,10 @@ export function computePayroll(input: ComputeInput): AnalysisResult {
       const adj = adjustments[g.key] ?? {};
       const dayType: DayType = adj.overrideStatus ?? orig;
       const hours = paidMinutes / 60;
+      const dayRates = cfg?.rateHistory?.length ? ratesOnDate(cfg, g.date, input.categories, rates) : rates;
       let base = 0;
       let otHours = 0;
-      if (rates.payBasis === "hourly") {
+      if (dayRates.payBasis === "hourly") {
         if (dayType !== "absent") {
           if (rules.overtimeEnabled) {
             const wk = startOfWeek(g.date, rules.weekStartsOn);
@@ -221,13 +237,13 @@ export function computePayroll(input: ComputeInput): AnalysisResult {
             const regular = Math.min(hours, weeklyLeft, dailyCap);
             otHours = Math.max(0, hours - regular);
             weekRegular.set(wk, used + regular);
-            base = regular * rates.hourlyRate + otHours * rates.hourlyRate * rules.overtimeMultiplier;
+            base = regular * dayRates.hourlyRate + otHours * dayRates.hourlyRate * rules.overtimeMultiplier;
           } else {
-            base = hours * rates.hourlyRate;
+            base = hours * dayRates.hourlyRate;
           }
         }
       } else {
-        base = dayRatePay(dayType, rates, rules);
+        base = dayRatePay(dayType, dayRates, rules);
       }
       base = round2(base);
       const cancelled = !!adj.cancelled;
@@ -323,26 +339,28 @@ export function computePayroll(input: ComputeInput): AnalysisResult {
     });
   }
 
+  return { periodStart, periodEnd, employees, warnings, totals: totalsOf(employees) };
+}
+
+/** Run totals over the included employees. */
+export function totalsOf(employees: EmployeeSummary[]): AnalysisResult["totals"] {
   const inc = employees.filter((e) => !e.excluded);
   return {
-    periodStart, periodEnd, employees, warnings,
-    totals: {
-      employees: inc.length,
-      totalPay: round2(sum(inc.map((e) => e.totalPay))),
-      netPay: round2(sum(inc.filter((e) => e.isNetPay).map((e) => e.totalPay))),
-      grossPay: round2(sum(inc.filter((e) => !e.isNetPay).map((e) => e.totalPay))),
-      bonuses: round2(sum(inc.map((e) => e.totalBonuses))),
-      deductions: round2(sum(inc.map((e) => e.totalDeductions))),
-      docked: round2(sum(inc.map((e) => e.totalDocked))),
-      fullDays: sum(inc.map((e) => e.fullDays)),
-      halfDays: sum(inc.map((e) => e.halfDays)),
-      flaggedDays: sum(inc.map((e) => e.flaggedDays)),
-      hours: round2(sum(inc.map((e) => e.hoursWorked))),
-      overtimeHours: round2(sum(inc.map((e) => e.overtimeHours))),
-      cash: round2(sum(inc.map((e) => e.payment.cash))),
-      bank: round2(sum(inc.map((e) => e.payment.bank))),
-      check: round2(sum(inc.map((e) => e.payment.check))),
-    },
+    employees: inc.length,
+    totalPay: round2(sum(inc.map((e) => e.totalPay))),
+    netPay: round2(sum(inc.filter((e) => e.isNetPay).map((e) => e.totalPay))),
+    grossPay: round2(sum(inc.filter((e) => !e.isNetPay).map((e) => e.totalPay))),
+    bonuses: round2(sum(inc.map((e) => e.totalBonuses))),
+    deductions: round2(sum(inc.map((e) => e.totalDeductions))),
+    docked: round2(sum(inc.map((e) => e.totalDocked))),
+    fullDays: sum(inc.map((e) => e.fullDays)),
+    halfDays: sum(inc.map((e) => e.halfDays)),
+    flaggedDays: sum(inc.map((e) => e.flaggedDays)),
+    hours: round2(sum(inc.map((e) => e.hoursWorked))),
+    overtimeHours: round2(sum(inc.map((e) => e.overtimeHours))),
+    cash: round2(sum(inc.map((e) => e.payment.cash))),
+    bank: round2(sum(inc.map((e) => e.payment.bank))),
+    check: round2(sum(inc.map((e) => e.payment.check))),
   };
 }
 
