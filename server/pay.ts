@@ -255,7 +255,10 @@ export function registerPayRoutes(app: Express, deps: { rowFromDoc: (doc: Timesh
 
   app.get("/api/sites/:id/pay/settings", g(async (req, res) => {
     const site = await site404(req, res);
-    if (site) res.json(await getPaySettings(site.id));
+    if (!site) return;
+    const ps = await getPaySettings(site.id);
+    // Accountants get what PDFs and exports need, not each employee's standing bonuses / deductions.
+    res.json(currentUser(res)?.role === "accountant" ? { ...ps, recurring: [] } : ps);
   }));
 
   const settingsPatch = z.object({

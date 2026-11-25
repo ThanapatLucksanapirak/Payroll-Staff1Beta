@@ -16,6 +16,7 @@ import { db } from "./db";
 import { actorOf, audit } from "./audit";
 import { currentUser } from "./auth";
 import { notificationEmailSchema } from "./users";
+import * as settings from "./settings";
 
 export const EMAIL_CONFIG_KEY = "email:config";
 export const EMAIL_STATUS_KEY = "email:status";
@@ -83,10 +84,11 @@ export function cleanError(err: unknown, cfg?: Pick<EmailConfig, "password">): s
   const e = err as any;
   let msg = String(e?.response || e?.message || e || "Unknown error");
   if (e?.code === "EAUTH") msg = `The email server refused the username or password. ${e?.response ? `(${String(e.response).slice(0, 160)})` : ""}`.trim();
-  else if (e?.code === "ECONNREFUSED") msg = "Could not connect to the email server (connection refused). Check the server name and port.";
-  else if (e?.code === "ETIMEDOUT" || e?.code === "ETIMEOUT" || /timeout/i.test(msg)) msg = "The email server did not answer in time. Check the server name, port and security setting.";
-  else if (e?.code === "EDNS" || e?.code === "ENOTFOUND") msg = "That email server name could not be found. Check the spelling.";
-  else if (e?.code === "ESOCKET" && /wrong version number|ssl3_get_record/i.test(msg)) msg = "Security setting doesn't match the port. Use STARTTLS with port 587, or SSL with port 465.";
+  else if (e?.code === "ESOCKET" && /wrong version number|ssl3_get_record|packet length too long/i.test(msg)) msg = "Security setting doesn't match the port. Use STARTTLS with port 587, or SSL with port 465.";
+  // Connection problems get one message, so the test can't be used to map which hosts and ports exist.
+  else if (["ECONNREFUSED", "ETIMEDOUT", "ETIMEOUT", "EDNS", "ENOTFOUND", "ECONNECTION", "ESOCKET", "EHOSTUNREACH", "ENETUNREACH", "ECONNRESET"].includes(e?.code) || /timeout|connect|getaddrinfo/i.test(msg)) {
+    msg = "Could not reach the email server. Check the server name, port and security setting.";
+  }
   if (cfg?.password && cfg.password.length >= 4) msg = msg.split(cfg.password).join("••••");
   return msg.replace(/\s+/g, " ").trim().slice(0, 300);
 }
@@ -183,12 +185,39 @@ const h = (fn: Handler) => (req: Request, res: Response, next: NextFunction) => 
 
 const inputSchema = z.unknown().transform((v) => parsePatch(emailConfigSchema, v ?? {}));
 
-/** Merge a change onto the saved settings. A blank password keeps the saved one unless `clearPassword`. */
+/** Where the saved password would be sent. Changing any of these needs the password typed again. */
+const destination = (c: Pick<EmailConfig, "host" | "port" | "security" | "username">) => [c.host.trim().toLowerCase(), c.port, c.security, c.username.trim().toLowerCase()].join("|");
+export const PASSWORD_AGAIN = "Enter the password again: the server, port, security or username changed, and the saved password is only ever sent to the server it was entered for.";
+
+/**
+ * Merge a change onto the saved settings. A blank password keeps the saved one
+ * (unless `clearPassword`), but only while the server details are unchanged:
+ * otherwise the saved password could be sent to a server someone else controls.
+ */
 function merge(cur: EmailConfig, input: Partial<EmailConfig>, clearPassword = false): EmailConfig {
   const next = { ...cur, ...input };
-  if (!input.password) next.password = clearPassword ? "" : cur.password;
+  if (!input.password) {
+    if (clearPassword) next.password = "";
+    else if (cur.password && destination(next) !== destination(cur)) throw Object.assign(new Error(PASSWORD_AGAIN), { status: 400 });
+    else next.password = cur.password;
+  }
   return emailConfigSchema.parse(next);
 }
+
+// Test emails: a few per person every 10 minutes.
+const TEST_LIMIT = 5;
+const TEST_WINDOW_MS = 10 * 60_000;
+const testLog = new Map<string, number[]>();
+function testAllowed(userId: string): boolean {
+  const now = Date.now();
+  const recent = (testLog.get(userId) ?? []).filter((t) => now - t < TEST_WINDOW_MS);
+  if (recent.length >= TEST_LIMIT) { testLog.set(userId, recent); return false; }
+  recent.push(now);
+  testLog.set(userId, recent);
+  return true;
+}
+/** Tests only. */
+export function resetTestEmailLimit() { testLog.clear(); }
 
 export function registerEmailRoutes(app: Express) {
   app.get("/api/email", h(async (_req, res) => {
@@ -215,10 +244,11 @@ export function registerEmailRoutes(app: Express) {
     const body = req.body ?? {};
     const user = currentUser(res)!;
     const cfg = merge(await getEmailConfig(), inputSchema.parse(body.config ?? {}));
+    if (!testAllowed(user.id)) return res.status(429).json({ error: "That's a lot of test emails. Wait a few minutes and try again." });
     const to = notificationEmailSchema.parse(typeof body.to === "string" && body.to.trim() ? body.to : user.notificationEmail ?? "");
     if (!to) return res.status(400).json({ error: "Enter the address to send the test to." });
     try { check(cfg); } catch (err: any) { return res.json({ ok: false, message: err.message }); }
-    const appName = "Payroll";
+    const appName = (await settings.getPrefs().catch(() => null))?.appName || "Payroll";
     try {
       await deliver(cfg, {
         to: [to],

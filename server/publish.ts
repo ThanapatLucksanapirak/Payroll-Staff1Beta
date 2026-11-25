@@ -33,6 +33,8 @@ export type PublishedMap = Record<string, PublishRecord>;
 
 let cache: { store: unknown; map: PublishedMap; at: number } | null = null;
 const CACHE_MS = 3_000;
+/** Forget the cached map (after a restore or database switch). */
+export function invalidatePublishedCache() { cache = null; }
 
 export async function getPublishedMap(): Promise<PublishedMap> {
   const store = await db();

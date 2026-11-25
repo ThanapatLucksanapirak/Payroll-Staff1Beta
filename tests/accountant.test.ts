@@ -279,3 +279,62 @@ test("people set their own notification email; admins set others'", async () => 
   // The accountant can't make themselves an editor.
   assert.equal((await call("PATCH", `/api/users/${acct.id}`, { role: "admin" }, "acct")).status, 403);
 });
+
+test("the live feed refuses accountants (cookie)", async () => {
+  const ctl = new AbortController();
+  const res = await fetch(base + "/api/live", { headers: { Cookie: jar.acct }, signal: ctl.signal });
+  assert.equal(res.status, 403);
+  ctl.abort();
+});
+
+test("the saved password is only sent to the server it was entered for", async () => {
+  const { resetTestEmailLimit, getEmailConfig } = await import("../server/email");
+  resetTestEmailLimit();
+  sent.length = 0;
+  const moved = await call("POST", "/api/email/test", { to: "owner@example.com", config: { host: "attacker.example.net" } }, "owner");
+  assert.equal(moved.status, 400);
+  assert.match(moved.body.error, /password again/);
+  assert.equal(sent.length, 0);
+  const port = await call("PUT", "/api/email", { config: { port: 2525 } }, "owner");
+  assert.equal(port.status, 400);
+  assert.equal((await getEmailConfig()).port, 587, "nothing saved");
+  // With the password typed again it works.
+  const ok = await call("POST", "/api/email/test", { to: "owner@example.com", config: { host: "other.example.net", password: "new-pass" } }, "owner");
+  assert.equal(ok.body.ok, true);
+  assert.equal(sent.at(-1)!.host, "other.example.net");
+  // Same server details: the saved password is still used.
+  const same = await call("POST", "/api/email/test", { to: "owner@example.com", config: { fromName: "x" } }, "owner");
+  assert.equal(same.body.ok, true);
+});
+
+test("test emails are rate limited and connection errors are generic", async () => {
+  const { resetTestEmailLimit, cleanError } = await import("../server/email");
+  resetTestEmailLimit();
+  const codes = await Promise.all(Array.from({ length: 6 }, () => call("POST", "/api/email/test", { to: "owner@example.com" }, "owner")));
+  assert.deepEqual(codes.map((c) => c.status).sort(), [200, 200, 200, 200, 200, 429]);
+  resetTestEmailLimit();
+  const msgs = ["ECONNREFUSED", "ETIMEDOUT", "EDNS", "ENOTFOUND"].map((code) => cleanError(Object.assign(new Error("connect " + code + " 10.0.0.5:22"), { code })));
+  assert.equal(new Set(msgs).size, 1);
+  assert.ok(!msgs[0].includes("10.0.0.5"));
+});
+
+test("restore keeps the email settings and refreshes published state", async () => {
+  const { getEmailConfig } = await import("../server/email");
+  const before = await getEmailConfig();
+  const backup = await call("GET", "/api/backup", undefined, "owner");
+  const r = await call("POST", "/api/backup/restore", backup.body, "owner");
+  assert.equal(r.status, 200, JSON.stringify(r.body));
+  const after = await getEmailConfig();
+  assert.equal(after.host, before.host);
+  assert.equal(after.password, before.password);
+  assert.equal((await call("GET", `/api/timesheets/${tsB}`, undefined, "acct")).status, 200);
+});
+
+test("accountants don't get employees' standing bonuses and deductions", async () => {
+  const put = await call("PUT", `/api/sites/${siteId}/pay/settings`, { recurring: [{ id: "r1", employee: "Ana Ruiz", kind: "deduction", label: "Uniform", amount: 10, active: true }] }, "owner");
+  const owner = await call("GET", `/api/sites/${siteId}/pay/settings`, undefined, "owner");
+  const acct = await call("GET", `/api/sites/${siteId}/pay/settings`, undefined, "acct");
+  assert.equal(acct.status, 200);
+  assert.deepEqual(acct.body.recurring, []);
+  if (put.status === 200) assert.ok(owner.body.recurring.length >= 1);
+});

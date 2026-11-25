@@ -32,7 +32,7 @@ import { TWO_FACTOR_PUBLIC, registerTwoFactorRoutes } from "./twofactor";
 import { registerOffsiteRoutes } from "./offsite";
 import { registerPortalAdminRoutes, registerPortalRoutes } from "./portal";
 import { registerEmailRoutes } from "./email";
-import { getPublishedMap, publishedRecord, registerPublishRoutes } from "./publish";
+import { getPublishedMap, invalidatePublishedCache, publishedRecord, registerPublishRoutes } from "./publish";
 
 type Handler = (req: Request, res: Response) => Promise<unknown>;
 const h = (fn: Handler) => (req: Request, res: Response, next: NextFunction) => { fn(req, res).catch(next); };
@@ -122,7 +122,7 @@ const restoreSchema = z.object({
 /**
  * Restore an export: afterwards the data matches the backup exactly (timesheets
  * and settings added since are removed, edited punches go back). The current
- * user accounts, activity log and manager PINs are always kept.
+ * user accounts, activity log, manager PINs and email settings are always kept.
  */
 async function restoreFrom(raw: unknown) {
   const body = restoreSchema.parse(raw);
@@ -136,7 +136,7 @@ async function restoreFrom(raw: unknown) {
     throw Object.assign(new Error(`Restore cancelled: could not back up the current data first (${err.message}).`), { status: 500 });
   });
   const store = await db();
-  const keepSetting = (k: string) => k === "password_hash" || k === USERS_KEY || k === "revoked_sessions" || k.startsWith(AUDIT_PREFIX) || k.startsWith("kiosk_manager_pin:") || NEVER_BACKED_UP(k);
+  const keepSetting = (k: string) => k === "password_hash" || k === USERS_KEY || k === "revoked_sessions" || k.startsWith(AUDIT_PREFIX) || k.startsWith("kiosk_manager_pin:") || k.startsWith("email:") || NEVER_BACKED_UP(k);
   const result = await store.importAll({
     settings: body.settings.filter((x) => !NEVER_BACKED_UP(x.key)),
     timesheets: body.timesheets.map(({ updated_at: _u, ...rest }: any) => rest),
@@ -144,6 +144,7 @@ async function restoreFrom(raw: unknown) {
     punches: hasPunches ? punches : undefined,
   }, { replace: true, keepSetting });
   settings.invalidateSettingsCache();
+  invalidatePublishedCache();
   invalidateEmployeeCache();
   resetTagCache();
   return result;
@@ -425,6 +426,7 @@ export function registerRoutes(app: Express) {
     const { config, copyData } = z.object({ config: databaseConfigSchema, copyData: z.boolean().default(false) }).parse(req.body);
     const result = await switchDatabase(config, { copyData });
     settings.invalidateSettingsCache();
+    invalidatePublishedCache();
     resetTagCache();
     await settings.getSites();
     res.json(result);

@@ -59,6 +59,9 @@ export function EmailSettings() {
 
   const saved = q.data.config;
   const plain = (c: EmailCfg) => [c.enabled, c.host, c.port, c.security, c.username, c.fromAddress, c.fromName, c.appUrl].join("|");
+  // The saved password only goes to the server it was entered for (the server enforces this too).
+  const dest = (c: EmailCfg) => [c.host.trim().toLowerCase(), c.port, c.security, c.username.trim().toLowerCase()].join("|");
+  const needPassword = saved.hasPassword && !password && dest(cfg) !== dest(saved);
   const dirty = plain(cfg) !== plain({ ...saved, appUrl: saved.appUrl || window.location.origin }) || !!password || !saved.appUrl;
   const body = () => ({
     enabled: cfg.enabled, host: cfg.host.trim(), port: cfg.port, security: cfg.security, username: cfg.username.trim(),
@@ -129,7 +132,7 @@ export function EmailSettings() {
               </div>
               <div className="grid items-start gap-3 sm:grid-cols-2">
                 <Field label="Username"><Input value={cfg.username} spellCheck={false} autoCapitalize="none" autoComplete="off" onChange={(e) => set({ username: e.target.value })} data-testid="input-email-username" /></Field>
-                <Field label="Password or API key" hint={saved.hasPassword ? "Saved. Leave blank to keep it." : "Stored on your server only. Never shown again."}>
+                <Field label="Password or API key" error={needPassword ? "Enter it again: the server details changed." : undefined} hint={saved.hasPassword ? "Saved. Leave blank to keep it." : "Stored on your server only. Never shown again."}>
                   <Input type="password" autoComplete="new-password" value={password} placeholder={saved.hasPassword ? "••••••••" : ""} onChange={(e) => setPassword(e.target.value)} data-testid="input-email-password" />
                 </Field>
                 <Field label="From address" hint="The address emails come from."><Input type="email" value={cfg.fromAddress} spellCheck={false} autoCapitalize="none" placeholder="payroll@yourcompany.com" onChange={(e) => set({ fromAddress: e.target.value })} data-testid="input-email-from" /></Field>
@@ -139,7 +142,7 @@ export function EmailSettings() {
             </>
           )}
           {(cfg.enabled || saved.enabled) && (
-            <Button onClick={() => void save()} disabled={!!busy || !dirty} data-testid="button-email-save">{busy === "save" && <Loader2 className="animate-spin" />}Save</Button>
+            <Button onClick={() => void save()} disabled={!!busy || !dirty || needPassword} data-testid="button-email-save">{busy === "save" && <Loader2 className="animate-spin" />}Save</Button>
           )}
         </div>
       </Section>
@@ -149,7 +152,7 @@ export function EmailSettings() {
           <div className="space-y-3">
             <form className="flex flex-wrap items-end gap-3" onSubmit={(e) => { e.preventDefault(); void test(); }}>
               <Field label="Send to" className="w-full sm:w-80"><Input type="email" value={testTo} spellCheck={false} autoCapitalize="none" placeholder="you@example.com" onChange={(e) => setTestTo(e.target.value)} data-testid="input-email-test-to" /></Field>
-              <Button type="submit" variant="outline" disabled={!!busy || !testTo.trim() || !cfg.host.trim() || !cfg.fromAddress.trim()} data-testid="button-email-test">{busy === "test" ? <Loader2 className="animate-spin" /> : <Send />}Send test email</Button>
+              <Button type="submit" variant="outline" disabled={!!busy || needPassword || !testTo.trim() || !cfg.host.trim() || !cfg.fromAddress.trim()} data-testid="button-email-test">{busy === "test" ? <Loader2 className="animate-spin" /> : <Send />}Send test email</Button>
             </form>
             {failing ? (
               <p className="flex items-start gap-2 rounded-lg bg-danger-soft px-3 py-2 text-xs text-danger" role="alert" data-testid="text-email-failed"><AlertTriangle className="mt-px h-3.5 w-3.5 shrink-0" /><span>Last email failed {timeAgo(st.lastFailureAt!)}: {st.lastError}</span></p>
