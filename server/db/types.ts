@@ -1,5 +1,5 @@
 import type { DatabaseHealth, TimesheetSummary } from "@shared/schema";
-import type { Punch, PunchEdit } from "@shared/punches";
+import type { Punch, PunchEdit, PunchFlags } from "@shared/punches";
 
 /** A row of the `recent_uploads` table (legacy name kept for compatibility). */
 export interface TimesheetRow {
@@ -24,7 +24,8 @@ export type TimesheetWrite = Omit<TimesheetRow, "id" | "created_at" | "updated_a
 
 /** Filter for time-clock punches. `from` is inclusive and `to` exclusive (UTC ISO). */
 export interface PunchQuery { siteId?: string; employeeId?: string; from?: string; to?: string; limit?: number }
-export type PunchPatch = Partial<Pick<Punch, "type" | "at" | "note" | "editedAt" | "edits" | "employeeName">>;
+/** `edits` rewrites the punch's meta: pass `flags` alongside it to keep them. */
+export type PunchPatch = Partial<Pick<Punch, "type" | "at" | "note" | "editedAt" | "edits" | "employeeName" | "flags">>;
 
 /** A row of the `punches` table. */
 export interface PunchRow {
@@ -32,10 +33,14 @@ export interface PunchRow {
   device_id: string | null; note: string | null; created_at: string; edited_at: string | null; meta_json: any;
 }
 
+function metaOf(edits: PunchEdit[] | undefined, flags: PunchFlags | undefined) {
+  return flags && Object.keys(flags).length ? { edits: edits ?? [], flags } : { edits: edits ?? [] };
+}
+
 export function punchToRow(p: Punch): PunchRow {
   return {
     id: p.id, site_id: p.siteId, employee_id: p.employeeId, employee_name: p.employeeName, type: p.type, at: p.at, source: p.source,
-    device_id: p.deviceId, note: p.note || null, created_at: p.createdAt, edited_at: p.editedAt, meta_json: { edits: p.edits ?? [] },
+    device_id: p.deviceId, note: p.note || null, created_at: p.createdAt, edited_at: p.editedAt, meta_json: metaOf(p.edits, p.flags),
   };
 }
 
@@ -46,6 +51,7 @@ export function rowToPunch(r: any): Punch {
     id: String(r.id), siteId: r.site_id, employeeId: r.employee_id, employeeName: r.employee_name, type: r.type, at: isoOf(r.at)!,
     source: r.source === "admin" ? "admin" : "kiosk", deviceId: r.device_id ?? null, note: r.note ?? "", createdAt: isoOf(r.created_at)!,
     editedAt: isoOf(r.edited_at), edits: Array.isArray(meta?.edits) ? (meta.edits as PunchEdit[]) : [],
+    ...(meta?.flags && typeof meta.flags === "object" ? { flags: meta.flags as PunchFlags } : {}),
   };
 }
 
@@ -56,7 +62,7 @@ export function patchToRow(patch: PunchPatch): Partial<PunchRow> {
   if (patch.note !== undefined) out.note = patch.note || null;
   if (patch.editedAt !== undefined) out.edited_at = patch.editedAt;
   if (patch.employeeName !== undefined) out.employee_name = patch.employeeName;
-  if (patch.edits !== undefined) out.meta_json = { edits: patch.edits };
+  if (patch.edits !== undefined || patch.flags !== undefined) out.meta_json = metaOf(patch.edits, patch.flags);
   return out;
 }
 

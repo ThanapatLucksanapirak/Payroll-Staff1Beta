@@ -76,6 +76,10 @@ const POLICY: Rule[] = [
   { method: "POST", path: /^\/sites\/[^/]+\/punches$/, need: "editor", sites: fromParam },
   { method: "PATCH", path: /^\/punches\/[^/]+$/, need: "editor", sites: punchSite },
   { method: "DELETE", path: /^\/punches\/[^/]+$/, need: "editor", sites: punchSite },
+  // Time-clock review: everyone reads; editors approve days and run auto clock-out; owners/admins change its settings.
+  { method: "GET", path: /^\/sites\/[^/]+\/timeclock\/(review|overtime|checklist|auto-close)$/, need: "user", sites: fromParam },
+  { method: "POST", path: /^\/sites\/[^/]+\/timeclock\/(approvals|auto-close\/run)$/, need: "editor", sites: fromParam },
+  { method: "PUT", path: /^\/sites\/[^/]+\/timeclock\/auto-close$/, need: "admin", sites: fromParam },
 ];
 
 const MESSAGES: Record<Need, string> = {

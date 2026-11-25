@@ -9,6 +9,7 @@ import { scheduleBackups, stopBackups } from "./backup";
 import { securityHeaders } from "./security";
 import { runAdminCliAndExit } from "./cli";
 import { endLiveStreams } from "./live";
+import { startAutoCloseJob, stopAutoCloseJob } from "./timeclock";
 
 const app = express();
 const httpServer = createServer(app);
@@ -45,6 +46,7 @@ function shutdown(reason: string, code = 0) {
   stopping = true;
   console.log(`[server] shutting down (${reason})`);
   stopBackups();
+  stopAutoCloseJob();
   endLiveStreams();
   const force = setTimeout(() => {
     closeDatabase();
@@ -81,6 +83,7 @@ process.on("SIGINT", () => shutdown("SIGINT"));
 
   await announceSetupCode().catch(() => undefined);
   scheduleBackups();
+  startAutoCloseJob(); // closes shifts left open past each location's auto clock-out time
   const daily = () => purgeTrash().catch((err) => console.error("[trash] purge failed:", err.message));
   setTimeout(daily, 60_000).unref();
   setInterval(daily, 24 * 60 * 60_000).unref();

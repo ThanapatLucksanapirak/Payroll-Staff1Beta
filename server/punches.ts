@@ -52,6 +52,7 @@ export interface RecordInput {
   note?: string;
   audience: "kiosk" | "admin";
   force?: boolean;
+  flags?: Punch["flags"];
 }
 
 export async function recordPunch(input: RecordInput): Promise<{ punch: Punch; created: boolean }> {
@@ -67,6 +68,7 @@ export async function recordPunch(input: RecordInput): Promise<{ punch: Punch; c
     const punch: Punch = {
       id: input.id, siteId: input.site.id, employeeId: input.employee.id, employeeName: input.employee.name, type: input.type, at,
       source: input.source, deviceId: input.deviceId, note: input.note ?? "", createdAt: new Date().toISOString(), editedAt: null, edits: [],
+      ...(input.flags ? { flags: input.flags } : {}),
     };
     const before = await nearbyPunches(input.site.id, input.employee.id, at);
     const problem = validateChange(before, [...before, punch], input.site.rules.timezone, input.audience);
@@ -90,7 +92,7 @@ export async function editPunch(id: string, patch: { type?: PunchType; at?: stri
     const problem = validateChange(before, after, site?.rules.timezone ?? "UTC", "admin");
     if (problem && !patch.force) throw new PunchError(problem, 409, "state");
     const edit: PunchEdit = { editedAt: new Date().toISOString(), note: patch.note, by: patch.by ?? null, before: { type: cur.type, at: cur.at } };
-    const saved = await store.updatePunch(id, { type: next.type, at, note: patch.note, editedAt: edit.editedAt, edits: [...cur.edits, edit] });
+    const saved = await store.updatePunch(id, { type: next.type, at, note: patch.note, editedAt: edit.editedAt, edits: [...cur.edits, edit], flags: cur.flags });
     if (!saved) throw new PunchError("That punch no longer exists.", 404, "missing");
     broadcast({ type: "punch", action: "updated", siteId: saved.siteId, punch: saved });
     return saved;
