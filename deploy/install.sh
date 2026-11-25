@@ -182,7 +182,15 @@ choose_repo() {
 
 can_reach_repo() { git_anywhere ls-remote --exit-code -h "$REPO_URL" "$BRANCH" >/dev/null 2>&1; }
 
-https_to_ssh() { sed -E -e 's#/+$##' -e 's#\.git$##' -e 's#^https://github.com/([^/]+)/([^/]+)$#git@github.com:\1/\2.git#' <<<"$1"; }
+https_to_ssh() {
+  # Only GitHub https URLs are converted; anything else is returned unchanged.
+  if [[ "$1" =~ ^https://github\.com/([^/]+)/([^/]+)/*$ ]]; then
+    local repo="${BASH_REMATCH[2]%.git}"
+    echo "git@github.com:${BASH_REMATCH[1]}/$repo.git"
+  else
+    echo "$1"
+  fi
+}
 
 setup_repo_access() {
   step "Connecting to the app's source code"
@@ -300,6 +308,7 @@ build_and_start() {
   # The CLI and units from the release we just activated.
   install_units
   systemctl enable -q payroll.service
+  systemctl reset-failed payroll.service 2>/dev/null || true
   systemctl restart payroll.service
   info "Starting…"
   if ! wait_healthy 90; then
@@ -307,6 +316,8 @@ build_and_start() {
     if [[ -L "$PAYROLL_PREVIOUS" ]]; then
       warn "The new version did not start. Going back to the previous one."
       activate_release "$(readlink -f "$PAYROLL_PREVIOUS")"
+      # The crashing version used up systemd's start limit; clear it first.
+      systemctl reset-failed payroll.service 2>/dev/null || true
       systemctl restart payroll.service
       wait_healthy 60 && die "Rolled back to the previous version. The new version's error is shown above."
     fi

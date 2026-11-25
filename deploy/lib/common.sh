@@ -234,8 +234,9 @@ prune_releases() {
   while IFS= read -r d; do
     [[ "$d" == "$cur" || "$d" == "$prev" ]] && continue
     n=$((n + 1))
-    (( n > keep - 2 )) && rm -rf "$d"
+    if (( n > keep - 2 )); then rm -rf "$d"; fi
   done < <(find "$PAYROLL_RELEASES" -mindepth 1 -maxdepth 1 -type d | sort -r)
+  return 0 # a false (( )) test above must not fail the caller under set -e
 }
 
 # ── Service health ────────────────────────────────────────────────────────────
