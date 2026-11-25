@@ -3,12 +3,14 @@
 //   node dist/index.cjs admin create --username NAME [--display-name "Full Name"] --password-stdin
 //   node dist/index.cjs admin reset-password --username NAME --password-stdin
 //   node dist/index.cjs admin list
+//   node dist/index.cjs admin disable-2fa --username NAME
 //
 // They use the same DATA_DIR and database settings as the server.
 import { initDatabase, closeDatabase } from "./db";
 import { clearSetupCode } from "./auth";
 import { ROLE_LABELS, UserError, createUser, findUserByName, listUsers, setUserPassword } from "./users";
 import { audit, flushAudit } from "./audit";
+import { disableTwoFactor } from "./twofactor";
 import { z } from "zod";
 
 export interface CliIO {
@@ -25,6 +27,8 @@ const USAGE = `Usage:
       Set a new password, re-activate the account and sign it out everywhere.
   admin list
       List user accounts.
+  admin disable-2fa --username NAME
+      Turn off two-factor sign-in for an account (lost phone and recovery codes).
 
 The password is read from standard input, e.g.
   printf '%s' 'new password' | node dist/index.cjs admin create --username alex --password-stdin`;
@@ -68,7 +72,7 @@ export async function runAdminCli(args: string[], io: CliIO = defaultIO()): Prom
       const users = await listUsers({ fresh: true });
       if (!users.length) { io.out("No user accounts yet. Run `admin create` or open the app to set it up."); return 0; }
       for (const u of users) {
-        io.out([u.username.padEnd(20), ROLE_LABELS[u.role].padEnd(14), (u.active ? "active" : "inactive").padEnd(9), u.displayName, u.siteIds.length ? `(locations: ${u.siteIds.join(", ")})` : ""].join(" ").trimEnd());
+        io.out([u.username.padEnd(20), ROLE_LABELS[u.role].padEnd(14), (u.active ? "active" : "inactive").padEnd(9), (u.twoFactor?.enabled ? "2FA" : "").padEnd(4), u.displayName, u.siteIds.length ? `(locations: ${u.siteIds.join(", ")})` : ""].join(" ").trimEnd());
       }
       return 0;
     }
@@ -93,6 +97,18 @@ export async function runAdminCli(args: string[], io: CliIO = defaultIO()): Prom
       audit({ ...cliActor, action: "user.password", target: `user:${user.id}`, detail: `${user.username}: password reset (command line)` });
       await flushAudit();
       io.out(`Password for "${user.username}" updated. All of its sessions were signed out.`);
+      return 0;
+    }
+    if (cmd === "disable-2fa") {
+      const username = str(flags.username);
+      if (!username) throw new UserError("--username is required.");
+      const user = await findUserByName(username);
+      if (!user) throw new UserError(`No account named "${username}". Use \`admin list\` to see accounts.`);
+      if (!user.twoFactor?.enabled) { io.out(`Two-factor sign-in is already off for "${user.username}".`); return 0; }
+      await disableTwoFactor(user.id);
+      audit({ ...cliActor, action: "user.2fa-reset", target: `user:${user.id}`, detail: `${user.username}: two-factor sign-in turned off (command line)` });
+      await flushAudit();
+      io.out(`Two-factor sign-in is now off for "${user.username}". They can sign in with their password and set it up again.`);
       return 0;
     }
     io.err(`Unknown command "${cmd}".\n\n${USAGE}`);
