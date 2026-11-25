@@ -76,6 +76,13 @@ const POLICY: Rule[] = [
   { method: "POST", path: /^\/sites\/[^/]+\/punches$/, need: "editor", sites: fromParam },
   { method: "PATCH", path: /^\/punches\/[^/]+$/, need: "editor", sites: punchSite },
   { method: "DELETE", path: /^\/punches\/[^/]+$/, need: "editor", sites: punchSite },
+  // Kiosk extras: punch photos for editors; shift notes and fix requests for managers of
+  // the location. Kiosk settings (stations, break reminder, photo retention) stay owner/admin.
+  { method: "GET", path: /^\/punches\/[^/]+\/photo$/, need: "editor", sites: punchSite },
+  { method: "GET", path: /^\/sites\/[^/]+\/(kiosk-notes|fix-requests)$/, need: "user", sites: fromParam },
+  { method: "POST", path: /^\/sites\/[^/]+\/kiosk-notes$/, need: "editor", sites: fromParam },
+  { method: "DELETE", path: /^\/sites\/[^/]+\/kiosk-notes\/[^/]+$/, need: "editor", sites: fromParam },
+  { method: "POST", path: /^\/sites\/[^/]+\/fix-requests\/[^/]+\/(approve|decline)$/, need: "editor", sites: fromParam },
 ];
 
 const MESSAGES: Record<Need, string> = {

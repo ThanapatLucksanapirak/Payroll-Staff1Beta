@@ -52,6 +52,19 @@ export interface Punch {
   createdAt: string;
   editedAt: string | null;
   edits: PunchEdit[];
+  /** Optional extras kept in the row's meta_json (older punches have none). */
+  meta?: PunchMeta;
+}
+
+/** Extra details stored with a punch. Unknown keys are kept as they are. */
+export interface PunchMeta {
+  /** Station / role picked at clock-in. */
+  station?: string;
+  /** Kiosk photo: "saved" when a snapshot was stored, "none" when the camera was unavailable. */
+  photo?: "saved" | "none";
+  /** The kiosk fix request this punch was created from. */
+  fixRequestId?: string;
+  [key: string]: unknown;
 }
 
 /** Validates a punch read from a backup file. */
@@ -68,6 +81,7 @@ export const punchSchema = z.object({
   createdAt: z.string().default(() => new Date().toISOString()),
   editedAt: z.string().nullable().default(null),
   edits: z.array(z.any()).default([]),
+  meta: z.record(z.string(), z.unknown()).optional().catch(undefined),
 });
 
 export function statusAfter(type: PunchType): ClockStatus {
