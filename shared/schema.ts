@@ -211,6 +211,8 @@ export interface TimesheetSummary {
   status: string;
   createdAt: string;
   updatedAt: string | null;
+  /** Set when the timesheet is in the Trash (ISO timestamp). */
+  deletedAt?: string | null;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

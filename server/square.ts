@@ -58,16 +58,29 @@ export async function pullTimecards(token: string, opts: { locationId?: string; 
   } while (cursor && ++guard < 100);
 
   const names: Record<string, string> = {};
-  if (timecards.length) {
+  const needed = new Set(timecards.map((tc) => tc.team_member_id).filter(Boolean));
+  if (needed.size) {
+    // Look up only this location's team, and stop once every name is known.
     let tmCursor: string | undefined;
     guard = 0;
     do {
-      const body: any = { limit: 100 };
+      const body: any = { limit: 200, query: { filter: { location_ids: [locationId] } } };
       if (tmCursor) body.cursor = tmCursor;
       const data = await call(token, "/team-members/search", { method: "POST", body });
-      for (const tm of data.team_members ?? []) names[tm.id] = `${tm.given_name ?? ""} ${tm.family_name ?? ""}`.trim() || tm.id;
+      for (const tm of data.team_members ?? []) {
+        names[tm.id] = `${tm.given_name ?? ""} ${tm.family_name ?? ""}`.trim() || tm.id;
+        needed.delete(tm.id);
+      }
       tmCursor = data.cursor;
-    } while (tmCursor && ++guard < 50);
+    } while (tmCursor && needed.size && ++guard < 50);
+    // Members no longer assigned to this location: fetch them one by one.
+    for (const id of [...needed].slice(0, 50)) {
+      try {
+        const data = await call(token, `/team-members/${encodeURIComponent(id)}`);
+        const tm = data.team_member;
+        if (tm) names[id] = `${tm.given_name ?? ""} ${tm.family_name ?? ""}`.trim() || id;
+      } catch { /* keep the id */ }
+    }
   }
 
   const shifts: Shift[] = timecards.map((tc) => {

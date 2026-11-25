@@ -10,6 +10,7 @@ import { Logo } from "@/components/Logo";
 export function LoginPage({ appName, setupRequired, dbError, onDone }: { appName: string; setupRequired: boolean; dbError?: string | null; onDone: () => void }) {
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
+  const [setupCode, setSetupCode] = useState("");
   const [remember, setRemember] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -18,9 +19,10 @@ export function LoginPage({ appName, setupRequired, dbError, onDone }: { appName
     e.preventDefault();
     setError("");
     if (setupRequired && password !== confirm) { setError("The passwords don't match."); return; }
+    if (setupRequired && password.length < 8) { setError("Use at least 8 characters."); return; }
     setBusy(true);
     try {
-      const r = await api<{ token: string }>("POST", setupRequired ? "/api/auth/setup" : "/api/auth/login", { password, remember });
+      const r = await api<{ token: string }>("POST", setupRequired ? "/api/auth/setup" : "/api/auth/login", setupRequired ? { password, setupCode } : { password, remember });
       session.set(r.token, remember);
       onDone();
     } catch (err) {
@@ -43,9 +45,16 @@ export function LoginPage({ appName, setupRequired, dbError, onDone }: { appName
           </div>
         </div>
         {dbError && <p className="rounded-md bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900 px-3 py-2 text-xs text-amber-800 dark:text-amber-200">Database issue: {dbError}</p>}
+        {setupRequired && (
+          <div className="space-y-2">
+            <Label htmlFor="setup-code">Setup code</Label>
+            <Input id="setup-code" autoFocus autoComplete="off" spellCheck={false} placeholder="XXXXX-XXXXX" className="font-mono tracking-wider uppercase" value={setupCode} onChange={(e) => setSetupCode(e.target.value)} data-testid="input-setup-code" />
+            <p className="text-xs text-muted-foreground">Shown by the installer. You can also find it on the server in the data folder, in setup-code.txt.</p>
+          </div>
+        )}
         <div className="space-y-2">
           <Label htmlFor="pw">{setupRequired ? "New password" : "Password"}</Label>
-          <Input id="pw" type="password" autoFocus autoComplete={setupRequired ? "new-password" : "current-password"} value={password} onChange={(e) => setPassword(e.target.value)} data-testid="input-password" />
+          <Input id="pw" type="password" autoFocus={!setupRequired} autoComplete={setupRequired ? "new-password" : "current-password"} value={password} onChange={(e) => setPassword(e.target.value)} data-testid="input-password" />
         </div>
         {setupRequired && (
           <div className="space-y-2">
@@ -58,7 +67,7 @@ export function LoginPage({ appName, setupRequired, dbError, onDone }: { appName
           Keep me signed in on this device
         </label>
         {error && <p className="text-sm text-destructive" role="alert" data-testid="text-login-error">{error}</p>}
-        <Button type="submit" className="w-full" disabled={busy || !password} data-testid="button-login">
+        <Button type="submit" className="w-full" disabled={busy || !password || (setupRequired && !setupCode.trim())} data-testid="button-login">
           {busy ? <Loader2 className="animate-spin" /> : setupRequired ? <ShieldCheck /> : <Lock />}
           {setupRequired ? "Create password" : "Unlock"}
         </Button>

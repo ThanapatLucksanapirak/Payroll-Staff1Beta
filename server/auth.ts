@@ -1,7 +1,9 @@
 import { createHmac, randomBytes, scrypt as nodeScrypt, timingSafeEqual } from "node:crypto";
 import { promisify } from "node:util";
 import type { NextFunction, Request, Response } from "express";
-import { getAuthSecret, loadConfig, saveConfig } from "./config";
+import fs from "node:fs";
+import path from "node:path";
+import { DATA_DIR, getAuthSecret, loadConfig, saveConfig } from "./config";
 import { db } from "./db";
 
 const scrypt = promisify(nodeScrypt) as (pw: string, salt: Buffer, len: number) => Promise<Buffer>;
@@ -96,16 +98,75 @@ export function requireAuth(publicPaths: Set<string>) {
   };
 }
 
-// Simple in-memory brute-force protection
+// ── First-run setup code ─────────────────────────────────────────────────────
+// Until an administrator password exists, creating one requires a one-time code.
+// Without it, anyone who found the address first (e.g. through a Cloudflare
+// Tunnel) could make themselves the administrator.
+const SETUP_FILE = path.join(DATA_DIR, "setup-code.txt");
+
+function newCode() {
+  const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  const bytes = randomBytes(10);
+  const chars = [...bytes].map((b) => alphabet[b % alphabet.length]).join("");
+  return `${chars.slice(0, 5)}-${chars.slice(5)}`;
+}
+
+/** The current setup code (created on first use). */
+export function getSetupCode(): string {
+  if (process.env.SETUP_CODE) return process.env.SETUP_CODE;
+  let code = loadConfig().setupCode;
+  if (!code) {
+    code = newCode();
+    saveConfig({ setupCode: code });
+  }
+  try {
+    fs.mkdirSync(DATA_DIR, { recursive: true });
+    fs.writeFileSync(SETUP_FILE, `${code}\n`, { mode: 0o600 });
+  } catch { /* the code is still printed to the log */ }
+  return code;
+}
+
+const norm = (c: string) => c.toUpperCase().replace(/[^A-Z0-9]/g, "");
+export function setupCodeMatches(input: string): boolean {
+  return !!input && safeEqual(norm(input), norm(getSetupCode()));
+}
+
+export function clearSetupCode() {
+  saveConfig({ setupCode: undefined });
+  try { fs.unlinkSync(SETUP_FILE); } catch { /* already gone */ }
+}
+
+/** On start-up: if no administrator exists yet, print the setup code. */
+export async function announceSetupCode() {
+  if (await currentPasswordHash()) { clearSetupCode(); return; }
+  const code = getSetupCode();
+  console.log("");
+  console.log("  ┌──────────────────────────────────────────────────────┐");
+  console.log("  │  First-time setup: open the app and enter this code  │");
+  console.log(`  │  Setup code: ${code.padEnd(40)}│`);
+  console.log("  └──────────────────────────────────────────────────────┘");
+  console.log("");
+}
+
+// ── Brute-force protection (per client address, in memory) ───────────────────
+const MAX_TRIES = 8;
+const WINDOW_MS = 15 * 60_000;
 const attempts = new Map<string, { n: number; until: number }>();
+
+function prune(now = Date.now()) {
+  for (const [k, a] of attempts) if (a.until < now) attempts.delete(k);
+}
+setInterval(prune, 5 * 60_000).unref();
+
 export function loginThrottle(ip: string): string | null {
   const a = attempts.get(ip);
-  if (a && a.until > Date.now() && a.n >= 8) return `Too many attempts. Try again in ${Math.ceil((a.until - Date.now()) / 60000)} minute(s).`;
+  if (a && a.until > Date.now() && a.n >= MAX_TRIES) return `Too many attempts. Try again in ${Math.ceil((a.until - Date.now()) / 60000)} minute(s).`;
   return null;
 }
 export function recordLogin(ip: string, ok: boolean) {
   if (ok) { attempts.delete(ip); return; }
+  if (attempts.size > 10_000) prune();
   const a = attempts.get(ip);
-  if (!a || a.until < Date.now()) attempts.set(ip, { n: 1, until: Date.now() + 5 * 60000 });
-  else a.n++;
+  if (!a || a.until < Date.now()) attempts.set(ip, { n: 1, until: Date.now() + WINDOW_MS });
+  else { a.n++; a.until = Date.now() + WINDOW_MS; }
 }
