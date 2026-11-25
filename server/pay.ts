@@ -24,6 +24,7 @@ import * as settings from "./settings";
 import { currentUser } from "./auth";
 import { actorOf, audit } from "./audit";
 import { canAccessSite } from "./users";
+import { clearPublished, getPublishedMap } from "./publish";
 
 type Next = NextFunction;
 const g = (fn: (req: Request, res: Response, next: Next) => Promise<unknown>) => (req: Request, res: Response, next: Next) => { fn(req, res, next).catch(next); };
@@ -152,10 +153,12 @@ async function resultOf(id: string, updatedAt: string | null): Promise<{ result:
   return { result, doc };
 }
 
-export async function finalizedFor(siteId: string, excludeId?: string) {
+/** Finalized timesheets of a location. `publishedOnly`: only those published to the accountant. */
+export async function finalizedFor(siteId: string, excludeId?: string, opts: { publishedOnly?: boolean } = {}) {
   const store = await db();
   const def = await settings.defaultSiteId();
-  const list = (await store.listTimesheets()).filter((t) => !t.deletedAt && t.status === "final" && (t.siteId ?? def) === siteId && t.id !== excludeId);
+  const published = opts.publishedOnly ? await getPublishedMap() : null;
+  const list = (await store.listTimesheets()).filter((t) => !t.deletedAt && t.status === "final" && (t.siteId ?? def) === siteId && t.id !== excludeId && (!published || !!published[t.id]));
   const out: { id: string; label: string; periodStart: string; periodEnd: string; result: AnalysisResult }[] = [];
   for (const t of list) {
     const r = await resultOf(t.id, t.updatedAt);
@@ -222,6 +225,7 @@ export function registerPayRoutes(app: Express, deps: { rowFromDoc: (doc: Timesh
     const doc = await docOf(row);
     doc.status = "draft";
     await reverseFinal(id, doc.siteId);
+    await clearPublished(id); // a reopened payroll is no longer published to the accountant
     const summary = await store.updateTimesheet(id, { meta_json: { ...docToMeta(doc), reopenedAt: new Date().toISOString(), reopenReason: reason } });
     audit({ ...actorOf(req, res), action: "timesheet.reopen", target: `timesheet:${id}`, detail: `${doc.label || doc.filename || "Timesheet"} · reason: ${reason}` });
     res.json(summary);
@@ -236,7 +240,8 @@ export function registerPayRoutes(app: Express, deps: { rowFromDoc: (doc: Timesh
     const q = z.object({ start: iso.optional() }).parse(req.query);
     const start = q.start || row.period_start || doc.periodStart;
     if (!start) return res.json(null);
-    const prev = (await finalizedFor(doc.siteId, id)).filter((t) => t.periodEnd && t.periodEnd < start).sort((a, b) => b.periodEnd.localeCompare(a.periodEnd))[0];
+    const publishedOnly = currentUser(res)?.role === "accountant";
+    const prev = (await finalizedFor(doc.siteId, id, { publishedOnly })).filter((t) => t.periodEnd && t.periodEnd < start).sort((a, b) => b.periodEnd.localeCompare(a.periodEnd))[0];
     if (!prev) return res.json(null);
     res.json({ id: prev.id, label: prev.label, periodStart: prev.periodStart, periodEnd: prev.periodEnd, ...snapshotOf(prev.result) });
   }));
@@ -250,7 +255,10 @@ export function registerPayRoutes(app: Express, deps: { rowFromDoc: (doc: Timesh
 
   app.get("/api/sites/:id/pay/settings", g(async (req, res) => {
     const site = await site404(req, res);
-    if (site) res.json(await getPaySettings(site.id));
+    if (!site) return;
+    const ps = await getPaySettings(site.id);
+    // Accountants get what PDFs and exports need, not each employee's standing bonuses / deductions.
+    res.json(currentUser(res)?.role === "accountant" ? { ...ps, recurring: [] } : ps);
   }));
 
   const settingsPatch = z.object({
@@ -387,7 +395,7 @@ export function registerPayRoutes(app: Express, deps: { rowFromDoc: (doc: Timesh
     if (!canAccessSite(user, site.id)) return res.status(403).json({ error: "Your account doesn't have access to this location." });
     const q = z.object({ year: z.coerce.number().int().min(2000).max(2100).optional(), excludeId: z.string().max(64).optional() }).parse(req.query);
     const year = q.year ?? new Date().getFullYear();
-    const list = (await finalizedFor(site.id, q.excludeId)).filter((t) => t.periodEnd.slice(0, 4) === String(year));
+    const list = (await finalizedFor(site.id, q.excludeId, { publishedOnly: user.role === "accountant" })).filter((t) => t.periodEnd.slice(0, 4) === String(year));
     res.json({ year, timesheets: list.length, rows: ytdTotals(list.map((t) => t.result)) });
   }));
 }

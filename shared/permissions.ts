@@ -59,9 +59,16 @@ export function normalizeRolePermissions(raw: unknown): RolePermissions {
   return out;
 }
 
+/**
+ * Accountants have a fixed, read-only set (not editable in Roles): they see
+ * published payroll with its pay, export PDFs / CSV and open Reports.
+ */
+export const ACCOUNTANT_PERMISSIONS: readonly Permission[] = ["pay.view", "export", "reports.view"];
+
 /** The permissions a role has. Owners and administrators have all of them. */
 export function permissionsForRole(role: string, table: RolePermissions): Permission[] {
   if (role === "owner" || role === "admin") return [...PERMISSIONS];
+  if (role === "accountant") return [...ACCOUNTANT_PERMISSIONS];
   const perms = table[role as LimitedRole];
   if (!perms) return [];
   return PERMISSIONS.filter((p) => perms[p]);

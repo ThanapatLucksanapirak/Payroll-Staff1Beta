@@ -50,7 +50,7 @@ export function RolePermissionsPanel() {
   return (
     <Section
       title="Roles"
-      description="Owners and administrators can do everything. Choose what managers and viewers can see and do. Changes apply straight away."
+      description="Owners and administrators can do everything. Accountants only see payroll you publish (read only). Choose what managers and viewers can see and do. Changes apply straight away."
       actions={!isDefault && q.data && <Button size="sm" variant="ghost" onClick={() => void reset()} disabled={!!busy}>{busy === "reset" && <Loader2 className="animate-spin" />}Reset to standard</Button>}
     >
       {q.isLoading ? <Skeleton className="h-64" /> : q.error || !roles ? (

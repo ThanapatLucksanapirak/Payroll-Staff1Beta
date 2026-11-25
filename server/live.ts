@@ -112,6 +112,8 @@ export function registerLiveRoutes(app: Express) {
     let sites: string[] | null | false = verifyLiveTicket(ticket);
     if (sites === false) {
       const session = await verifyToken(requestToken(req));
+      // Accountants only see published payroll: never the live time clock.
+      if (session?.user.role === "accountant") return res.status(403).json({ error: "Accountant accounts can only see published payroll." });
       sites = session ? userSites(session.user) : false;
     }
     if (sites === false) return res.status(401).json({ error: "This live connection has expired. Reconnecting…" });

@@ -10,6 +10,7 @@ import { PreferencesSettings } from "@/components/settings/PreferencesSettings";
 import { UsersSettings } from "@/components/settings/UsersSettings";
 import { AuditSettings } from "@/components/settings/AuditSettings";
 import { PaySettings } from "@/components/settings/PaySettings";
+import { EmailSettings } from "@/components/settings/EmailSettings";
 import { useApp } from "@/context/AppData";
 import { SETTINGS_GROUPS, visibleSettingsSections, type SettingsSectionMeta } from "@/pages/settings-sections";
 import { cn } from "@/lib/utils";
@@ -20,6 +21,7 @@ const PANES: Record<string, ComponentType> = {
   categories: CategoriesSettings,
   pay: PaySettings,
   preferences: PreferencesSettings,
+  email: EmailSettings,
   database: DatabaseSettings,
   security: SecuritySettings,
   users: UsersSettings,

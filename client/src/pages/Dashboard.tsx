@@ -7,7 +7,7 @@ import { useApp } from "@/context/AppData";
 import { api, errorMessage, queryClient } from "@/lib/api";
 import { timeAgo } from "@/lib/doc";
 import { safeStorage } from "@/lib/storage";
-import { canEdit, isAdmin } from "@/lib/roles";
+import { canEdit, isAccountant, isAdmin } from "@/lib/roles";
 import { useToast } from "@/hooks/use-toast";
 import { useConfirm } from "@/components/ConfirmDialog";
 import { useNewTimesheet } from "@/components/NewTimesheet";
@@ -109,12 +109,12 @@ export function Dashboard() {
   return (
     <Page>
       <PageHeader
-        title="Timesheets"
+        title={isAccountant(app.user) ? "Published payroll" : "Timesheets"}
         titleTestId="text-page-title"
         subtitle={<span className="inline-flex items-center gap-1.5"><SiteDot color={site.color} />{site.name}{siteTotal.length ? ` · ${siteTotal.length} saved${drafts ? `, ${drafts} draft${drafts === 1 ? "" : "s"}` : ""}` : ""}</span>}
         actions={
           <>
-            <Button variant="ghost" onClick={() => setTrashOpen(true)} data-testid="button-open-trash"><Trash2 />Trash</Button>
+            {!isAccountant(app.user) && <Button variant="ghost" onClick={() => setTrashOpen(true)} data-testid="button-open-trash"><Trash2 />Trash</Button>}
             {editable && <Button onClick={() => newTimesheet()} data-testid="button-new-timesheet"><Plus /> New timesheet</Button>}
           </>
         }
@@ -176,7 +176,7 @@ export function Dashboard() {
                   <p className="text-[22px] font-semibold leading-none tracking-tight tabular">{app.money(t.totalPay)}</p>
                   <p className="mt-1.5 flex items-center gap-1 text-xs text-muted-foreground"><Users className="h-3 w-3" />{t.employeeCount} · edited {timeAgo(t.updatedAt ?? t.createdAt)}</p>
                 </div>
-                <StatusBadge status={t.status} />
+                <StatusBadge status={t.status} publishedAt={t.publishedAt} />
               </div>
             </div>
           ))}
@@ -197,7 +197,7 @@ export function Dashboard() {
                 <span className="pointer-events-none relative hidden text-[13px] text-muted-foreground sm:block" role="cell">{t.periodStart ? `${app.date(t.periodStart)} – ${app.date(t.periodEnd)}` : "—"}</span>
                 <span className="pointer-events-none relative hidden text-right text-[13px] tabular sm:block" role="cell">{t.employeeCount}</span>
                 <span className="pointer-events-none relative text-right text-[14px] font-semibold tabular" role="cell">{app.money(t.totalPay)}</span>
-                <span className="pointer-events-none relative hidden sm:block" role="cell"><StatusBadge status={t.status} /></span>
+                <span className="pointer-events-none relative hidden sm:block" role="cell"><StatusBadge status={t.status} publishedAt={t.publishedAt} /></span>
                 <span className="relative justify-self-end" role="cell">{editable && menu(t)}</span>
               </li>
             ))}
