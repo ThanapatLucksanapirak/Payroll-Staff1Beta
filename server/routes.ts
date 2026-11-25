@@ -4,6 +4,7 @@ import {
   type TimesheetDoc, categorySchema, databaseConfigSchema, employeeConfigSchema, prefsSchema, siteInputSchema, siteRulesSchema, timesheetDocSchema,
 } from "@shared/schema";
 import { computePayroll } from "@shared/engine";
+import { computeTimesheet } from "@shared/payExtras";
 import { docToMeta, rowToDoc, shiftsToCsv } from "@shared/legacy";
 import { parseScheduleItems } from "@shared/importers/schedule";
 import { configIsPersistent, managedSupabase, loadConfig } from "./config";
@@ -24,6 +25,7 @@ import { kioskHostGuard, registerKioskRoutes, registerTimeClockAdminRoutes } fro
 import { registerScheduleRoutes } from "./schedule";
 import { registerTimeclockRoutes } from "./timeclock";
 import { registerKioskFeatureAdminRoutes } from "./kioskFeatures";
+import { registerPayRoutes } from "./pay";
 
 type Handler = (req: Request, res: Response) => Promise<unknown>;
 const h = (fn: Handler) => (req: Request, res: Response, next: NextFunction) => { fn(req, res).catch(next); };
@@ -36,7 +38,7 @@ function ctxFor(sites: Awaited<ReturnType<typeof settings.getSites>>, siteId: st
 
 async function rowFromDoc(doc: TimesheetDoc) {
   const categories = await settings.getCategories();
-  const result = computePayroll({ shifts: doc.shifts, employees: doc.employees, manualEmployees: doc.manualEmployees, categories, rules: doc.rules });
+  const result = computeTimesheet(doc, categories);
   return {
     filename: doc.filename || doc.label || "Timesheet",
     custom_label: doc.label || null,
@@ -146,6 +148,7 @@ export function registerRoutes(app: Express) {
   app.use("/api", requireAuth(PUBLIC));
   app.use("/api", authorize(PUBLIC));
   app.use("/api", auditTrail());
+  registerPayRoutes(app, { rowFromDoc }); // pay extras, lock on finalized timesheets (before the timesheet routes)
 
   // ── Public ──────────────────────────────────────────────────────────────────
   app.get("/api/health", h(async (_req, res) => {

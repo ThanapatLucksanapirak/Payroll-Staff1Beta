@@ -57,7 +57,7 @@ function reducer(s: State, a: Action): State {
 
 export type SaveState = "saved" | "dirty" | "saving" | "error" | "conflict";
 
-export function useTimesheet(id: string, opts: { autosave: boolean }) {
+export function useTimesheet(id: string, opts: { autosave: boolean; /** Edits, undo and redo do nothing (also while the timesheet is final). */ frozen?: boolean }) {
   const [state, dispatch] = useReducer(reducer, { doc: null, past: [], future: [], version: 0, lastKey: null, lastAt: 0 });
   const [loadError, setLoadError] = useState<string | null>(null);
   const [legacy, setLegacy] = useState(false);
@@ -121,6 +121,7 @@ export function useTimesheet(id: string, opts: { autosave: boolean }) {
         queryClient.setQueryData<TimesheetSummary[]>(["/api/timesheets"], (old) => old?.map((t) => (t.id === id ? { ...t, ...r } : t)));
         return true;
       } catch (e) {
+        if (e instanceof ApiError && e.status === 409 && e.body?.locked) { setSaveState("error"); setSaveError(e.message); return false; }
         if (e instanceof ApiError && e.status === 409) { setSaveState("conflict"); setSaveError(e.message); return false; }
         setSaveState("error");
         setSaveError(errorMessage(e));
@@ -173,9 +174,13 @@ export function useTimesheet(id: string, opts: { autosave: boolean }) {
     };
   }, [save, opts.autosave]);
 
-  const edit = useCallback((fn: (d: TimesheetDoc) => TimesheetDoc, key?: string) => dispatch({ type: "edit", fn, key }), []);
-  const undo = useCallback(() => dispatch({ type: "undo" }), []);
-  const redo = useCallback(() => dispatch({ type: "redo" }), []);
+  // A finalized timesheet is locked (the server refuses changes too); reopening reloads it.
+  const isFrozen = !!opts.frozen || state.doc?.status === "final";
+  const frozen = useRef(isFrozen);
+  frozen.current = isFrozen;
+  const edit = useCallback((fn: (d: TimesheetDoc) => TimesheetDoc, key?: string) => { if (!frozen.current) dispatch({ type: "edit", fn, key }); }, []);
+  const undo = useCallback(() => { if (!frozen.current) dispatch({ type: "undo" }); }, []);
+  const redo = useCallback(() => { if (!frozen.current) dispatch({ type: "redo" }); }, []);
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -194,7 +199,7 @@ export function useTimesheet(id: string, opts: { autosave: boolean }) {
   }, [save, undo, redo]);
 
   return {
-    doc: state.doc, edit, undo, redo, canUndo: state.past.length > 0, canRedo: state.future.length > 0,
+    doc: state.doc, edit, undo, redo, canUndo: !isFrozen && state.past.length > 0, canRedo: !isFrozen && state.future.length > 0,
     save, reload: load, loadError, legacy, saveState, saveError, lastSavedAt,
     dirty: state.version !== savedVersion.current,
   };

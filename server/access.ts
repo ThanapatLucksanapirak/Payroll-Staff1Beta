@@ -68,6 +68,16 @@ const POLICY: Rule[] = [
   // Saved wage profiles (used from the timesheet editor)
   { method: "GET", path: /^\/sites\/[^/]+\/wages$/, need: "user", sites: fromParam },
   { method: "PUT", path: /^\/sites\/[^/]+\/wages$/, need: "editor", sites: fromParam },
+  // Pay extras (server/pay.ts): everyone reads; editors record advances and save rates;
+  // location pay settings and advance write-offs stay owner/admin; reopening is owner-only (checked in the route).
+  { method: "GET", path: /^\/timesheets\/[^/]+\/pay\/previous$/, need: "user", sites: fromRow },
+  { method: "POST", path: /^\/timesheets\/[^/]+\/reopen$/, need: "admin", sites: fromRow },
+  { method: "GET", path: /^\/sites\/[^/]+\/pay\/(settings|context|advances|rates|ytd)$/, need: "user", sites: fromParam },
+  { method: "POST", path: /^\/sites\/[^/]+\/pay\/advances$/, need: "editor", sites: fromParam },
+  { method: "PUT", path: /^\/sites\/[^/]+\/pay\/rates$/, need: "editor", sites: fromParam },
+  { method: "PUT", path: /^\/sites\/[^/]+\/pay\/settings$/, need: "admin", sites: fromParam },
+  { method: "PATCH", path: /^\/sites\/[^/]+\/pay\/advances\/[^/]+$/, need: "admin", sites: fromParam },
+  { method: "DELETE", path: /^\/sites\/[^/]+\/pay\/advances\/[^/]+$/, need: "admin", sites: fromParam },
   // Time clock: everyone signed in can watch Live for their locations; editors fix punches
   // and build timesheets from them. Employees and kiosk devices stay owner/admin.
   { method: "POST", path: /^\/live\/ticket$/, need: "user" },

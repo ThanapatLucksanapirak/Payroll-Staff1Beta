@@ -41,6 +41,11 @@ export interface PdfOptions {
   payDate?: string;
   /** Override the "generated" timestamp (tests). */
   generatedAt?: Date;
+  /** Year-to-date gross / net by employee key, printed on pay statements. */
+  ytd?: Record<string, { gross: number; net: number }>;
+  ytdYear?: number;
+  /** Bills and coins for the pay-out sheet (omit to leave the breakdown out). */
+  cash?: { denominations: number[]; roundCash: boolean };
   /** Override pref orientation / size. */
   orientation?: "portrait" | "landscape";
   pageSize?: "letter" | "a4";

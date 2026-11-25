@@ -19,6 +19,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Field } from "@/components/workspace/fields";
 import { cn } from "@/lib/utils";
+import { YtdPanel } from "@/components/pay/YtdPanel";
 
 export interface EmployeeRow { id: string; name: string; role: string; active: boolean; hasPin: boolean; createdAt: string; updatedAt: string }
 
@@ -139,6 +140,8 @@ export function EmployeesPage() {
         </div>
       )}
       <p className="mt-3 px-1 text-xs text-muted-foreground">Names should match how they appear in your timesheets and saved rates, so time-clock hours line up with the right pay.</p>
+
+      <YtdPanel siteId={site.id} siteName={site.name} />
 
       {editing && <EmployeeDialog siteId={site.id} employee={editing === "new" ? null : editing} onClose={() => setEditing(null)} />}
       {importing && <ImportNamesDialog siteId={site.id} onClose={() => setImporting(false)} />}
