@@ -1,14 +1,22 @@
 // Append-only activity log.
 //
-// Entries are stored per month in the app_settings key/value table under
-// "audit:YYYY-MM" (a JSON array, newest last, capped), so the log works on
-// SQLite and Supabase alike. Writes are queued and applied one batch at a time
-// in this process, so entries are never lost to concurrent read-modify-writes.
+// With the local SQLite database, entries are appended (one JSON line each) to
+// DATA_DIR/audit/YYYY-MM.jsonl, so a write never rewrites the month. With
+// Supabase (or AUDIT_STORAGE=settings) they are stored per month in the
+// app_settings key/value table under "audit:YYYY-MM" (a JSON array, newest
+// last, capped). Reads always merge both, so entries written before the switch
+// to files (in "audit:YYYY-MM") still show. Writes are queued and applied one
+// batch at a time in this process, so entries are never lost to concurrent
+// read-modify-writes.
 // Repeated saves of the same item by the same person within a few minutes are
 // folded into one entry (with a count) so autosave doesn't flood the log.
 import { randomUUID } from "node:crypto";
+import fs from "node:fs";
+import path from "node:path";
 import type { NextFunction, Request, Response } from "express";
 import { db } from "./db";
+import type { DataStore } from "./db/types";
+import { DATA_DIR } from "./config";
 import type { UserRecord } from "./users";
 
 export interface AuditEntry {
@@ -83,6 +91,48 @@ function append(list: AuditEntry[], e: AuditEntry) {
   list.push(e);
 }
 
+// ── Append-only files (local SQLite) ─────────────────────────────────────────
+/** Append to files rather than rewriting a settings value (local database only). */
+const useFiles = (store: DataStore) => store.kind === "sqlite" && process.env.AUDIT_STORAGE !== "settings";
+const auditFile = (key: string) => path.join(DATA_DIR, "audit", `${key.slice(AUDIT_PREFIX.length).replace(/[^0-9-]/g, "")}.jsonl`);
+/** How many recent entries per month are kept in memory to fold repeated autosaves. */
+const TAIL = 200;
+const tails = new Map<string, AuditEntry[]>();
+
+async function readFileEntries(key: string): Promise<AuditEntry[]> {
+  let text: string;
+  try { text = await fs.promises.readFile(auditFile(key), "utf8"); } catch { return []; }
+  const out: AuditEntry[] = [];
+  for (const line of text.split("\n")) {
+    if (!line.trim()) continue;
+    try { const e = JSON.parse(line); if (e && typeof e === "object" && e.id && e.at) out.push(e); } catch { /* a torn last line */ }
+  }
+  return out;
+}
+
+/** Settings entries, then appended ones; a later line with the same id (a folded autosave) replaces the earlier one. */
+function mergeMonth(...lists: AuditEntry[][]): AuditEntry[] {
+  const byId = new Map<string, AuditEntry>();
+  for (const list of lists) for (const e of list) { byId.delete(e.id); byId.set(e.id, e); }
+  const all = [...byId.values()];
+  return all.length > MAX_PER_MONTH ? all.slice(all.length - MAX_PER_MONTH) : all;
+}
+
+async function appendToFile(store: DataStore, key: string, entries: AuditEntry[]) {
+  const tk = `${store.label}|${key}`;
+  let tail = tails.get(tk);
+  if (!tail) tail = mergeMonth(parse(await store.getSetting(key)), await readFileEntries(key)).slice(-TAIL);
+  const lines: string[] = [];
+  for (const e of entries) {
+    append(tail, e);
+    lines.push(JSON.stringify(tail[tail.length - 1]));
+  }
+  if (tail.length > TAIL) tail.splice(0, tail.length - TAIL);
+  tails.set(tk, tail);
+  await fs.promises.mkdir(path.dirname(auditFile(key)), { recursive: true });
+  await fs.promises.appendFile(auditFile(key), `${lines.join("\n")}\n`, "utf8");
+}
+
 /** Write everything queued so far. Resolves when it is stored (or dropped after an error). */
 export function flushAudit(): Promise<void> {
   flushing = flushing.then(async () => {
@@ -95,6 +145,10 @@ export function flushAudit(): Promise<void> {
       for (const e of batch) {
         const k = monthKey(e.at);
         byMonth.set(k, [...(byMonth.get(k) ?? []), e]);
+      }
+      if (useFiles(store)) {
+        for (const [k, entries] of byMonth) await appendToFile(store, k, entries);
+        return;
       }
       for (const [k, entries] of byMonth) {
         const list = parse(await store.getSetting(k));
@@ -133,7 +187,8 @@ export async function queryAudit(q: AuditQuery): Promise<{ entries: AuditEntry[]
   const day = (d: string, n: number) => new Date(Date.parse(`${d}T12:00:00Z`) + n * 86_400_000).toISOString().slice(0, 10);
   const keys = monthsBetween(day(from, -1), day(to, 1)); // entries are filed by UTC month
   const raw = await store.getSettings(keys);
-  let all: AuditEntry[] = keys.flatMap((k) => parse(raw[k]));
+  const files = useFiles(store) ? await Promise.all(keys.map(readFileEntries)) : keys.map(() => []);
+  let all: AuditEntry[] = keys.flatMap((k, i) => mergeMonth(parse(raw[k]), files[i]));
   const actions = [...new Set(all.map((e) => e.action))].sort();
   const fromT = Date.parse(`${from}T00:00:00`);
   const toT = Date.parse(`${to}T23:59:59.999`);

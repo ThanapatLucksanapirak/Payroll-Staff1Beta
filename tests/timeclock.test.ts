@@ -552,6 +552,45 @@ describe("server", () => {
     assert.equal((await call("GET", `/api/sites/${siteId}/timeclock/checklist?start=2025-01-01&end=2026-01-01`)).status, 400);
   });
 
+  test("live: a stalled client is disconnected instead of buffering without limit", async () => {
+    const live = await import("../server/live");
+    const http = await import("node:http");
+    const { ticket } = (await call("POST", "/api/live/ticket", {})).body;
+    const before = live.liveClientCount();
+    // Connect and then stop reading, like a laptop that went to sleep.
+    const req = http.get(`${base}/api/live?ticket=${encodeURIComponent(ticket)}`);
+    const res = await new Promise<import("node:http").IncomingMessage>((r) => req.on("response", r));
+    res.pause();
+    for (let i = 0; i < 50 && live.liveClientCount() === before; i++) await new Promise((r) => setTimeout(r, 10));
+    assert.equal(live.liveClientCount(), before + 1);
+    const big = "x".repeat(64 * 1024);
+    for (let i = 0; i < 2000 && live.liveClientCount() > before; i++) {
+      live.broadcast({ type: "test", blob: big });
+      await new Promise((r) => setImmediate(r));
+    }
+    assert.equal(live.liveClientCount(), before, "the stalled client was dropped");
+    req.destroy();
+  });
+
+  test("audit entries are appended to a monthly file, and still read back", async () => {
+    const { flushAudit, queryAudit } = await import("../server/audit");
+    await flushAudit();
+    const month = new Date().toISOString().slice(0, 7);
+    const file = path.join(dir, "audit", `${month}.jsonl`);
+    const before = fs.readFileSync(file, "utf8").split("\n").filter(Boolean).length;
+    assert.ok(before > 0);
+    await call("POST", `/api/sites/${siteId}/timeclock/approvals`, { approve: false, days: [{ employeeId: ana, date: new Date().toISOString().slice(0, 10) }] });
+    await flushAudit();
+    const lines = fs.readFileSync(file, "utf8").split("\n").filter(Boolean);
+    assert.equal(lines.length, before + 1, "one line appended, nothing rewritten");
+    assert.equal(JSON.parse(lines[lines.length - 1]).action, "timeclock.unapprove");
+    const q = await queryAudit({ action: "timeclock" });
+    assert.ok(q.entries.some((e) => e.action === "timeclock.unapprove"));
+    assert.ok(q.entries.some((e) => e.action === "timeclock.auto_close" && e.userName === "System"));
+    const { db } = await import("../server/db");
+    assert.equal(await (await db()).getSetting(`audit:${month}`), null, "the settings value is no longer rewritten");
+  });
+
   test("auto clock-out settings and approvals are in the backup; flags survive restore", async () => {
     const b = await call("GET", "/api/backup");
     const keys = b.body.settings.map((s: any) => s.key);
