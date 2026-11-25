@@ -21,6 +21,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Field } from "@/components/workspace/fields";
 import { ScheduleAlerts } from "@/components/schedule/ScheduleAlerts";
+import { LiveTimeclockPanel } from "@/components/timeclock/LiveTimeclockPanel";
 import { cn } from "@/lib/utils";
 
 interface EmployeeNow {
@@ -154,6 +155,8 @@ export function LivePage() {
             )}
           </section>
 
+          <LiveTimeclockPanel site={site} />
+
           <section>
             <SectionLabel action={<span className="text-xs text-muted-foreground">{data.punches.length} punch{data.punches.length === 1 ? "" : "es"}</span>}>Today's punches</SectionLabel>
             <div className="overflow-hidden rounded-xl border border-card-border bg-card shadow-card">
@@ -170,6 +173,7 @@ export function LivePage() {
                         {p.source === "kiosk" ? <><Tablet className="h-3.5 w-3.5" />Kiosk</> : <><UserRound className="h-3.5 w-3.5" />Admin</>}
                       </span>
                       {(p.editedAt || p.source === "admin") && p.note && <span className="hidden max-w-[14rem] truncate text-xs text-muted-foreground lg:block" title={p.note}>“{p.note}”</span>}
+                      {p.flags?.autoClosed && !p.editedAt && <Badge variant="warning" className="shrink-0">Auto-closed</Badge>}
                       {p.editedAt && <Badge variant="secondary" className="shrink-0">Edited</Badge>}
                       {editable && <Button variant="ghost" size="sm" className="text-muted-foreground" onClick={() => setFix(p)} data-testid={`button-fix-${p.id}`}><Pencil /> <span className="hidden sm:inline">Fix</span></Button>}
                     </li>

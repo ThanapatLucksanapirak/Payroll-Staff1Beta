@@ -38,6 +38,15 @@ export interface PunchEdit {
   before: { type: PunchType; at: string } | null;
 }
 
+/**
+ * Extra markers kept in the punch's meta (optional; older punches have none).
+ * autoClosed: the server added this clock-out (or break end) because the shift
+ * was left open past the location's auto clock-out time.
+ */
+export interface PunchFlags {
+  autoClosed?: { reason: "cutoff" | "max_shift"; closedAt: string };
+}
+
 export interface Punch {
   id: string;
   siteId: string;
@@ -52,6 +61,7 @@ export interface Punch {
   createdAt: string;
   editedAt: string | null;
   edits: PunchEdit[];
+  flags?: PunchFlags;
 }
 
 /** Validates a punch read from a backup file. */
@@ -68,6 +78,9 @@ export const punchSchema = z.object({
   createdAt: z.string().default(() => new Date().toISOString()),
   editedAt: z.string().nullable().default(null),
   edits: z.array(z.any()).default([]),
+  flags: z.object({
+    autoClosed: z.object({ reason: z.enum(["cutoff", "max_shift"]).catch("cutoff"), closedAt: z.string() }).optional(),
+  }).optional().catch(undefined),
 });
 
 export function statusAfter(type: PunchType): ClockStatus {

@@ -43,6 +43,7 @@ async function connect() {
     source.addEventListener("hello", () => { attempt = 0; setConnected(true); listeners.forEach((l) => l({ type: "hello" })); });
     source.addEventListener("punch", dispatch as EventListener);
     source.addEventListener("schedule", dispatch as EventListener);
+    source.addEventListener("timeclock", dispatch as EventListener); // approvals, auto clock-out
     source.onerror = () => {
       // The ticket is single-connection in spirit and expires quickly: always start over.
       source.close();
