@@ -10,7 +10,8 @@ import { configIsPersistent, managedSupabase, loadConfig } from "./config";
 import { db, dbStatus, retryInit, switchDatabase, testDatabase } from "./db";
 import { SETUP_SQL, type TimesheetRow } from "./db/types";
 import * as settings from "./settings";
-import { checkPassword, currentPasswordHash, issueToken, loginThrottle, recordLogin, requireAuth, resetTagCache, setPassword, verifyToken } from "./auth";
+import { checkPassword, clearSetupCode, currentPasswordHash, issueToken, loginThrottle, recordLogin, requireAuth, resetTagCache, setPassword, setupCodeMatches, verifyToken } from "./auth";
+import { backupPath, listBackups, readBackup, runBackup } from "./backup";
 import { listLocations, pullTimecards } from "./square";
 import { extractPdfText } from "./pdf";
 
@@ -42,19 +43,83 @@ async function rowFromDoc(doc: TimesheetDoc) {
   };
 }
 
+export const TRASH_DAYS = 30;
+
+/** Move a timesheet to the Trash (kept for TRASH_DAYS, then removed). */
+async function moveToTrash(id: string): Promise<boolean> {
+  const store = await db();
+  const cur = await store.getTimesheet(id);
+  if (!cur) return false;
+  if (cur.meta_json?.deletedAt) return true;
+  const doc = rowToDoc(cur, ctxFor(await settings.getSites(), cur.site_id));
+  await store.updateTimesheet(id, { site_id: doc.siteId, meta_json: { ...docToMeta(doc), deletedAt: new Date().toISOString() } });
+  return true;
+}
+
+/** Retention never deletes outright: the oldest drafts go to the Trash. */
 async function applyRetention(siteId: string, keepId: string) {
   const prefs = await settings.getPrefs();
   if (!prefs.retentionPerSite) return 0;
   const store = await db();
   const def = await settings.defaultSiteId();
-  const list = (await store.listTimesheets()).filter((t) => (t.siteId ?? def) === siteId && t.status !== "final");
+  const list = (await store.listTimesheets()).filter((t) => !t.deletedAt && (t.siteId ?? def) === siteId && t.status !== "final");
   const extra = list.slice(prefs.retentionPerSite).filter((t) => t.id !== keepId);
-  for (const t of extra) await store.deleteTimesheet(t.id);
+  for (const t of extra) await moveToTrash(t.id);
   return extra.length;
+}
+
+/** Permanently remove timesheets that have been in the Trash longer than TRASH_DAYS. */
+export async function purgeTrash(now = Date.now()): Promise<number> {
+  const store = await db();
+  const cutoff = now - TRASH_DAYS * 86_400_000;
+  const old = (await store.listTimesheets()).filter((t) => t.deletedAt && Date.parse(t.deletedAt) < cutoff);
+  for (const t of old) await store.deleteTimesheet(t.id);
+  if (old.length) console.log(`[trash] permanently removed ${old.length} timesheet(s) older than ${TRASH_DAYS} days`);
+  return old.length;
+}
+
+const restoreSchema = z.object({
+  app: z.literal("payroll-admin"),
+  settings: z.array(z.object({ key: z.string().min(1).max(200), value: z.string() })).default([]),
+  timesheets: z.array(z.object({
+    id: z.string().min(1).max(64).optional(),
+    filename: z.string().max(500).default(""),
+    custom_label: z.string().max(500).nullable().default(null),
+    period_start: z.string().max(40).nullable().default(null),
+    period_end: z.string().max(40).nullable().default(null),
+    employee_count: z.coerce.number().default(0),
+    total_pay: z.coerce.number().default(0),
+    result_json: z.any().default(null),
+    wages_json: z.any().default(null),
+    manual_employees_json: z.any().default(null),
+    csv_data: z.string().nullable().default(null),
+    site_id: z.string().max(100).nullable().default(null),
+    meta_json: z.any().default(null),
+    created_at: z.string().optional(),
+  }).passthrough()).default([]),
+});
+
+/** Restore an export. The current admin password is always kept. */
+async function restoreFrom(raw: unknown) {
+  const body = restoreSchema.parse(raw);
+  await runBackup("pre-restore").catch((err) => {
+    throw Object.assign(new Error(`Restore cancelled: could not back up the current data first (${err.message}).`), { status: 500 });
+  });
+  const store = await db();
+  const keep = new Set(["password_hash"]);
+  const result = await store.importAll({
+    settings: body.settings.filter((x) => !keep.has(x.key)),
+    timesheets: body.timesheets.map(({ updated_at: _u, ...rest }: any) => rest),
+  });
+  settings.invalidateSettingsCache();
+  resetTagCache();
+  return result;
 }
 
 export function registerRoutes(app: Express) {
   const PUBLIC = new Set(["/health", "/auth/status", "/auth/login", "/auth/setup"]);
+  // Never cache API responses (payroll data) in browsers or at the Cloudflare edge.
+  app.use("/api", (_req, res, next) => { res.setHeader("Cache-Control", "no-store"); next(); });
   app.use("/api", requireAuth(PUBLIC));
 
   // ── Public ──────────────────────────────────────────────────────────────────
@@ -85,16 +150,27 @@ export function registerRoutes(app: Express) {
   }));
 
   app.post("/api/auth/setup", h(async (req, res) => {
+    const ip = req.ip ?? "unknown";
+    const blocked = loginThrottle(ip);
+    if (blocked) return res.status(429).json({ error: blocked });
     if (await currentPasswordHash()) return res.status(409).json({ error: "An administrator password is already set." });
-    const { password } = z.object({ password: z.string().min(6, "Use at least 6 characters.").max(200) }).parse(req.body);
+    const { password, setupCode } = z.object({
+      password: z.string().min(8, "Use at least 8 characters.").max(200),
+      setupCode: z.string().max(100).default(""),
+    }).parse(req.body);
+    if (!setupCodeMatches(setupCode)) {
+      recordLogin(ip, false);
+      return res.status(403).json({ error: "That setup code is not right. It was printed by the installer, and is saved on the server in the data folder as setup-code.txt." });
+    }
     await setPassword(password);
+    clearSetupCode();
     resetTagCache();
     res.json(await issueToken(30));
   }));
 
   // ── Session & bootstrap ─────────────────────────────────────────────────────
   app.post("/api/auth/change-password", h(async (req, res) => {
-    const { current, next } = z.object({ current: z.string().min(1), next: z.string().min(6, "Use at least 6 characters.").max(200) }).parse(req.body);
+    const { current, next } = z.object({ current: z.string().min(1), next: z.string().min(8, "Use at least 8 characters.").max(200) }).parse(req.body);
     if (!(await checkPassword(current))) return res.status(400).json({ error: "Current password is incorrect." });
     await setPassword(next);
     resetTagCache();
@@ -192,10 +268,14 @@ export function registerRoutes(app: Express) {
   // Older (v1) rows stored M/D/YY periods that sort wrongly and totals from the old
   // engine. Derive correct values in memory (never written back until the user saves).
   const legacyCache = new Map<string, { periodStart: string | null; periodEnd: string | null; totalPay: number; employeeCount: number }>();
-  app.get("/api/timesheets", h(async (_req, res) => {
+  app.get("/api/timesheets", h(async (req, res) => {
     const store = await db();
     const def = await settings.defaultSiteId();
-    const list = await store.listTimesheets();
+    const trash = req.query.trash === "1";
+    const list = (await store.listTimesheets()).filter((t) => (trash ? !!t.deletedAt : !t.deletedAt));
+    // Keep the cache to rows that still exist in their current version.
+    const live = new Set(list.map((t) => `${t.id}|${t.updatedAt}`));
+    for (const k of legacyCache.keys()) if (!live.has(k) && !trash) legacyCache.delete(k);
     const isIso = (v: string | null) => !v || /^\d{4}-\d{2}-\d{2}$/.test(v);
     const legacy = list.filter((t) => !isIso(t.periodStart) || !isIso(t.periodEnd));
     if (legacy.length) {
@@ -221,7 +301,7 @@ export function registerRoutes(app: Express) {
     if (!row) return res.status(404).json({ error: "This timesheet no longer exists." });
     const sites = await settings.getSites();
     const doc = rowToDoc(row, ctxFor(sites, row.site_id));
-    res.json({ id: row.id, doc, createdAt: row.created_at, updatedAt: row.updated_at, legacy: !(row.meta_json?.version >= 2) });
+    res.json({ id: row.id, doc, createdAt: row.created_at, updatedAt: row.updated_at, deletedAt: row.meta_json?.deletedAt ?? null, legacy: !(row.meta_json?.version >= 2) });
   }));
 
   app.post("/api/timesheets", h(async (req, res) => {
@@ -238,6 +318,7 @@ export function registerRoutes(app: Express) {
     const id = String(req.params.id);
     const cur = await store.getTimesheet(id);
     if (!cur) return res.status(404).json({ error: "This timesheet was deleted." });
+    if (cur.meta_json?.deletedAt) return res.status(410).json({ error: "This timesheet is in the Trash. Restore it to make changes." });
     if (!body.force && body.baseUpdatedAt && cur.updated_at && Date.parse(cur.updated_at) !== Date.parse(body.baseUpdatedAt)) {
       return res.status(409).json({ error: "This timesheet was changed somewhere else (another tab or device).", updatedAt: cur.updated_at });
     }
@@ -251,6 +332,7 @@ export function registerRoutes(app: Express) {
     const id = String(req.params.id);
     const cur = await store.getTimesheet(id);
     if (!cur) return res.status(404).json({ error: "This timesheet no longer exists." });
+    if (cur.meta_json?.deletedAt) return res.status(410).json({ error: "This timesheet is in the Trash. Restore it to make changes." });
     const update: Partial<TimesheetRow> = {};
     if (patch.label !== undefined) update.custom_label = patch.label.trim() || null;
     if (patch.siteId !== undefined || patch.status !== undefined) {
@@ -274,10 +356,34 @@ export function registerRoutes(app: Express) {
     res.json(await store.insertTimesheet(await rowFromDoc(doc)));
   }));
 
+  // Delete moves to the Trash. `?permanent=1` removes a timesheet that is already in the Trash.
   app.delete("/api/timesheets/:id", h(async (req, res) => {
     const store = await db();
-    const ok = await store.deleteTimesheet(String(req.params.id));
-    res.json({ ok });
+    const id = String(req.params.id);
+    if (req.query.permanent === "1") {
+      const cur = await store.getTimesheet(id);
+      if (!cur) return res.json({ ok: false });
+      if (!cur.meta_json?.deletedAt) return res.status(409).json({ error: "Move the timesheet to the Trash first." });
+      return res.json({ ok: await store.deleteTimesheet(id) });
+    }
+    res.json({ ok: await moveToTrash(id), trashed: true, trashDays: TRASH_DAYS });
+  }));
+
+  app.post("/api/timesheets/:id/restore", h(async (req, res) => {
+    const store = await db();
+    const id = String(req.params.id);
+    const cur = await store.getTimesheet(id);
+    if (!cur) return res.status(404).json({ error: "This timesheet no longer exists." });
+    if (!cur.meta_json?.deletedAt) return res.json(await store.updateTimesheet(id, {}));
+    const { deletedAt: _d, ...meta } = cur.meta_json;
+    res.json(await store.updateTimesheet(id, { meta_json: meta }));
+  }));
+
+  app.delete("/api/trash", h(async (_req, res) => {
+    const store = await db();
+    const trashed = (await store.listTimesheets()).filter((t) => t.deletedAt);
+    for (const t of trashed) await store.deleteTimesheet(t.id);
+    res.json({ removed: trashed.length });
   }));
 
   // ── Database ────────────────────────────────────────────────────────────────
@@ -326,23 +432,24 @@ export function registerRoutes(app: Express) {
       timesheets: await store.allTimesheets(),
     });
   }));
-  app.post("/api/backup/restore", express.json({ limit: "60mb" }), h(async (req, res) => {
-    const body = z.object({
-      app: z.literal("payroll-admin"),
-      settings: z.array(z.object({ key: z.string(), value: z.string() })).default([]),
-      timesheets: z.array(z.record(z.string(), z.any())).default([]),
-    }).parse(req.body);
-    const store = await db();
-    for (const s of body.settings) await store.setSetting(s.key, s.value);
-    let n = 0;
-    for (const t of body.timesheets) {
-      const { updated_at: _u, ...rest } = t as any;
-      await store.insertTimesheet(rest);
-      n++;
-    }
-    settings.invalidateSettingsCache();
-    resetTagCache();
-    res.json({ settings: body.settings.length, timesheets: n });
+  app.post("/api/backup/restore", express.json({ limit: "100mb" }), h(async (req, res) => {
+    res.json(await restoreFrom(req.body));
+  }));
+
+  // ── Automatic backups on the server ─────────────────────────────────────────
+  app.get("/api/backups", h(async (_req, res) => {
+    res.json(listBackups());
+  }));
+  app.post("/api/backups", h(async (_req, res) => {
+    res.json(await runBackup("manual"));
+  }));
+  app.get("/api/backups/:name", h(async (req, res) => {
+    const p = backupPath(String(req.params.name));
+    if (!p) return res.status(404).json({ error: "Backup not found." });
+    res.download(p);
+  }));
+  app.post("/api/backups/:name/restore", h(async (req, res) => {
+    res.json(await restoreFrom(readBackup(String(req.params.name))));
   }));
 
   // ── Errors ──────────────────────────────────────────────────────────────────

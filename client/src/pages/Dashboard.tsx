@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { useLocation } from "wouter";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { CalendarRange, CheckCircle2, Copy, FileSpreadsheet, FileText, Loader2, MoreHorizontal, MoveRight, Pencil, Plus, Search, Trash2, Users } from "lucide-react";
+import { CalendarRange, CheckCircle2, Copy, FileSpreadsheet, FileText, Loader2, MoreHorizontal, MoveRight, Pencil, Plus, RotateCcw, Search, Trash2, Users } from "lucide-react";
 import type { EmployeeConfig, TimesheetSummary } from "@shared/schema";
 import { useApp } from "@/context/AppData";
 import { api, errorMessage, queryClient } from "@/lib/api";
@@ -15,7 +15,8 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuSub, DropdownMenuSubContent, DropdownMenuSubTrigger, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { ToastAction } from "@/components/ui/toast";
 
 type Sort = "updated" | "period" | "pay";
 
@@ -30,6 +31,7 @@ export function Dashboard() {
   const [status, setStatus] = useState<"all" | "draft" | "final">("all");
   const [sort, setSort] = useState<Sort>("updated");
   const [renaming, setRenaming] = useState<TimesheetSummary | null>(null);
+  const [trashOpen, setTrashOpen] = useState(false);
 
   const list = useQuery<TimesheetSummary[]>({ queryKey: ["/api/timesheets"] });
   const site = app.site;
@@ -55,9 +57,21 @@ export function Dashboard() {
     onSuccess: invalidate,
     onError: (e) => toast({ title: "Couldn't update", description: errorMessage(e), variant: "destructive" }),
   });
+  const restore = useMutation({
+    mutationFn: (id: string) => api("POST", `/api/timesheets/${id}/restore`),
+    onSuccess: () => { invalidate(); toast({ title: "Timesheet restored" }); },
+    onError: (e) => toast({ title: "Couldn't restore", description: errorMessage(e), variant: "destructive" }),
+  });
   const remove = useMutation({
     mutationFn: (id: string) => api("DELETE", `/api/timesheets/${id}`),
-    onSuccess: () => { invalidate(); toast({ title: "Timesheet deleted" }); },
+    onSuccess: (_r, id) => {
+      invalidate();
+      toast({
+        title: "Moved to Trash",
+        description: "It stays in the Trash for 30 days.",
+        action: <ToastAction altText="Undo" onClick={() => restore.mutate(id)}>Undo</ToastAction>,
+      });
+    },
     onError: (e) => toast({ title: "Couldn't delete", description: errorMessage(e), variant: "destructive" }),
   });
   const duplicate = useMutation({
@@ -115,6 +129,7 @@ export function Dashboard() {
           <SelectTrigger className="w-[10.5rem]" data-testid="select-sort"><SelectValue /></SelectTrigger>
           <SelectContent><SelectItem value="updated">Recently edited</SelectItem><SelectItem value="period">Pay period</SelectItem><SelectItem value="pay">Total pay</SelectItem></SelectContent>
         </Select>
+        <Button variant="ghost" size="sm" onClick={() => setTrashOpen(true)} data-testid="button-open-trash"><Trash2 className="h-4 w-4" />Trash</Button>
       </div>
 
       {list.isLoading ? (
@@ -163,10 +178,7 @@ export function Dashboard() {
                       <DropdownMenuSeparator />
                       <DropdownMenuItem
                         className="text-destructive focus:text-destructive"
-                        onClick={async () => {
-                          const ok = await confirm({ title: "Delete this timesheet?", description: `"${t.customLabel || t.filename}" will be permanently removed.`, confirmLabel: "Delete", destructive: true });
-                          if (ok) remove.mutate(t.id);
-                        }}
+                        onClick={() => remove.mutate(t.id)}
                         data-testid={`button-delete-${t.id}`}
                       ><Trash2 className="h-4 w-4 mr-2" />Delete</DropdownMenuItem>
                     </DropdownMenuContent>
@@ -186,6 +198,7 @@ export function Dashboard() {
       )}
 
       <ImportDialog open={importOpen} onOpenChange={setImportOpen} site={site} mode="create" initialSource={importSource} onComplete={create} />
+      <TrashDialog open={trashOpen} onOpenChange={setTrashOpen} onRestore={(id) => restore.mutate(id)} confirm={confirm} />
       <RenameDialog item={renaming} onClose={() => setRenaming(null)} onSave={(label) => renaming ? patch.mutateAsync({ id: renaming.id, body: { label } }) : undefined} />
     </div>
   );
@@ -219,6 +232,57 @@ function RenameDialog({ item, onClose, onSave }: { item: TimesheetSummary | null
           <Input value={value} onChange={(e) => setValue(e.target.value)} autoFocus maxLength={120} data-testid="input-rename" />
           <DialogFooter><Button type="button" variant="outline" onClick={onClose}>Cancel</Button><Button type="submit" disabled={busy} data-testid="button-rename-save">{busy && <Loader2 className="animate-spin" />}Save</Button></DialogFooter>
         </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function TrashDialog({ open, onOpenChange, onRestore, confirm }: {
+  open: boolean; onOpenChange: (o: boolean) => void; onRestore: (id: string) => void; confirm: ReturnType<typeof useConfirm>;
+}) {
+  const app = useApp();
+  const { toast } = useToast();
+  const trash = useQuery<TimesheetSummary[]>({ queryKey: ["/api/timesheets?trash=1"], queryFn: () => api("GET", "/api/timesheets?trash=1"), enabled: open });
+  const refresh = () => { void trash.refetch(); void queryClient.invalidateQueries({ queryKey: ["/api/timesheets"] }); };
+  const removeForever = async (t: TimesheetSummary) => {
+    const ok = await confirm({ title: "Delete forever?", description: `"${t.customLabel || t.filename}" will be permanently removed. This can't be undone.`, confirmLabel: "Delete forever", destructive: true });
+    if (!ok) return;
+    try { await api("DELETE", `/api/timesheets/${t.id}?permanent=1`); refresh(); } catch (e) { toast({ title: "Couldn't delete", description: errorMessage(e), variant: "destructive" }); }
+  };
+  const empty = async () => {
+    const ok = await confirm({ title: "Empty the Trash?", description: "Every timesheet in the Trash will be permanently removed. This can't be undone.", confirmLabel: "Empty Trash", destructive: true });
+    if (!ok) return;
+    try { await api("DELETE", "/api/trash"); refresh(); } catch (e) { toast({ title: "Couldn't empty the Trash", description: errorMessage(e), variant: "destructive" }); }
+  };
+  const items = trash.data ?? [];
+  const daysLeft = (d?: string | null) => (d ? Math.max(0, 30 - Math.floor((Date.now() - Date.parse(d)) / 86_400_000)) : 30);
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle>Trash</DialogTitle>
+          <DialogDescription>Deleted timesheets stay here for 30 days, then they are removed for good.</DialogDescription>
+        </DialogHeader>
+        {trash.isLoading ? <Skeleton className="h-24" /> : items.length === 0 ? (
+          <p className="py-8 text-center text-sm text-muted-foreground">The Trash is empty.</p>
+        ) : (
+          <ul className="max-h-[50vh] overflow-y-auto divide-y rounded-lg border" data-testid="list-trash">
+            {items.map((t) => (
+              <li key={t.id} className="flex items-center gap-3 px-3 py-2.5">
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-medium">{t.customLabel || t.filename || "Untitled"}</p>
+                  <p className="text-xs text-muted-foreground">{app.sites.find((x) => x.id === t.siteId)?.name ?? ""}{t.periodStart ? ` · ${app.date(t.periodStart)} – ${app.date(t.periodEnd)}` : ""} · {daysLeft(t.deletedAt)} days left</p>
+                </div>
+                <Button size="sm" variant="outline" onClick={() => { onRestore(t.id); setTimeout(refresh, 300); }} data-testid={`button-restore-${t.id}`}><RotateCcw className="h-3.5 w-3.5" />Restore</Button>
+                <Button size="icon" variant="ghost" className="h-8 w-8" aria-label="Delete forever" onClick={() => removeForever(t)}><Trash2 className="h-4 w-4" /></Button>
+              </li>
+            ))}
+          </ul>
+        )}
+        <DialogFooter>
+          {items.length > 0 && <Button variant="ghost" className="text-destructive mr-auto" onClick={empty}>Empty Trash</Button>}
+          <Button variant="outline" onClick={() => onOpenChange(false)}>Done</Button>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );

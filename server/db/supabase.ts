@@ -1,10 +1,15 @@
 // Minimal PostgREST client for Supabase. Avoids the realtime/websocket stack
 // of supabase-js and degrades gracefully when the v2 columns are missing.
 import type { DatabaseHealth } from "@shared/schema";
+import { randomUUID } from "node:crypto";
 import { fetchWithTimeout } from "../http";
 import { type DataStore, type TimesheetRow, type TimesheetWrite, StoreError, toSummary } from "./types";
 
 const EXT_COLS = ["site_id", "meta_json"] as const;
+const ROW_COLS = [
+  "id", "filename", "custom_label", "period_start", "period_end", "employee_count", "total_pay", "result_json", "wages_json",
+  "manual_employees_json", "csv_data", "site_id", "meta_json", "created_at", "updated_at",
+];
 const SUMMARY_COLS = "id,filename,custom_label,period_start,period_end,employee_count,total_pay,created_at,updated_at";
 
 export class SupabaseStore implements DataStore {
@@ -89,8 +94,8 @@ export class SupabaseStore implements DataStore {
 
   async listTimesheets() {
     const cols = this.extended
-      ? `${SUMMARY_COLS},site_id,status:meta_json->>status`
-      : `${SUMMARY_COLS},site_id:result_json->__meta->>siteId,status:result_json->__meta->>status`;
+      ? `${SUMMARY_COLS},site_id,status:meta_json->>status,deleted_at:meta_json->>deletedAt`
+      : `${SUMMARY_COLS},site_id:result_json->__meta->>siteId,status:result_json->__meta->>status,deleted_at:result_json->__meta->>deletedAt`;
     const rows = await this.req("GET", `/recent_uploads?select=${cols}&order=updated_at.desc.nullslast,created_at.desc&limit=5000`);
     return (rows ?? []).map(toSummary);
   }
@@ -102,7 +107,8 @@ export class SupabaseStore implements DataStore {
     return { site_id: null, meta_json: null, ...r };
   }
   private encode(row: Partial<TimesheetWrite>) {
-    const out: any = { ...row };
+    const out: any = {};
+    for (const [k, v] of Object.entries(row)) if (ROW_COLS.includes(k)) out[k] = v;
     if (!this.extended) {
       const meta = out.meta_json ? { ...out.meta_json, siteId: out.site_id ?? out.meta_json.siteId } : undefined;
       for (const c of EXT_COLS) delete out[c];
@@ -137,7 +143,7 @@ export class SupabaseStore implements DataStore {
     if (!data.id) delete data.id;
     const prefer = data.id ? "return=representation,resolution=merge-duplicates" : "return=representation";
     const rows = await this.write("POST", `/recent_uploads?select=${SUMMARY_COLS}`, data, prefer);
-    return toSummary({ ...rows[0], site_id: row.site_id, status: row.meta_json?.status });
+    return toSummary({ ...rows[0], site_id: row.site_id, status: row.meta_json?.status, deleted_at: row.meta_json?.deletedAt });
   }
   async updateTimesheet(id: string, row: Partial<TimesheetWrite>) {
     if (!/^[0-9a-f-]{36}$/i.test(id)) return null;
@@ -151,12 +157,35 @@ export class SupabaseStore implements DataStore {
     const rows = await this.write("PATCH", `/recent_uploads?id=eq.${id}&select=${SUMMARY_COLS}`, data, "return=representation");
     if (!rows?.[0]) return null;
     const full = await this.getTimesheet(id);
-    return toSummary({ ...rows[0], site_id: full?.site_id ?? null, status: full?.meta_json?.status });
+    return toSummary({ ...rows[0], site_id: full?.site_id ?? null, status: full?.meta_json?.status, deleted_at: full?.meta_json?.deletedAt });
   }
   async deleteTimesheet(id: string) {
     if (!/^[0-9a-f-]{36}$/i.test(id)) return false;
     const rows = await this.req("DELETE", `/recent_uploads?id=eq.${id}&select=id`, undefined, { Prefer: "return=representation" });
     return (rows ?? []).length > 0;
+  }
+
+  /**
+   * PostgREST runs each request in one transaction, so every table is written
+   * with a single request: a bad row fails the whole batch. Timesheets go
+   * first so a failure never leaves settings pointing at missing data.
+   */
+  async importAll(data: { settings: { key: string; value: string }[]; timesheets: TimesheetWrite[] }) {
+    const now = new Date().toISOString();
+    if (data.timesheets.length) {
+      const rows = data.timesheets.map((t) => {
+        const r = this.encode({ ...t, updated_at: now } as any);
+        if (!r.id) r.id = randomUUID();
+        return r;
+      });
+      await this.write("POST", `/recent_uploads?on_conflict=id`, rows, "resolution=merge-duplicates,return=minimal");
+    }
+    if (data.settings.length) {
+      await this.req("POST", `/app_settings?on_conflict=key`, data.settings.map((s) => ({ key: s.key, value: s.value, updated_at: now })), {
+        Prefer: "resolution=merge-duplicates,return=minimal",
+      });
+    }
+    return { settings: data.settings.length, timesheets: data.timesheets.length };
   }
 
   async health(): Promise<DatabaseHealth> {

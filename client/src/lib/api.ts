@@ -1,12 +1,8 @@
 import { QueryClient } from "@tanstack/react-query";
 import { safeStorage } from "./storage";
 
-const RAW_BASE: string = (window as any).__API_BASE__ ?? "";
-const LOCAL = new Set(["localhost", "127.0.0.1", "[::1]"]);
-if (RAW_BASE.startsWith("__PORT_") && !LOCAL.has(location.hostname) && location.protocol !== "http:") {
-  console.error("Backend proxy placeholder was not rewritten");
-}
-const API_BASE = RAW_BASE.startsWith("__PORT_") ? "" : RAW_BASE;
+// The API is always served from the same origin as the app.
+const API_BASE = "";
 const TOKEN_KEY = "payroll.session";
 
 let token: string | null = safeStorage.get(TOKEN_KEY);

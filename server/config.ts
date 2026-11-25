@@ -13,6 +13,7 @@ export interface LocalConfig {
   database?: DatabaseConfig;
   authSecret?: string;
   passwordHashCache?: string;
+  setupCode?: string;
 }
 
 let cache: LocalConfig | null = null;

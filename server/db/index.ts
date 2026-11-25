@@ -55,6 +55,13 @@ export async function db(): Promise<DataStore> {
   return active;
 }
 
+/** Close the active store (used on shutdown). */
+export function closeDatabase() {
+  try { active?.close(); } catch { /* ignore */ }
+  active = null;
+  initPromise = null;
+}
+
 export function dbStatus() {
   return { config: activeConfig, connected: !!active, error: initError, label: active?.label ?? null, kind: active?.kind ?? activeConfig?.kind ?? null };
 }
@@ -85,13 +92,14 @@ export async function switchDatabase(cfg: DatabaseConfig, opts: { copyData: bool
   if (prev) {
     const settings = await prev.allSettings();
     if (opts.copyData) {
-      for (const s of settings) await next.setSetting(s.key, s.value);
       const rows = await prev.allTimesheets();
-      for (const r of rows) {
-        const { id, created_at, updated_at: _u, ...rest } = r;
-        await next.insertTimesheet({ ...rest, id, created_at });
+      const timesheets = rows.map(({ updated_at: _u, ...rest }) => rest);
+      try {
+        copied = await next.importAll({ settings, timesheets });
+      } catch (err: any) {
+        next.close();
+        throw new StoreError(`Nothing was switched: copying data failed (${err.message}).`, 400);
       }
-      copied = { settings: settings.length, timesheets: rows.length };
     } else {
       // Always carry the admin password so the user is not locked out
       const pw = settings.find((s) => s.key === "password_hash");

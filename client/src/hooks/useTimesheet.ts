@@ -1,6 +1,10 @@
 import { useCallback, useEffect, useReducer, useRef, useState } from "react";
 import type { TimesheetDoc, TimesheetSummary } from "@shared/schema";
 import { api, ApiError, errorMessage, queryClient } from "@/lib/api";
+import { toast } from "@/hooks/use-toast";
+import { safeStorage } from "@/lib/storage";
+
+const unsavedKey = (id: string) => `payroll.unsaved.${id}`;
 
 interface State {
   doc: TimesheetDoc | null;
@@ -65,6 +69,7 @@ export function useTimesheet(id: string, opts: { autosave: boolean }) {
   const inflight = useRef<Promise<boolean> | null>(null);
   const retryTimer = useRef<number | null>(null);
   const retryDelay = useRef(3000);
+  const mounted = useRef(true);
   const stateRef = useRef(state);
   stateRef.current = state;
 
@@ -78,6 +83,18 @@ export function useTimesheet(id: string, opts: { autosave: boolean }) {
       setLastSavedAt(r.updatedAt);
       setSaveState("saved");
       dispatch({ type: "load", doc: r.doc });
+      // Offer back edits that could not be saved when the timesheet was last closed.
+      const raw = safeStorage.get(unsavedKey(id));
+      if (raw) {
+        safeStorage.remove(unsavedKey(id));
+        try {
+          const kept = JSON.parse(raw) as { at: number; doc: TimesheetDoc };
+          if (kept?.doc && Date.now() - kept.at < 7 * 86_400_000) {
+            dispatch({ type: "edit", fn: () => kept.doc });
+            toast({ title: "Restored unsaved changes", description: "Edits that couldn't be saved last time are back. Use Undo to discard them." });
+          }
+        } catch { /* ignore a damaged copy */ }
+      }
     } catch (e) {
       setLoadError(errorMessage(e));
     }
@@ -107,7 +124,9 @@ export function useTimesheet(id: string, opts: { autosave: boolean }) {
         if (e instanceof ApiError && e.status === 409) { setSaveState("conflict"); setSaveError(e.message); return false; }
         setSaveState("error");
         setSaveError(errorMessage(e));
-        if (!(e instanceof ApiError && e.status === 400)) {
+        // Retry only problems that can clear up by themselves (network, timeouts, server errors).
+        const permanent = e instanceof ApiError && e.status >= 400 && e.status < 500 && e.status !== 408 && e.status !== 429;
+        if (!permanent && mounted.current) {
           if (retryTimer.current) window.clearTimeout(retryTimer.current);
           retryTimer.current = window.setTimeout(() => { void save(); }, retryDelay.current);
           retryDelay.current = Math.min(retryDelay.current * 2, 60000);
@@ -136,10 +155,21 @@ export function useTimesheet(id: string, opts: { autosave: boolean }) {
       if (stateRef.current.version !== savedVersion.current) { e.preventDefault(); e.returnValue = ""; }
     };
     window.addEventListener("beforeunload", fn);
+    mounted.current = true;
     return () => {
+      mounted.current = false;
       window.removeEventListener("beforeunload", fn);
       if (retryTimer.current) window.clearTimeout(retryTimer.current);
-      if (stateRef.current.version !== savedVersion.current && opts.autosave) void save();
+      // Leaving the timesheet with unsaved edits: save them, and say so if that fails,
+      // because the editor (and its error banner) is no longer on screen.
+      if (stateRef.current.version !== savedVersion.current && opts.autosave) {
+        const doc = stateRef.current.doc;
+        void save().then((ok) => {
+          if (ok || !doc) return;
+          safeStorage.set(unsavedKey(id), JSON.stringify({ at: Date.now(), base: updatedAt.current, doc }));
+          toast({ title: "Your last changes weren't saved", description: "They are kept on this device. Open the timesheet again to restore them.", variant: "destructive" });
+        });
+      }
     };
   }, [save, opts.autosave]);
 

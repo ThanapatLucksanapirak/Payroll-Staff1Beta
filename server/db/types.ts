@@ -36,6 +36,13 @@ export interface DataStore {
   insertTimesheet(row: TimesheetWrite): Promise<TimesheetSummary>;
   updateTimesheet(id: string, row: Partial<TimesheetWrite>): Promise<TimesheetSummary | null>;
   deleteTimesheet(id: string): Promise<boolean>;
+  /**
+   * Write many settings and timesheets as one unit: either everything is
+   * written or nothing is (used by restore and database copy).
+   */
+  importAll(data: { settings: { key: string; value: string }[]; timesheets: TimesheetWrite[] }): Promise<{ settings: number; timesheets: number }>;
+  /** Write a consistent snapshot of the database to a file, if the store supports it. */
+  snapshotTo?(file: string): Promise<void>;
   health(): Promise<DatabaseHealth>;
   close(): void;
 }
@@ -92,6 +99,7 @@ export function toSummary(r: any): TimesheetSummary {
     employeeCount: Number(r.employee_count) || 0,
     totalPay: Number(r.total_pay) || 0,
     status: r.status ?? "draft",
+    deletedAt: r.deleted_at ?? null,
     createdAt: r.created_at ?? new Date().toISOString(),
     updatedAt: r.updated_at ?? null,
   };

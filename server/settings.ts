@@ -40,10 +40,10 @@ async function bootstrap(store: DataStore): Promise<Site[]> {
     clockInCutoff: Number.parseInt(legacy.clock_in_cutoff ?? "", 10) || undefined,
     clockOutCutoff: Number.parseInt(legacy.clock_out_cutoff ?? "", 10) || undefined,
   });
-  const site = siteSchema.parse({ id: LEGACY_SITE_ID, name: isExisting ? "Shijiri Sushi Bar" : "Main Location", rules });
+  const site = siteSchema.parse({ id: LEGACY_SITE_ID, name: "Main Location", rules });
   await store.setSetting(K.sites, JSON.stringify([site]));
   if (!(await store.getSetting(K.prefs)) && isExisting) {
-    await store.setSetting(K.prefs, JSON.stringify(prefsSchema.parse({ appName: "Shijiri Payroll Analyzer", businessName: "Shijiri Sushi Bar", defaultSiteId: LEGACY_SITE_ID })));
+    await store.setSetting(K.prefs, JSON.stringify(prefsSchema.parse({ defaultSiteId: LEGACY_SITE_ID })));
   }
   return [site];
 }
