@@ -132,6 +132,8 @@ You can also put Cloudflare Access in front of the admin hostname only.
   that the table is missing; the rest of the app keeps working.
 * Employees and devices are stored in `app_settings` (`employees:<siteId>`,
   `kiosk_devices`). Backups and exports include punches.
+* Punch photos (optional, see `docs/features/kiosk.md`) are files under
+  `DATA_DIR/punch-photos` and are **not** included in backups.
 
 ## 10. Lock the tablet to the time clock
 

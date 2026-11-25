@@ -44,6 +44,7 @@ async function connect() {
     source.addEventListener("punch", dispatch as EventListener);
     source.addEventListener("schedule", dispatch as EventListener);
     source.addEventListener("timeclock", dispatch as EventListener); // approvals, auto clock-out
+    source.addEventListener("kiosk", dispatch as EventListener); // fix requests, shift notes
     source.onerror = () => {
       // The ticket is single-connection in spirit and expires quickly: always start over.
       source.close();

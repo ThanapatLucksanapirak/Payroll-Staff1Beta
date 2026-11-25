@@ -23,6 +23,7 @@ import { type Punch, punchSchema } from "@shared/punches";
 import { kioskHostGuard, registerKioskRoutes, registerTimeClockAdminRoutes } from "./kiosk";
 import { registerScheduleRoutes } from "./schedule";
 import { registerTimeclockRoutes } from "./timeclock";
+import { registerKioskFeatureAdminRoutes } from "./kioskFeatures";
 
 type Handler = (req: Request, res: Response) => Promise<unknown>;
 const h = (fn: Handler) => (req: Request, res: Response, next: NextFunction) => { fn(req, res).catch(next); };
@@ -440,6 +441,7 @@ export function registerRoutes(app: Express) {
   registerTimeClockAdminRoutes(app); // employees, punches, kiosk devices, live updates
   registerScheduleRoutes(app); // schedule, time off, late alerts, labor vs. sales, forecast
   registerTimeclockRoutes(app); // auto clock-out, fix punches, approvals, overtime watch, pre-payroll checklist
+  registerKioskFeatureAdminRoutes(app); // kiosk extras: stations, shift notes, fix requests, punch photos
 
   // ── Errors ──────────────────────────────────────────────────────────────────
   app.use("/api", (_req: Request, res: Response) => res.status(404).json({ error: "Not found." }));

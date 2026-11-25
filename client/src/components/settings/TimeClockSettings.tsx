@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link } from "wouter";
 import { useQuery } from "@tanstack/react-query";
-import { Check, Copy, ExternalLink, KeyRound, Loader2, Plus, Tablet, Trash2 } from "lucide-react";
+import { Check, Copy, ExternalLink, KeyRound, Loader2, Plus, SlidersHorizontal, Tablet, Trash2 } from "lucide-react";
 import type { Site, TimeSource } from "@shared/schema";
 import { api, errorMessage, queryClient } from "@/lib/api";
 import { timeAgo } from "@/lib/doc";
@@ -14,8 +14,10 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Field, Section } from "@/components/workspace/fields";
 import { AutoClockOutSettings } from "@/components/timeclock/AutoClockOutSettings";
 import { cn } from "@/lib/utils";
+import type { KioskDeviceOptions, KioskSiteConfig } from "@shared/kiosk";
+import { DeviceOptionsPanel, KioskLocationExtras } from "./KioskExtrasSettings";
 
-interface Device { id: string; name: string; createdAt: string; lastSeenAt: string | null; pairCodeExpiresAt: string | null }
+interface Device { id: string; name: string; createdAt: string; lastSeenAt: string | null; pairCodeExpiresAt: string | null; options?: KioskDeviceOptions }
 interface Created { device: Device; token: string; pairCode: string; pairPath: string }
 
 const SOURCES: { id: TimeSource; title: string; desc: string }[] = [
@@ -67,6 +69,7 @@ export function TimeClockSection({ site, draft, onChange }: { site: Site; draft:
         <Devices site={site} enabled={site.timeSource !== "square"} />
         <ManagerPin site={site} />
         {site.timeSource !== "square" && <AutoClockOutSettings site={site} />}
+        <KioskLocationExtras site={site} />
       </div>
     </Section>
   );
@@ -80,6 +83,8 @@ function Devices({ site, enabled }: { site: Site; enabled: boolean }) {
   const [name, setName] = useState("");
   const [busy, setBusy] = useState(false);
   const [created, setCreated] = useState<Created | null>(null);
+  const [openOptions, setOpenOptions] = useState<string | null>(null);
+  const cfg = useQuery<KioskSiteConfig>({ queryKey: ["/api/sites", site.id, "kiosk-config"] });
 
   const add = async () => {
     setBusy(true);
@@ -110,11 +115,18 @@ function Devices({ site, enabled }: { site: Site; enabled: boolean }) {
       ) : (
         <ul className="divide-y divide-border/70 overflow-hidden rounded-xl border border-border/80">
           {q.data!.map((d) => (
-            <li key={d.id} className="flex items-center gap-3 px-3 py-2 text-[13px]">
-              <Tablet className="h-4 w-4 text-muted-foreground" />
-              <span className="flex-1 min-w-0 truncate font-medium">{d.name}</span>
-              {d.pairCodeExpiresAt ? <Badge variant="warning">Waiting to pair</Badge> : <span className="text-xs text-muted-foreground">{d.lastSeenAt ? `Seen ${timeAgo(d.lastSeenAt)}` : "Not used yet"}</span>}
-              <Button variant="ghost" size="icon-sm" className="text-muted-foreground hover:text-destructive" aria-label={`Remove ${d.name}`} onClick={() => revoke(d)} data-testid={`button-revoke-${d.id}`}><Trash2 /></Button>
+            <li key={d.id} className="text-[13px]">
+              <div className="flex items-center gap-3 px-3 py-2">
+                <Tablet className="h-4 w-4 shrink-0 text-muted-foreground" />
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate font-medium">{d.name}</span>
+                  {d.options && <span className="block truncate text-xs text-muted-foreground">{[d.options.photo ? "Photo on" : "No photo", d.options.loginMode === "site" ? null : d.options.loginMode === "pin" ? "PIN only" : "Name list", `${d.options.idleSeconds}s idle`].filter(Boolean).join(" · ")}</span>}
+                </span>
+                {d.pairCodeExpiresAt ? <Badge variant="warning">Waiting to pair</Badge> : <span className="hidden text-xs text-muted-foreground sm:inline">{d.lastSeenAt ? `Seen ${timeAgo(d.lastSeenAt)}` : "Not used yet"}</span>}
+                <Button variant="ghost" size="sm" className="text-muted-foreground" aria-expanded={openOptions === d.id} onClick={() => setOpenOptions(openOptions === d.id ? null : d.id)} data-testid={`button-device-options-${d.id}`}><SlidersHorizontal /> Options</Button>
+                <Button variant="ghost" size="icon-sm" className="text-muted-foreground hover:text-destructive" aria-label={`Remove ${d.name}`} onClick={() => revoke(d)} data-testid={`button-revoke-${d.id}`}><Trash2 /></Button>
+              </div>
+              {openOptions === d.id && <DeviceOptionsPanel siteId={site.id} deviceId={d.id} options={d.options} hasStations={(cfg.data?.stations.length ?? 0) > 0} />}
             </li>
           ))}
         </ul>

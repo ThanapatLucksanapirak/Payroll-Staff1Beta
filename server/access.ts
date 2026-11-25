@@ -90,6 +90,13 @@ const POLICY: Rule[] = [
   { method: "GET", path: /^\/sites\/[^/]+\/timeclock\/(review|overtime|checklist|auto-close)$/, need: "user", sites: fromParam },
   { method: "POST", path: /^\/sites\/[^/]+\/timeclock\/(approvals|auto-close\/run)$/, need: "editor", sites: fromParam },
   { method: "PUT", path: /^\/sites\/[^/]+\/timeclock\/auto-close$/, need: "admin", sites: fromParam },
+  // Kiosk extras: punch photos for editors; shift notes and fix requests for managers of
+  // the location. Kiosk settings (stations, break reminder, photo retention) stay owner/admin.
+  { method: "GET", path: /^\/punches\/[^/]+\/photo$/, need: "editor", sites: punchSite },
+  { method: "GET", path: /^\/sites\/[^/]+\/(kiosk-notes|fix-requests)$/, need: "user", sites: fromParam },
+  { method: "POST", path: /^\/sites\/[^/]+\/kiosk-notes$/, need: "editor", sites: fromParam },
+  { method: "DELETE", path: /^\/sites\/[^/]+\/kiosk-notes\/[^/]+$/, need: "editor", sites: fromParam },
+  { method: "POST", path: /^\/sites\/[^/]+\/fix-requests\/[^/]+\/(approve|decline)$/, need: "editor", sites: fromParam },
 ];
 
 const MESSAGES: Record<Need, string> = {

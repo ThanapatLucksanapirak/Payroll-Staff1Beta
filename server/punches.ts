@@ -6,7 +6,7 @@ import { z } from "zod";
 import type { Site } from "@shared/schema";
 import { addDays, todayISO } from "@shared/dates";
 import {
-  type Punch, type PunchEdit, type PunchSource, type PunchType, PUNCH_TYPES, STALE_SHIFT_HOURS, byTime, clockState, localRange,
+  type Punch, type PunchEdit, type PunchMeta, type PunchSource, type PunchType, PUNCH_TYPES, STALE_SHIFT_HOURS, byTime, clockState, localRange,
   punchesToShifts, validateChange, workedMinutes,
 } from "@shared/punches";
 import { db } from "./db";
@@ -14,6 +14,8 @@ import * as settings from "./settings";
 import { type StoredEmployee, getEmployee, listEmployees } from "./employees";
 import { broadcast } from "./live";
 import { applyScheduleRules } from "./schedule";
+import { breakDue } from "@shared/kiosk";
+import { getSiteConfig } from "./kioskConfig";
 
 const DAY = 86_400_000;
 export const PUNCH_ID_RE = /^[A-Za-z0-9_-]{8,64}$/;
@@ -54,6 +56,7 @@ export interface RecordInput {
   audience: "kiosk" | "admin";
   force?: boolean;
   flags?: Punch["flags"];
+  meta?: PunchMeta;
 }
 
 export async function recordPunch(input: RecordInput): Promise<{ punch: Punch; created: boolean }> {
@@ -70,6 +73,7 @@ export async function recordPunch(input: RecordInput): Promise<{ punch: Punch; c
       id: input.id, siteId: input.site.id, employeeId: input.employee.id, employeeName: input.employee.name, type: input.type, at,
       source: input.source, deviceId: input.deviceId, note: input.note ?? "", createdAt: new Date().toISOString(), editedAt: null, edits: [],
       ...(input.flags ? { flags: input.flags } : {}),
+      ...(input.meta && Object.keys(input.meta).length ? { meta: input.meta } : {}),
     };
     const before = await nearbyPunches(input.site.id, input.employee.id, at);
     const problem = validateChange(before, [...before, punch], input.site.rules.timezone, input.audience);
@@ -93,7 +97,7 @@ export async function editPunch(id: string, patch: { type?: PunchType; at?: stri
     const problem = validateChange(before, after, site?.rules.timezone ?? "UTC", "admin");
     if (problem && !patch.force) throw new PunchError(problem, 409, "state");
     const edit: PunchEdit = { editedAt: new Date().toISOString(), note: patch.note, by: patch.by ?? null, before: { type: cur.type, at: cur.at } };
-    const saved = await store.updatePunch(id, { type: next.type, at, note: patch.note, editedAt: edit.editedAt, edits: [...cur.edits, edit], flags: cur.flags });
+    const saved = await store.updatePunch(id, { type: next.type, at, note: patch.note, editedAt: edit.editedAt, edits: [...cur.edits, edit], flags: cur.flags, meta: cur.meta });
     if (!saved) throw new PunchError("That punch no longer exists.", 404, "missing");
     broadcast({ type: "punch", action: "updated", siteId: saved.siteId, punch: saved });
     return saved;
@@ -130,6 +134,10 @@ export interface EmployeeNow {
   /** Minutes worked on the given local date (open shifts count until now). */
   minutes: number;
   lastPunch: Punch | null;
+  /** Station picked at the current shift's clock-in, if any. */
+  station?: string | null;
+  /** Worked longer than the location's break reminder without a break. */
+  breakDue?: boolean;
 }
 
 /** Who is working now at a location, and the punches of a local date. */
@@ -140,6 +148,7 @@ export async function timeclockDay(site: Site, date: string, now = Date.now()) {
   const to = new Date(Math.max(Date.parse(day.to), now) + 1).toISOString();
   const punches = await (await db()).listPunches({ siteId: site.id, from, to });
   const directory = await listEmployees(site.id);
+  const breakRule = (await getSiteConfig(site.id)).breakReminderHours;
   const byEmp = new Map<string, Punch[]>();
   for (const p of punches) {
     if (!byEmp.has(p.employeeId)) byEmp.set(p.employeeId, []);
@@ -153,6 +162,8 @@ export async function timeclockDay(site: Site, date: string, now = Date.now()) {
     people.push({
       id, name, role, active, inDirectory, status: st.status, since: st.since, shiftStart: st.shiftStart,
       minutes: workedMinutes(list, Date.parse(day.from), Date.parse(day.to), now), lastPunch: st.last,
+      station: st.shiftStart ? (list.find((p) => p.type === "in" && p.at === st.shiftStart)?.meta?.station ?? null) : null,
+      breakDue: breakDue(list, breakRule, now).due,
     });
     seen.add(id);
   };

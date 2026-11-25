@@ -11,7 +11,11 @@ import type { Express, NextFunction, Request, Response } from "express";
 import { z } from "zod";
 import type { Site } from "@shared/schema";
 import { todayISO } from "@shared/dates";
-import { PUNCH_TYPES, type Punch, allowedActions, clockState, localRange, workedMinutes } from "@shared/punches";
+import { PUNCH_TYPES, type Punch, type PunchMeta, allowedActions, clockState, localRange } from "@shared/punches";
+import { type KioskDeviceOptions, DEVICE_LOGIN_MODES, IDLE_MAX, IDLE_MIN, breakDue, checkAction, daySummary, matchStation, normalizeDeviceOptions, notesFor } from "@shared/kiosk";
+import { getSiteConfig, listNotes } from "./kioskConfig";
+import { decodePhoto, deletePhoto, savePhoto } from "./kioskPhotos";
+import { registerKioskDeviceFeatureRoutes } from "./kioskFeatures";
 import { getAuthSecret } from "./config";
 import { db } from "./db";
 import type { DataStore } from "./db/types";
@@ -31,6 +35,8 @@ export interface KioskDevice {
   pairCodeExpiresAt: string | null;
   createdAt: string;
   lastSeenAt: string | null;
+  /** Per-device kiosk options (photo, sign-in, idle timeout, stations). Missing on older devices. */
+  options?: Partial<KioskDeviceOptions>;
 }
 const DEVICES_KEY = "kiosk_devices";
 const PAIR_CODE_MS = 15 * 60_000;
@@ -70,7 +76,20 @@ const normCode = (c: string) => c.toUpperCase().replace(/[^A-Z0-9]/g, "");
 export const deviceView = (d: KioskDevice) => ({
   id: d.id, siteId: d.siteId, name: d.name, createdAt: d.createdAt, lastSeenAt: d.lastSeenAt,
   pairCodeExpiresAt: d.pairCodeHash && d.pairCodeExpiresAt && Date.parse(d.pairCodeExpiresAt) > Date.now() ? d.pairCodeExpiresAt : null,
+  options: normalizeDeviceOptions(d.options),
 });
+
+/** Change a device's kiosk options. Returns the updated device, or null when it doesn't exist at that location. */
+export async function setDeviceOptions(siteId: string, id: string, patch: Partial<KioskDeviceOptions>): Promise<KioskDevice | null> {
+  return withDevLock(async () => {
+    const list = await loadDevices();
+    const cur = list.find((d) => d.id === id && d.siteId === siteId);
+    if (!cur) return null;
+    const next = { ...cur, options: normalizeDeviceOptions({ ...normalizeDeviceOptions(cur.options), ...patch }) };
+    await saveDevices(list.map((d) => (d.id === id ? next : d)));
+    return next;
+  });
+}
 
 export async function createDevice(siteId: string, name: string) {
   return withDevLock(async () => {
@@ -195,30 +214,72 @@ function readTicket(ticket: string, deviceId: string): string | null {
   } catch { return null; }
 }
 
+/** The employee a ticket claims to be for (unverified: used only to order requests). */
+function ticketEmployee(ticket: string | undefined): string | null {
+  if (!ticket) return null;
+  try {
+    const d = JSON.parse(Buffer.from(ticket.split(".")[0] ?? "", "base64url").toString("utf8"));
+    return typeof d?.e === "string" && d.e.length <= 64 ? d.e : null;
+  } catch { return null; }
+}
+
+// ── Per-employee arrival order ───────────────────────────────────────────────
+const arrivals = new Map<string, Promise<void>>();
+/**
+ * Join the queue for `key` right now (synchronously) and get a promise that
+ * resolves when it is this caller's turn. Call done() when finished.
+ */
+export function acquireArrival(key: string): { ready: Promise<void>; done: () => void } {
+  const prev = arrivals.get(key) ?? Promise.resolve();
+  let done!: () => void;
+  const mine = new Promise<void>((r) => { done = r; });
+  const tail = prev.then(() => mine);
+  arrivals.set(key, tail);
+  tail.then(() => { if (arrivals.get(key) === tail) arrivals.delete(key); });
+  // Never hold a queue forever if something hangs.
+  const timer = setTimeout(() => done(), 30_000);
+  timer.unref?.();
+  return { ready: prev, done: () => { clearTimeout(timer); done(); } };
+}
+
 // ── Kiosk API ─────────────────────────────────────────────────────────────────
 type Handler = (req: Request, res: Response) => Promise<unknown>;
-const h = (fn: Handler) => (req: Request, res: Response, next: NextFunction) => {
+export const h = (fn: Handler) => (req: Request, res: Response, next: NextFunction) => {
   fn(req, res).catch((err) => {
     if (err instanceof PunchError) return res.status(err.status).json({ error: err.message, code: err.code });
     next(err);
   });
 };
 
-interface Ctx { device: KioskDevice; site: Site }
-const ctx = (res: Response) => res.locals.kiosk as Ctx;
+export interface Ctx { device: KioskDevice; site: Site }
+export const ctx =(res: Response) => res.locals.kiosk as Ctx;
 
 /** Clock-in is allowed only where the location uses the kiosk. */
-const kioskEnabled = (site: Site) => site.timeSource === "kiosk" || site.timeSource === "both";
+export const kioskEnabled = (site: Site) => site.timeSource === "kiosk" || site.timeSource === "both";
 
 const pairThrottle = new Map<string, { n: number; until: number }>();
 
-async function employeeClock(site: Site, employeeId: string, now = Date.now()) {
+/** An employee's clock state now, today's hours and breaks, and whether a break is due. */
+export async function employeeClock(site: Site, employeeId: string, now = Date.now()) {
   const from = new Date(now - 3 * 86_400_000).toISOString();
   const punches = await (await db()).listPunches({ siteId: site.id, employeeId, from, to: new Date(now + 3 * 60_000).toISOString() });
   const st = clockState(punches, now);
   const today = localRange(todayISO(site.rules.timezone), todayISO(site.rules.timezone), site.rules.timezone);
-  return { ...st, todayMinutes: workedMinutes(punches, Date.parse(today.from), Date.parse(today.to), now) };
+  const day = daySummary(punches, Date.parse(today.from), Date.parse(today.to), now);
+  const rule = (await getSiteConfig(site.id)).breakReminderHours;
+  const bd = breakDue(punches, rule, now);
+  const station = st.shiftStart ? (punches.find((p) => p.type === "in" && p.at === st.shiftStart)?.meta?.station ?? null) : null;
+  return {
+    ...st, todayMinutes: day.workedMinutes, breakMinutes: day.breakMinutes, breaks: day.breaks, station,
+    breakDue: bd.due, minutesWithoutBreak: bd.minutesWithoutBreak, breakReminderHours: rule,
+  };
 }
+type Clock = Awaited<ReturnType<typeof employeeClock>>;
+/** What the kiosk shows about a person's day (no pay information). */
+export const clockView = (st: Clock) => ({
+  status: st.status, since: st.since, shiftStart: st.shiftStart, todayMinutes: st.todayMinutes, breakMinutes: st.breakMinutes, breaks: st.breaks,
+  station: st.station, breakDue: st.breakDue, minutesWithoutBreak: st.minutesWithoutBreak,
+});
 
 function lockedResponse(res: Response, ms: number) {
   const secs = Math.ceil(ms / 1000);
@@ -227,7 +288,7 @@ function lockedResponse(res: Response, ms: number) {
 }
 
 /** Check a PIN (or a ticket from /identify) and return the employee. Sends the error response itself. */
-async function authenticateEmployee(req: Request, res: Response, body: { pin?: string; employeeId?: string; ticket?: string }): Promise<StoredEmployee | null> {
+export async function authenticateEmployee(req: Request, res: Response, body: { pin?: string; employeeId?: string; ticket?: string }): Promise<StoredEmployee | null> {
   const { device, site } = ctx(res);
   if (body.ticket) {
     const id = readTicket(body.ticket, device.id);
@@ -288,9 +349,15 @@ export function registerKioskRoutes(app: Express) {
     const punches = kioskEnabled(site) ? await (await db()).listPunches({ siteId: site.id, from }) : [];
     const byEmp = new Map<string, Punch[]>();
     for (const p of punches) { if (!byEmp.has(p.employeeId)) byEmp.set(p.employeeId, []); byEmp.get(p.employeeId)!.push(p); }
+    const options = normalizeDeviceOptions(device.options);
+    const config = await getSiteConfig(site.id);
     res.json({
       device: { id: device.id, name: device.name },
-      site: { id: site.id, name: site.name, color: site.color, timezone: site.rules.timezone, loginMode: site.kioskLoginMode, enabled: kioskEnabled(site), managerPinSet: await managerPinSet(site.id) },
+      site: {
+        id: site.id, name: site.name, color: site.color, timezone: site.rules.timezone, enabled: kioskEnabled(site), managerPinSet: await managerPinSet(site.id),
+        loginMode: options.loginMode === "site" ? site.kioskLoginMode : options.loginMode,
+      },
+      options: { photo: options.photo, idleSeconds: options.idleSeconds, stations: options.stations ? config.stations : [], breakReminderHours: config.breakReminderHours },
       serverTime: new Date(now).toISOString(),
       employees: employees.map((e) => {
         const st = clockState(byEmp.get(e.id) ?? [], now);
@@ -340,8 +407,7 @@ export function registerKioskRoutes(app: Express) {
     if (!e) return;
     const st = await employeeClock(site, e.id);
     res.json({
-      employee: { id: e.id, name: e.name, role: e.role }, status: st.status, since: st.since, shiftStart: st.shiftStart,
-      todayMinutes: st.todayMinutes, actions: allowedActions(st.status), ticket: issueTicket(device.id, e.id),
+      employee: { id: e.id, name: e.name, role: e.role }, ...clockView(st), actions: allowedActions(st.status), ticket: issueTicket(device.id, e.id),
     });
   }));
 
@@ -355,13 +421,30 @@ export function registerKioskRoutes(app: Express) {
       pin: z.string().max(12).optional(),
       employeeId: z.string().max(64).optional(),
       at: z.string().max(40).optional(),
+      station: z.string().max(80).nullish(),
+      /** JPEG data URL from the front camera, or null when the camera was unavailable. */
+      photo: z.string().max(300_000).nullish(),
     }).parse(req.body);
 
+    // Punches for one employee are handled strictly in the order they arrive, from
+    // here (before the PIN check, which takes time) to the insert. Otherwise two
+    // devices punching the same person a moment apart could be checked out of order.
+    // The lock is taken synchronously, before any await, so arrival order is kept.
+    const claimed = body.employeeId || ticketEmployee(body.ticket);
+    const release = claimed ? acquireArrival(`${site.id}|${claimed}`) : null;
+    try {
+      await release?.ready;
+      return await punchLocked();
+    } finally {
+      release?.done();
+    }
+
+    async function punchLocked() {
     // A replay of a punch this device already sent: answer the same way, without asking for the PIN again.
     const prior = await (await db()).getPunch(body.id);
     if (prior && prior.deviceId === device.id && prior.siteId === site.id) {
       const st = await employeeClock(site, prior.employeeId);
-      return res.json({ punch: { id: prior.id, type: prior.type, at: prior.at }, employee: { id: prior.employeeId, name: prior.employeeName }, status: st.status, since: st.since, todayMinutes: st.todayMinutes, duplicate: true });
+      return res.json({ punch: { id: prior.id, type: prior.type, at: prior.at }, employee: { id: prior.employeeId, name: prior.employeeName }, ...clockView(st), duplicate: true, notes: [] });
     }
 
     const now = Date.now();
@@ -376,13 +459,55 @@ export function registerKioskRoutes(app: Express) {
 
     const e = await authenticateEmployee(req, res, body);
     if (!e) return;
-    const { punch, created } = await recordPunch({
-      id: body.id, site, employee: e, type: body.type, at: new Date(at).toISOString(), source: "kiosk", deviceId: device.id, audience: "kiosk",
-    });
+    // A live punch is stamped now, in arrival order (the PIN check may have taken a moment).
+    if (!body.at) at = Math.max(at, Date.now());
+
+    // Extras chosen per device / location: a station at clock-in, and a photo.
+    const options = normalizeDeviceOptions(device.options);
+    const meta: PunchMeta = {};
+    if (body.type === "in" && options.stations && body.station) {
+      const station = matchStation((await getSiteConfig(site.id)).stations, body.station);
+      if (station) meta.station = station;
+    }
+    let photoSaved = false;
+    if (options.photo && body.photo !== undefined) {
+      const bytes = body.photo ? decodePhoto(body.photo) : null;
+      photoSaved = !!bytes && savePhoto(site.id, body.id, bytes);
+      meta.photo = photoSaved ? "saved" : "none";
+    }
+
+    let result: Awaited<ReturnType<typeof recordPunch>>;
+    try {
+      result = await recordPunch({
+        id: body.id, site, employee: e, type: body.type, at: new Date(at).toISOString(), source: "kiosk", deviceId: device.id, audience: "kiosk", meta,
+      });
+    } catch (err) {
+      if (photoSaved) deletePhoto(site.id, body.id);
+      // Wrong action for the current state: say what makes sense instead.
+      if (err instanceof PunchError && err.code === "state") {
+        const st = await employeeClock(site, e.id);
+        const check = checkAction(st.status, body.type);
+        return res.status(409).json({
+          error: err.message, code: "state", status: st.status, suggest: check.suggest ?? null, question: check.question ?? null,
+          actions: allowedActions(st.status), ticket: issueTicket(device.id, e.id),
+        });
+      }
+      throw err;
+    }
+    const { punch, created } = result;
     const st = await employeeClock(site, e.id);
-    res.json({ punch: { id: punch.id, type: punch.type, at: punch.at }, employee: { id: e.id, name: e.name }, status: st.status, since: st.since, todayMinutes: st.todayMinutes, duplicate: !created });
+    const notes = punch.type === "in" && created
+      ? notesFor(await listNotes(site.id), e.id).map((n) => ({ id: n.id, text: n.text, createdAt: n.createdAt, createdBy: n.createdBy }))
+      : [];
+    res.json({
+      punch: { id: punch.id, type: punch.type, at: punch.at, station: punch.meta?.station ?? null, photo: punch.meta?.photo ?? null },
+      employee: { id: e.id, name: e.name }, ...clockView(st), duplicate: !created, notes,
+      ticket: notes.length ? issueTicket(device.id, e.id) : undefined,
+    });
+    }
   }));
 
+  registerKioskDeviceFeatureRoutes(app, { ctx, kioskEnabled, authenticateEmployee }); // shift notes and fix requests (device token)
   app.use("/api/kiosk", (_req: Request, res: Response) => res.status(404).json({ error: "Not found." }));
 }
 
@@ -406,6 +531,17 @@ export function registerTimeClockAdminRoutes(app: Express) {
   }));
   app.delete("/api/sites/:siteId/kiosk-devices/:id", h(async (req, res) => {
     res.json({ ok: await revokeDevice(String(req.params.id), String(req.params.siteId)) });
+  }));
+  app.put("/api/sites/:siteId/kiosk-devices/:id/options", h(async (req, res) => {
+    const patch = z.object({
+      photo: z.boolean().optional(),
+      loginMode: z.enum(DEVICE_LOGIN_MODES).optional(),
+      idleSeconds: z.number().int().min(IDLE_MIN).max(IDLE_MAX).optional(),
+      stations: z.boolean().optional(),
+    }).strict().parse(req.body ?? {});
+    const d = await setDeviceOptions(String(req.params.siteId), String(req.params.id), patch);
+    if (!d) return res.status(404).json({ error: "Device not found." });
+    res.json(deviceView(d));
   }));
   app.get("/api/sites/:siteId/kiosk-manager-pin", h(async (req, res) => {
     res.json({ set: await managerPinSet(String(req.params.siteId)) });

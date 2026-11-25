@@ -40,5 +40,23 @@ input { -webkit-user-select: text; user-select: text; }
 }
 .kiosk-fade-up { animation: kiosk-fade-up 0.35s ease-out both; }
 
+@keyframes kiosk-fade-in { from { opacity: 0; } to { opacity: 1; } }
+.kiosk-fade-in { animation: kiosk-fade-in 0.25s ease-out both; }
+
+/* Big, forgiving touch targets: wet hands and gloves. No double-tap zoom,
+   no long-press menus, and a visible focus ring for keyboards. */
+.kiosk-tap { touch-action: manipulation; -webkit-touch-callout: none; min-height: 64px; }
+.kiosk-tap:focus-visible { outline: 3px solid #0a84ff; outline-offset: 3px; }
+
+@keyframes kiosk-pulse-ring {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(251, 191, 36, 0.9); }
+  50% { box-shadow: 0 0 0 10px rgba(251, 191, 36, 0); }
+}
+.kiosk-pulse { animation: kiosk-pulse-ring 1.6s ease-in-out infinite; }
+
+@media (prefers-reduced-motion: reduce) {
+  .kiosk-shake, .kiosk-pop, .kiosk-fade-up, .kiosk-fade-in, .kiosk-pulse { animation: none; }
+}
+
 @keyframes kiosk-countdown { from { transform: scaleX(1); } to { transform: scaleX(0); } }
 .kiosk-countdown { transform-origin: left; animation-name: kiosk-countdown; animation-timing-function: linear; animation-fill-mode: forwards; }
