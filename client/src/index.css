@@ -2,78 +2,171 @@
 @tailwind components;
 @tailwind utilities;
 
+/*
+ * Design tokens — calm, white, macOS / iOS inspired.
+ * Light is the hero theme; dark mirrors it with Apple's elevated greys.
+ * All colours are HSL triplets so Tailwind can apply alpha (`bg-primary/10`).
+ */
 @layer base {
   :root {
-    --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI Variable", "Segoe UI", system-ui, Roboto, "Helvetica Neue", Arial, sans-serif;
-    --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+    --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Segoe UI Variable", "Segoe UI", system-ui, Roboto, "Helvetica Neue", Arial, sans-serif;
+    --font-mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, monospace;
     --font-serif: ui-serif, Georgia, serif;
-    --background: 150 12% 98%;
-    --foreground: 160 18% 10%;
+
+    /* Surfaces */
+    --background: 240 20% 99%;          /* #fbfbfd page canvas */
+    --foreground: 240 3% 12%;           /* #1d1d1f */
     --card: 0 0% 100%;
-    --card-foreground: 160 18% 10%;
-    --card-border: 155 12% 89%;
+    --card-foreground: 240 3% 12%;
+    --card-border: 240 6% 90%;
     --popover: 0 0% 100%;
-    --popover-foreground: 160 18% 10%;
-    --popover-border: 155 12% 89%;
-    --primary: 160 64% 27%;
+    --popover-foreground: 240 3% 12%;
+    --popover-border: 240 6% 88%;
+    --sidebar: 240 11% 96%;             /* #f5f5f7 */
+    --sidebar-foreground: 240 3% 12%;
+    --sidebar-border: 240 6% 89%;
+    --sidebar-accent: 240 6% 90%;
+    --sidebar-accent-foreground: 240 3% 12%;
+    --sidebar-primary: 211 100% 45%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-ring: 211 100% 45%;
+    --segment: 0 0% 100%;               /* selected segment in a segmented control */
+
+    /* Accent — Apple blue #0071e3 */
+    --primary: 211 100% 45%;
     --primary-foreground: 0 0% 100%;
-    --secondary: 155 16% 94%;
-    --secondary-foreground: 160 18% 16%;
-    --muted: 155 14% 95%;
-    --muted-foreground: 160 8% 40%;
-    --accent: 155 22% 92%;
-    --accent-foreground: 160 20% 14%;
-    --destructive: 0 70% 46%;
+    --secondary: 240 6% 95%;
+    --secondary-foreground: 240 3% 12%;
+    --muted: 240 6% 95%;
+    --muted-foreground: 240 2% 42%;     /* #6b6b70 — 5.2:1 on white */
+    --accent: 240 6% 94%;
+    --accent-foreground: 240 3% 12%;
+    --destructive: 355 100% 42%;        /* #d70015 */
     --destructive-foreground: 0 0% 100%;
-    --border: 155 12% 88%;
-    --input: 155 12% 84%;
-    --ring: 160 64% 32%;
-    --radius: 0.5rem;
-    --chart-1: 160 64% 32%;
-    --chart-2: 38 92% 50%;
-    --chart-3: 0 70% 50%;
-    --chart-4: 215 16% 55%;
-    --chart-5: 200 70% 45%;
+    --border: 240 6% 90%;
+    --input: 240 5% 84%;
+    --ring: 211 100% 45%;
+    --radius: 0.75rem;
+
+    /* Status palette */
+    --success: 136 59% 32%;
+    --success-soft: 137 50% 94%;
+    --warning: 33 100% 33%;
+    --warning-soft: 40 100% 93%;
+    --danger: 355 80% 44%;
+    --danger-soft: 354 100% 96%;
+    --neutral: 240 2% 42%;
+    --neutral-soft: 240 6% 94%;
+    --info: 211 100% 42%;
+    --info-soft: 211 100% 96%;
+
+    --chart-1: 211 100% 45%;
+    --chart-2: 136 50% 42%;
+    --chart-3: 33 100% 48%;
+    --chart-4: 280 50% 55%;
+    --chart-5: 190 70% 42%;
   }
+
   .dark {
-    --background: 160 14% 7%;
-    --foreground: 150 10% 92%;
-    --card: 160 12% 10%;
-    --card-foreground: 150 10% 92%;
-    --card-border: 160 10% 18%;
-    --popover: 160 12% 11%;
-    --popover-foreground: 150 10% 92%;
-    --popover-border: 160 10% 20%;
-    --primary: 158 55% 45%;
-    --primary-foreground: 160 30% 6%;
-    --secondary: 160 10% 16%;
-    --secondary-foreground: 150 10% 90%;
-    --muted: 160 10% 14%;
-    --muted-foreground: 150 6% 62%;
-    --accent: 160 12% 17%;
-    --accent-foreground: 150 10% 92%;
-    --destructive: 0 65% 55%;
+    --background: 240 4% 7%;
+    --foreground: 0 0% 96%;
+    --card: 240 3% 11%;                 /* #1c1c1e */
+    --card-foreground: 0 0% 96%;
+    --card-border: 240 3% 18%;
+    --popover: 240 3% 13%;
+    --popover-foreground: 0 0% 96%;
+    --popover-border: 240 3% 22%;
+    --sidebar: 240 3% 9%;
+    --sidebar-foreground: 0 0% 94%;
+    --sidebar-border: 240 3% 16%;
+    --sidebar-accent: 240 3% 18%;
+    --sidebar-accent-foreground: 0 0% 96%;
+    --sidebar-primary: 211 100% 55%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-ring: 211 100% 60%;
+    --segment: 240 3% 28%;
+
+    --primary: 211 100% 55%;            /* #1a8cff */
+    --primary-foreground: 0 0% 100%;
+    --secondary: 240 3% 18%;
+    --secondary-foreground: 0 0% 94%;
+    --muted: 240 3% 16%;
+    --muted-foreground: 240 4% 66%;
+    --accent: 240 3% 19%;
+    --accent-foreground: 0 0% 96%;
+    --destructive: 3 100% 62%;
     --destructive-foreground: 0 0% 100%;
-    --border: 160 10% 19%;
-    --input: 160 10% 24%;
-    --ring: 158 55% 45%;
+    --border: 240 3% 19%;
+    --input: 240 3% 26%;
+    --ring: 211 100% 60%;
+
+    --success: 135 55% 58%;
+    --success-soft: 135 35% 16%;
+    --warning: 38 100% 62%;
+    --warning-soft: 35 50% 15%;
+    --danger: 3 100% 68%;
+    --danger-soft: 355 45% 17%;
+    --neutral: 240 4% 66%;
+    --neutral-soft: 240 3% 18%;
+    --info: 211 100% 68%;
+    --info-soft: 211 50% 17%;
+
+    --chart-1: 211 100% 60%;
+    --chart-2: 135 55% 55%;
+    --chart-3: 38 100% 60%;
+    --chart-4: 280 60% 70%;
+    --chart-5: 190 70% 55%;
   }
 }
 
 @layer base {
   * { @apply border-border; }
-  html { -webkit-text-size-adjust: 100%; }
+  html { -webkit-text-size-adjust: 100%; color-scheme: light; }
+  html.dark { color-scheme: dark; }
   body {
     @apply bg-background text-foreground antialiased;
     font-family: var(--font-sans);
-    font-feature-settings: "cv11", "ss01";
+    font-size: 14px;
+    letter-spacing: -0.006em;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
   }
-  .tabular { font-variant-numeric: tabular-nums; }
+  h1, h2, h3 { letter-spacing: -0.018em; }
+  ::selection { background: hsl(var(--primary) / 0.18); }
+  /* Soft, visible focus for anything that doesn't define its own ring. */
+  :focus-visible { outline: 2px solid hsl(var(--ring) / 0.55); outline-offset: 2px; border-radius: 6px; }
+  .tabular, .tabular-nums { font-variant-numeric: tabular-nums; }
+  input[type="date"]::-webkit-calendar-picker-indicator,
+  input[type="time"]::-webkit-calendar-picker-indicator { opacity: 0.55; cursor: pointer; }
+  .dark input[type="date"]::-webkit-calendar-picker-indicator,
+  .dark input[type="time"]::-webkit-calendar-picker-indicator { filter: invert(1); }
+  /* Thin, quiet scrollbars */
+  * { scrollbar-width: thin; scrollbar-color: hsl(var(--foreground) / 0.18) transparent; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
 
 @layer components {
-  .status-full_day { @apply bg-emerald-100 text-emerald-800 dark:bg-emerald-900/50 dark:text-emerald-200; }
-  .status-half_day { @apply bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200; }
-  .status-flagged  { @apply bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-200; }
-  .status-absent   { @apply bg-zinc-200 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300; }
+  /* Day-type pills */
+  .status-full_day { background: hsl(var(--success-soft)); color: hsl(var(--success)); }
+  .status-half_day { background: hsl(var(--warning-soft)); color: hsl(var(--warning)); }
+  .status-flagged  { background: hsl(var(--danger-soft)); color: hsl(var(--danger)); }
+  .status-absent   { background: hsl(var(--neutral-soft)); color: hsl(var(--neutral)); }
+
+  /* Small grey section label ("GENERAL", "RECENT") */
+  .section-label { @apply text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-foreground; }
+
+  /* Frosted surfaces for bars that float over content */
+  .glass { @apply bg-background/80 backdrop-blur-xl backdrop-saturate-150; }
+
+  /* A white card with a hairline border */
+  .surface { @apply rounded-xl border border-card-border bg-card text-card-foreground shadow-card; }
 }

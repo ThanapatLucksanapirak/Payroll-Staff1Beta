@@ -30,7 +30,7 @@ export function SecuritySettings() {
   };
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
       <Section title="Change password" description="Changing it signs out every other device.">
         <form className="grid gap-3 sm:grid-cols-3 items-start" onSubmit={(e) => { e.preventDefault(); if (!mismatch && next.length >= 6) void change(); }}>
           <Field label="Current password"><Input type="password" autoComplete="current-password" value={current} onChange={(e) => setCurrent(e.target.value)} data-testid="input-pw-current" /></Field>

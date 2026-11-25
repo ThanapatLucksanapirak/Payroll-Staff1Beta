@@ -9,7 +9,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Field, Section } from "@/components/workspace/fields";
+import { Field, Section, ToggleRow } from "@/components/workspace/fields";
+import { cn } from "@/lib/utils";
 
 export function PreferencesSettings() {
   const app = useApp();
@@ -32,7 +33,7 @@ export function PreferencesSettings() {
   };
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
       <Section title="Branding">
         <div className="grid gap-3 sm:grid-cols-2">
           <Field label="App name"><Input value={p.appName} maxLength={60} onChange={(e) => set("appName", e.target.value)} data-testid="input-pref-appname" /></Field>
@@ -81,8 +82,8 @@ export function PreferencesSettings() {
           <Field label="Footer text"><Input value={p.pdfFooter} maxLength={120} onChange={(e) => set("pdfFooter", e.target.value)} /></Field>
         </div>
       </Section>
-      <div className="sticky bottom-0 flex items-center justify-end gap-2 border-t bg-background/95 py-3 backdrop-blur">
-        {dirty && <span className="mr-auto text-xs text-muted-foreground">Unsaved changes</span>}
+      <div className={cn("z-10 -mx-1 flex items-center justify-end gap-2 rounded-xl border px-3 py-2.5 transition-shadow duration-200", dirty ? "glass sticky bottom-[calc(3.5rem+env(safe-area-inset-bottom))] border-border/70 shadow-float md:bottom-4" : "border-transparent")} data-testid="bar-save">
+        <span className="mr-auto text-xs text-muted-foreground">{dirty ? "Unsaved changes" : "All changes saved"}</span>
         <Button variant="outline" disabled={!dirty || saving} onClick={() => { setP(app.prefs); applyTheme(app.prefs.theme); }}>Discard</Button>
         <Button disabled={!dirty || saving} onClick={save} data-testid="button-save-prefs">{saving && <Loader2 className="animate-spin" />}Save preferences</Button>
       </div>
@@ -91,10 +92,5 @@ export function PreferencesSettings() {
 }
 
 function Toggle({ label, hint, checked, onChange }: { label: string; hint?: string; checked: boolean; onChange: (v: boolean) => void }) {
-  return (
-    <label className="flex items-center justify-between gap-3 rounded-lg border px-3 py-2.5">
-      <span><span className="block text-sm">{label}</span>{hint && <span className="block text-xs text-muted-foreground">{hint}</span>}</span>
-      <Switch checked={checked} onCheckedChange={onChange} />
-    </label>
-  );
+  return <ToggleRow label={label} hint={hint} checked={checked} onChange={onChange} />;
 }

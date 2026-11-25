@@ -40,8 +40,8 @@ export function CategoriesSettings() {
       description="Shared rate templates (e.g. Chef, Server). Employees in a category always use its current rates. Limit a category to one location if rates differ."
       actions={<Button variant="outline" size="sm" onClick={() => setList([...list, { id: uid("c"), name: "", siteId: null, payBasis: "day_rate", fullDayRate: 0, halfDayRate: 0, hourlyRate: 0, isNetPay: true }])} data-testid="button-add-category"><Plus /> Add category</Button>}
     >
-      {list.length === 0 ? <p className="text-sm text-muted-foreground">No categories yet.</p> : (
-        <div className="overflow-x-auto -mx-4 px-4">
+      {list.length === 0 ? <p className="rounded-lg border border-dashed border-border px-4 py-8 text-center text-[13px] text-muted-foreground">No categories yet. Add one for each role that shares a rate, like Chef or Server.</p> : (
+        <div className="overflow-x-auto -mx-5 px-5">
           <table className="w-full text-sm min-w-[50rem]">
             <thead>
               <tr className="text-left text-xs text-muted-foreground">
@@ -51,7 +51,7 @@ export function CategoriesSettings() {
             </thead>
             <tbody>
               {list.map((c, i) => (
-                <tr key={c.id} className="border-t" data-testid={`row-category-${c.id}`}>
+                <tr key={c.id} className="border-t border-border/60" data-testid={`row-category-${c.id}`}>
                   <td className="py-2 pr-2"><Input className="h-8" value={c.name} onChange={(e) => set(i, { name: e.target.value })} placeholder="Name" data-testid={`input-category-name-${i}`} /></td>
                   <td className="py-2 pr-2 w-44">
                     <Select value={c.siteId ?? ALL} onValueChange={(v) => set(i, { siteId: v === ALL ? null : v })}>

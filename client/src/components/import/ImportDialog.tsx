@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "wouter";
-import { AlertTriangle, ArrowLeft, CalendarRange, FileSpreadsheet, FileText, Loader2, PlusSquare, RefreshCw, Upload } from "lucide-react";
+import { AlertTriangle, ChevronLeft, CalendarRange, FileSpreadsheet, FileText, Loader2, PlusSquare, RefreshCw, Upload } from "lucide-react";
 import type { Shift, Site } from "@shared/schema";
 import { CSV_FIELD_LABELS, type CsvField, type CsvMapping, type CsvParseResult, parseCsvText } from "@shared/importers/csv";
 import type { ScheduleParseResult } from "@shared/importers/schedule";
@@ -52,8 +52,8 @@ export function ImportDialog({ open, onOpenChange, site, mode, initialSource, on
         ) : (
           <div className="space-y-4">
             {!initialSource && (
-              <button className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground" onClick={() => setSource(null)} data-testid="button-import-back">
-                <ArrowLeft className="h-4 w-4" /> All sources
+              <button className="inline-flex items-center gap-0.5 rounded-md text-[13px] font-medium text-primary hover:underline" onClick={() => setSource(null)} data-testid="button-import-back">
+                <ChevronLeft className="h-4 w-4" /> All sources
               </button>
             )}
             {source === "square" && <SquareStep site={site} onResult={setReview} />}
@@ -68,6 +68,7 @@ export function ImportDialog({ open, onOpenChange, site, mode, initialSource, on
 }
 
 function SourcePicker({ onPick, showBlank }: { onPick: (s: ImportSource) => void; showBlank: boolean }) {
+  const tint: Record<ImportSource, string> = { square: "bg-[#0a84ff]", csv: "bg-[#30d158]", pdf: "bg-[#ff9f0a]", blank: "bg-[#8e8e93]" };
   const opts: { id: ImportSource; title: string; desc: string; icon: any }[] = [
     { id: "square", title: "Pull from Square", desc: "Fetch closed timecards for a date range", icon: CalendarRange },
     { id: "csv", title: "Upload CSV", desc: "Square, Toast TimeEntries, Sling, 7shifts or any time-card CSV", icon: FileSpreadsheet },
@@ -75,13 +76,13 @@ function SourcePicker({ onPick, showBlank }: { onPick: (s: ImportSource) => void
     ...(showBlank ? [{ id: "blank" as const, title: "Start blank", desc: "Enter shifts or manual pay by hand", icon: PlusSquare }] : []),
   ];
   return (
-    <div className="grid gap-2 sm:grid-cols-2">
+    <div className="grid gap-3 sm:grid-cols-2">
       {opts.map((o) => (
-        <button key={o.id} onClick={() => onPick(o.id)} className="flex items-start gap-3 rounded-lg border bg-card p-4 text-left transition-colors hover:border-primary/50 hover:bg-accent/50" data-testid={`button-source-${o.id}`}>
-          <o.icon className="mt-0.5 h-5 w-5 text-primary shrink-0" />
-          <span>
-            <span className="block font-medium text-sm">{o.title}</span>
-            <span className="block text-xs text-muted-foreground mt-0.5">{o.desc}</span>
+        <button key={o.id} onClick={() => onPick(o.id)} className="flex items-start gap-3 rounded-xl border border-border/80 bg-card p-4 text-left shadow-card transition-[border-color,box-shadow,transform] duration-150 hover:border-primary/40 hover:shadow-float focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/35 active:scale-[0.99]" data-testid={`button-source-${o.id}`}>
+          <span className={cn("flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] text-white shadow-sm", tint[o.id])}><o.icon className="h-[18px] w-[18px]" /></span>
+          <span className="min-w-0">
+            <span className="block text-[14px] font-semibold">{o.title}</span>
+            <span className="mt-0.5 block text-xs leading-snug text-muted-foreground">{o.desc}</span>
           </span>
         </button>
       ))}
@@ -90,7 +91,7 @@ function SourcePicker({ onPick, showBlank }: { onPick: (s: ImportSource) => void
 }
 
 function ErrorNote({ children }: { children: React.ReactNode }) {
-  return <p className="flex items-start gap-2 rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive" role="alert"><AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />{children}</p>;
+  return <p className="flex items-start gap-2 rounded-lg bg-danger-soft px-3 py-2.5 text-[13px] font-medium text-danger" role="alert"><AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />{children}</p>;
 }
 
 function SquareStep({ site, onResult }: { site: Site; onResult: (r: ImportResult) => void }) {
@@ -105,9 +106,10 @@ function SquareStep({ site, onResult }: { site: Site; onResult: (r: ImportResult
 
   if (!connected) {
     return (
-      <div className="rounded-lg border bg-muted/40 p-4 text-sm space-y-2">
-        <p>Square isn't connected for <b>{site.name}</b> yet.</p>
-        <Link href="/settings/locations"><Button size="sm" variant="outline">Connect in Settings</Button></Link>
+      <div className="flex flex-col items-center gap-3 rounded-xl border border-dashed border-border px-6 py-8 text-center">
+        <span className="flex h-11 w-11 items-center justify-center rounded-full bg-foreground/[0.05]"><CalendarRange className="h-5 w-5 text-muted-foreground" /></span>
+        <div><p className="text-[15px] font-semibold">Square isn't connected for {site.name}</p><p className="mt-1 text-[13px] text-muted-foreground">Add an access token once and timecards can be pulled in one click.</p></div>
+        <Button asChild size="sm"><Link href="/settings/locations">Connect in Settings</Link></Button>
       </div>
     );
   }
@@ -123,8 +125,8 @@ function SquareStep({ site, onResult }: { site: Site; onResult: (r: ImportResult
     <div className="space-y-4">
       <div className="flex flex-wrap gap-2">
         {[{ l: "Last pay period", p: prev }, { l: "Current pay period", p: cur }].map(({ l, p }) => (
-          <Button key={l} size="sm" variant={start === p.start && end === p.end ? "secondary" : "outline"} onClick={() => { setStart(p.start); setEnd(p.end); }}>
-            {l} <span className="text-muted-foreground font-normal">{app.date(p.start)}–{app.date(p.end)}</span>
+          <Button key={l} size="sm" variant={start === p.start && end === p.end ? "tinted" : "outline"} aria-pressed={start === p.start && end === p.end} onClick={() => { setStart(p.start); setEnd(p.end); }}>
+            {l} <span className="font-normal opacity-75">{app.date(p.start)}–{app.date(p.end)}</span>
           </Button>
         ))}
       </div>
@@ -153,11 +155,11 @@ function FileDrop({ accept, onFile, label, busy }: { accept: string; onFile: (f:
       role="button"
       tabIndex={0}
       onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") ref.current?.click(); }}
-      className={cn("flex cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed p-8 text-center transition-colors", over ? "border-primary bg-primary/5" : "border-border hover:border-primary/50")}
+      className={cn("flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed p-10 text-center transition-colors duration-150 focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/35", over ? "border-primary bg-primary/5" : "border-border hover:border-primary/40 hover:bg-foreground/[0.015]")}
       data-testid="dropzone"
     >
-      {busy ? <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /> : <Upload className="h-6 w-6 text-muted-foreground" />}
-      <p className="text-sm font-medium">{label}</p>
+      <span className="flex h-11 w-11 items-center justify-center rounded-full bg-primary/10 text-primary">{busy ? <Loader2 className="h-5 w-5 animate-spin" /> : <Upload className="h-5 w-5" />}</span>
+      <p className="text-[14px] font-semibold">{label}</p>
       <p className="text-xs text-muted-foreground">Drag a file here or click to browse</p>
       <input ref={ref} type="file" accept={accept} className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) onFile(f); e.target.value = ""; }} data-testid="input-file" />
     </div>
@@ -193,8 +195,8 @@ function CsvStep({ onResult }: { onResult: (r: ImportResult) => void }) {
       <FileDrop accept=".csv,text/csv" onFile={load} label={file ? file.name : "Choose a CSV file"} />
       {error && <ErrorNote>{error}</ErrorNote>}
       {parsed?.needsMapping && (
-        <div className="space-y-3 rounded-lg border p-4">
-          <p className="text-sm font-medium">Match the columns</p>
+        <div className="space-y-3 rounded-xl border border-border/80 p-4">
+          <p className="text-[14px] font-semibold">Match the columns</p>
           <p className="text-xs text-muted-foreground">We couldn't recognise this layout automatically. Pick which column holds each value. Dates can include the time (e.g. "9/20/26 10:44 AM").</p>
           <div className="grid gap-3 sm:grid-cols-2">
             {fields.map((f) => (
@@ -242,8 +244,8 @@ function PdfStep({ site, onResult }: { site: Site; onResult: (r: ImportResult) =
   return (
     <div className="space-y-4">
       <FileDrop accept="application/pdf,.pdf" busy={busy} onFile={(f) => { setFile(f); run(f); }} label={file ? file.name : "Choose a schedule PDF"} />
-      <details className="text-xs text-muted-foreground">
-        <summary className="cursor-pointer select-none">How to get a PDF from Toast / Sling</summary>
+      <details className="rounded-lg bg-foreground/[0.03] px-3 py-2.5 text-xs text-muted-foreground">
+        <summary className="cursor-pointer select-none font-medium text-foreground/80">How to get a PDF from Toast / Sling</summary>
         <ul className="mt-2 list-disc pl-5 space-y-1">
           <li>Sling by Toast: Schedule → choose Week view → Print → Download PDF.</li>
           <li>Toast Web: Reports → Labor → Time entries → export, or print the page to PDF.</li>
@@ -252,7 +254,7 @@ function PdfStep({ site, onResult }: { site: Site; onResult: (r: ImportResult) =
       </details>
       {error && <ErrorNote>{error}</ErrorNote>}
       {res && (res.needsWeekStart || !res.shifts.length) && (
-        <div className="space-y-3 rounded-lg border p-4">
+        <div className="space-y-3 rounded-xl border border-border/80 p-4">
           {res.warnings.map((w, i) => <p key={i} className="text-sm">{w}</p>)}
           {res.unmatched.length > 0 && (
             <details className="text-xs"><summary className="cursor-pointer text-muted-foreground">Lines with times we couldn't place ({res.unmatched.length})</summary>
@@ -304,21 +306,21 @@ function ReviewStep({ result, onBack, onConfirm, mode }: { result: ImportResult;
   return (
     <div className="space-y-4">
       {result.warnings.length > 0 && (
-        <ul className="space-y-1 rounded-md bg-muted/60 px-3 py-2 text-xs text-muted-foreground">
+        <ul className="space-y-1 rounded-lg bg-foreground/[0.04] px-3 py-2.5 text-xs text-muted-foreground">
           {result.warnings.map((w, i) => <li key={i}>{w}</li>)}
         </ul>
       )}
-      <div className="flex flex-wrap gap-x-6 gap-y-1 text-sm">
-        <span><b className="tabular">{kept.length}</b> shifts</span>
-        <span><b className="tabular">{names.length - excluded.size}</b> employees</span>
-        {dates.length > 0 && <span>{app.date(dates[0])} – {app.date(dates[dates.length - 1])}</span>}
+      <div className="grid grid-cols-3 divide-x divide-border/70 rounded-xl border border-border/80 text-center">
+        <div className="px-3 py-2.5"><p className="text-[20px] font-semibold tabular">{kept.length}</p><p className="text-xs text-muted-foreground">shifts</p></div>
+        <div className="px-3 py-2.5"><p className="text-[20px] font-semibold tabular">{names.length - excluded.size}</p><p className="text-xs text-muted-foreground">employees</p></div>
+        <div className="flex flex-col justify-center px-3 py-2.5"><p className="text-[13px] font-semibold">{dates.length > 0 ? `${app.date(dates[0])} – ${app.date(dates[dates.length - 1])}` : "—"}</p><p className="text-xs text-muted-foreground">dates</p></div>
       </div>
-      <div className="max-h-[40dvh] overflow-y-auto rounded-lg border divide-y">
+      <div className="max-h-[40dvh] divide-y divide-border/70 overflow-y-auto rounded-xl border border-border/80">
         {names.map((n) => {
           const list = byEmp.get(employeeKey(n)) ?? [];
           const off = excluded.has(employeeKey(n));
           return (
-            <label key={n} className={cn("flex items-center gap-3 px-3 py-2 text-sm cursor-pointer", off && "opacity-50")}>
+            <label key={n} className={cn("flex cursor-pointer items-center gap-3 px-3.5 py-2.5 text-[13px] transition-colors hover:bg-foreground/[0.02]", off && "opacity-50")}>
               <Checkbox checked={!off} onCheckedChange={(v) => { const s = new Set(excluded); v ? s.delete(employeeKey(n)) : s.add(employeeKey(n)); setExcluded(s); }} data-testid={`checkbox-import-${employeeKey(n)}`} />
               <span className="flex-1 min-w-0 truncate font-medium">{n}</span>
               <span className="text-xs text-muted-foreground tabular whitespace-nowrap">{list.length} shift{list.length === 1 ? "" : "s"}</span>
@@ -330,7 +332,7 @@ function ReviewStep({ result, onBack, onConfirm, mode }: { result: ImportResult;
         <div className="space-y-1.5"><Label>Timesheet name (optional)</Label><Input value={label} onChange={(e) => setLabel(e.target.value)} placeholder={result.filename} data-testid="input-import-label" /></div>
       )}
       {error && <ErrorNote>{error}</ErrorNote>}
-      <div className="flex gap-2 justify-end">
+      <div className="flex justify-end gap-2 border-t border-border/70 pt-4">
         <Button variant="outline" onClick={onBack}>Back</Button>
         <Button
           disabled={busy || !kept.length}

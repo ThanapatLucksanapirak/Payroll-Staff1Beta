@@ -45,7 +45,7 @@ export function DataSettings() {
   };
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
       <Section title="Backup" description="Download everything as one JSON file — timesheets, locations, categories, rates and preferences.">
         <div className="flex flex-wrap items-center gap-4">
           <Button onClick={backup} disabled={!!busy} data-testid="button-backup">{busy === "backup" ? <Loader2 className="animate-spin" /> : <Download />} Download backup</Button>
@@ -118,7 +118,7 @@ function ServerBackups() {
         {list.isLoading ? <p className="text-sm text-muted-foreground">Loading…</p> : exports.length === 0 ? (
           <p className="text-sm text-muted-foreground">No server backups yet. The first one is made a minute after the app starts.</p>
         ) : (
-          <ul className="divide-y rounded-lg border max-h-72 overflow-y-auto" data-testid="list-backups">
+          <ul className="max-h-72 divide-y divide-border/70 overflow-y-auto rounded-xl border border-border/80" data-testid="list-backups">
             {exports.map((b) => (
               <li key={b.name} className="flex items-center gap-3 px-3 py-2 text-sm">
                 <div className="min-w-0 flex-1">

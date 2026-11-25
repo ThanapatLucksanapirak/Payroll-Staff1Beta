@@ -1,4 +1,4 @@
-import { useEffect, useState, useSyncExternalStore } from "react";
+import { lazy, Suspense, useEffect, useState, useSyncExternalStore } from "react";
 import { Router, Switch, Route } from "wouter";
 import { useHashLocation } from "wouter/use-hash-location";
 import { QueryClientProvider } from "@tanstack/react-query";
@@ -11,10 +11,24 @@ import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { AppDataProvider, applyTheme } from "@/context/AppData";
 import { AppShell } from "@/components/AppShell";
 import { LoginPage } from "@/pages/Login";
-import { Dashboard } from "@/pages/Dashboard";
-import { WorkspacePage } from "@/pages/Workspace";
-import { SettingsPage } from "@/pages/Settings";
 import { Button } from "@/components/ui/button";
+
+// Route-level code splitting: each page loads on first visit.
+const HomePage = lazy(() => import("@/pages/Home").then((m) => ({ default: m.HomePage })));
+const Dashboard = lazy(() => import("@/pages/Dashboard").then((m) => ({ default: m.Dashboard })));
+const WorkspacePage = lazy(() => import("@/pages/Workspace").then((m) => ({ default: m.WorkspacePage })));
+const SettingsPage = lazy(() => import("@/pages/Settings").then((m) => ({ default: m.SettingsPage })));
+const ReportsPage = lazy(() => import("@/pages/Reports").then((m) => ({ default: m.ReportsPage })));
+const LivePage = lazy(() => import("@/pages/Live").then((m) => ({ default: m.LivePage })));
+const EmployeesPage = lazy(() => import("@/pages/Employees").then((m) => ({ default: m.EmployeesPage })));
+
+function PageFallback() {
+  return (
+    <div className="flex min-h-[50vh] items-center justify-center" role="status" aria-label="Loading">
+      <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+    </div>
+  );
+}
 
 interface AuthStatus { setupRequired: boolean; authenticated: boolean; appName: string; db: { connected: boolean; error: string | null } }
 
@@ -39,7 +53,8 @@ function Gate() {
       <FullScreen>
         <div className="space-y-3">
           <ServerCrash className="mx-auto h-8 w-8 text-muted-foreground" />
-          <p className="text-sm text-muted-foreground">{error}</p>
+          <p className="font-semibold">Can't reach the server</p>
+          <p className="max-w-sm text-sm text-muted-foreground">{error}</p>
           <Button variant="outline" onClick={load}><RefreshCw /> Try again</Button>
         </div>
       </FullScreen>
@@ -69,12 +84,18 @@ function Gate() {
     >
       <AppShell>
         <ErrorBoundary>
-          <Switch>
-            <Route path="/" component={Dashboard} />
-            <Route path="/timesheet/:id">{(p) => <WorkspacePage key={p.id} id={p.id} />}</Route>
-            <Route path="/settings/:section?">{(p) => <SettingsPage section={p.section} />}</Route>
-            <Route><Dashboard /></Route>
-          </Switch>
+          <Suspense fallback={<PageFallback />}>
+            <Switch>
+              <Route path="/"><HomePage /></Route>
+              <Route path="/timesheets"><Dashboard /></Route>
+              <Route path="/timesheet/:id">{(p) => <WorkspacePage key={p.id} id={p.id} />}</Route>
+              <Route path="/live"><LivePage /></Route>
+              <Route path="/employees"><EmployeesPage /></Route>
+              <Route path="/reports"><ReportsPage /></Route>
+              <Route path="/settings/:section?">{(p) => <SettingsPage section={p.section} />}</Route>
+              <Route><HomePage /></Route>
+            </Switch>
+          </Suspense>
         </ErrorBoundary>
       </AppShell>
     </AppDataProvider>

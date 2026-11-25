@@ -33,45 +33,51 @@ export function LoginPage({ appName, setupRequired, dbError, onDone }: { appName
   };
 
   return (
-    <div className="min-h-dvh flex items-center justify-center bg-background p-4">
-      <form onSubmit={submit} className="w-full max-w-sm rounded-xl border bg-card p-6 shadow-sm space-y-5" data-testid="form-login">
-        <div className="flex flex-col items-center gap-3 text-center">
-          <Logo className="h-11 w-11" />
+    <div className="relative flex min-h-dvh items-center justify-center overflow-hidden bg-background p-4">
+      {/* Soft ambient backdrop */}
+      <div aria-hidden className="pointer-events-none absolute inset-0 bg-[radial-gradient(60rem_40rem_at_50%_-10%,hsl(var(--primary)/0.10),transparent_60%),radial-gradient(40rem_30rem_at_100%_110%,hsl(var(--chart-4)/0.08),transparent_60%)]" />
+      <div className="relative w-full max-w-[22rem]">
+        <div className="mb-7 flex flex-col items-center gap-4 text-center">
+          <Logo className="h-16 w-16 drop-shadow-[0_8px_24px_hsl(var(--primary)/0.35)]" />
           <div>
-            <h1 className="text-lg font-semibold">{appName}</h1>
-            <p className="text-sm text-muted-foreground">
-              {setupRequired ? "Create the administrator password to get started." : "Enter the administrator password."}
+            <h1 className="text-[26px] font-bold tracking-tight">{appName}</h1>
+            <p className="mt-1 text-[14px] text-muted-foreground">
+              {setupRequired ? "Create the administrator password to get started." : "Sign in to continue."}
             </p>
           </div>
         </div>
-        {dbError && <p className="rounded-md bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900 px-3 py-2 text-xs text-amber-800 dark:text-amber-200">Database issue: {dbError}</p>}
-        {setupRequired && (
-          <div className="space-y-2">
-            <Label htmlFor="setup-code">Setup code</Label>
-            <Input id="setup-code" autoFocus autoComplete="off" spellCheck={false} placeholder="XXXXX-XXXXX" className="font-mono tracking-wider uppercase" value={setupCode} onChange={(e) => setSetupCode(e.target.value)} data-testid="input-setup-code" />
-            <p className="text-xs text-muted-foreground">Shown by the installer. You can also find it on the server in the data folder, in setup-code.txt.</p>
+        <form onSubmit={submit} className="space-y-4 rounded-2xl border border-card-border bg-card/90 p-6 shadow-float backdrop-blur-xl" data-testid="form-login">
+          {dbError && <p className="rounded-lg bg-warning-soft px-3 py-2 text-xs text-warning" role="alert">Database issue: {dbError}</p>}
+          {setupRequired && (
+            <div className="space-y-1.5">
+              <Label htmlFor="setup-code">Setup code</Label>
+              <Input id="setup-code" autoFocus autoComplete="off" spellCheck={false} placeholder="XXXXX-XXXXX" className="h-10 font-mono uppercase tracking-wider" value={setupCode} onChange={(e) => setSetupCode(e.target.value)} data-testid="input-setup-code" />
+              <p className="text-xs leading-snug text-muted-foreground">Shown by the installer. You can also find it on the server in the data folder, in setup-code.txt.</p>
+            </div>
+          )}
+          <div className="space-y-1.5">
+            <Label htmlFor="pw">{setupRequired ? "New password" : "Password"}</Label>
+            <Input id="pw" type="password" className="h-10" autoFocus={!setupRequired} autoComplete={setupRequired ? "new-password" : "current-password"} value={password} onChange={(e) => setPassword(e.target.value)} aria-invalid={!!error || undefined} aria-describedby={error ? "login-error" : undefined} data-testid="input-password" />
+            {setupRequired && <p className="text-xs text-muted-foreground">At least 8 characters.</p>}
           </div>
-        )}
-        <div className="space-y-2">
-          <Label htmlFor="pw">{setupRequired ? "New password" : "Password"}</Label>
-          <Input id="pw" type="password" autoFocus={!setupRequired} autoComplete={setupRequired ? "new-password" : "current-password"} value={password} onChange={(e) => setPassword(e.target.value)} data-testid="input-password" />
-        </div>
-        {setupRequired && (
-          <div className="space-y-2">
-            <Label htmlFor="pw2">Confirm password</Label>
-            <Input id="pw2" type="password" autoComplete="new-password" value={confirm} onChange={(e) => setConfirm(e.target.value)} data-testid="input-password-confirm" />
-          </div>
-        )}
-        <label className="flex items-center gap-2 text-sm text-muted-foreground cursor-pointer select-none">
-          <Checkbox checked={remember} onCheckedChange={(v) => setRemember(v === true)} data-testid="checkbox-remember" />
-          Keep me signed in on this device
-        </label>
-        {error && <p className="text-sm text-destructive" role="alert" data-testid="text-login-error">{error}</p>}
-        <Button type="submit" className="w-full" disabled={busy || !password || (setupRequired && !setupCode.trim())} data-testid="button-login">
-          {busy ? <Loader2 className="animate-spin" /> : setupRequired ? <ShieldCheck /> : <Lock />}
-          {setupRequired ? "Create password" : "Unlock"}
-        </Button>
-      </form>
+          {setupRequired && (
+            <div className="space-y-1.5">
+              <Label htmlFor="pw2">Confirm password</Label>
+              <Input id="pw2" type="password" className="h-10" autoComplete="new-password" value={confirm} onChange={(e) => setConfirm(e.target.value)} data-testid="input-password-confirm" />
+            </div>
+          )}
+          <label className="flex cursor-pointer select-none items-center gap-2 text-[13px] text-muted-foreground">
+            <Checkbox checked={remember} onCheckedChange={(v) => setRemember(v === true)} data-testid="checkbox-remember" />
+            Keep me signed in on this device
+          </label>
+          {error && <p id="login-error" className="rounded-lg bg-danger-soft px-3 py-2 text-[13px] font-medium text-danger" role="alert" data-testid="text-login-error">{error}</p>}
+          <Button type="submit" size="lg" className="w-full" disabled={busy || !password || (setupRequired && !setupCode.trim())} data-testid="button-login">
+            {busy ? <Loader2 className="animate-spin" /> : setupRequired ? <ShieldCheck /> : <Lock />}
+            {setupRequired ? "Create password" : "Unlock"}
+          </Button>
+        </form>
+        <p className="mt-6 text-center text-xs text-muted-foreground">Your data stays on your own server.</p>
+      </div>
     </div>
   );
 }
