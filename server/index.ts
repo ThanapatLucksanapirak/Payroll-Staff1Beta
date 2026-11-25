@@ -7,6 +7,7 @@ import { closeDatabase, initDatabase } from "./db";
 import { announceSetupCode } from "./auth";
 import { scheduleBackups, stopBackups } from "./backup";
 import { securityHeaders } from "./security";
+import { runAdminCliAndExit } from "./cli";
 
 const app = express();
 const httpServer = createServer(app);
@@ -58,6 +59,8 @@ process.on("SIGTERM", () => shutdown("SIGTERM"));
 process.on("SIGINT", () => shutdown("SIGINT"));
 
 (async () => {
+  // `node dist/index.cjs admin ...`: operator commands, no web server.
+  if (process.argv[2] === "admin") return runAdminCliAndExit(process.argv.slice(3));
   await initDatabase();
   registerRoutes(app);
   if (process.env.NODE_ENV === "production") serveStatic(app);

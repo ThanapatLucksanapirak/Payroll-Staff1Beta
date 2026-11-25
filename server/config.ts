@@ -13,6 +13,8 @@ export interface LocalConfig {
   database?: DatabaseConfig;
   authSecret?: string;
   passwordHashCache?: string;
+  /** Last known user accounts, so sign-in still works while the database is unreachable. */
+  usersCache?: unknown[];
   setupCode?: string;
 }
 
