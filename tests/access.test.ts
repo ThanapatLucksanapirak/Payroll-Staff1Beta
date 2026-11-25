@@ -480,3 +480,33 @@ test("offsite: S3 upload is signed, the secret stays on the server, and settings
     await new Promise<void>((r) => s3server.close(() => r()));
   }
 });
+
+// ── Installable app ──────────────────────────────────────────────────────────
+test("installable app: manifests, icons and service worker ship, and the kiosk host serves them", async () => {
+  const pub = path.resolve(import.meta.dirname, "..", "client", "public");
+  const main = JSON.parse(fs.readFileSync(path.join(pub, "manifest.webmanifest"), "utf8"));
+  const kiosk = JSON.parse(fs.readFileSync(path.join(pub, "kiosk.webmanifest"), "utf8"));
+  assert.equal(main.theme_color, "#ffffff");
+  assert.equal(kiosk.scope, "/kiosk");
+  assert.equal(kiosk.display, "fullscreen");
+  for (const icon of [...main.icons, ...kiosk.icons]) assert.ok(fs.existsSync(path.join(pub, icon.src)), icon.src);
+  assert.ok(main.icons.some((i: any) => i.purpose === "maskable"));
+  const sw = fs.readFileSync(path.join(pub, "sw.js"), "utf8");
+  assert.match(sw, /startsWith\("\/api\/"\)\) return; \/\/ never cache data/);
+
+  const { request } = await import("node:http");
+  const get = (p: string) => new Promise<{ status: number; type: string }>((resolve, reject) => {
+    const u = new URL(base);
+    const r = request({ host: u.hostname, port: u.port, path: p, headers: { Host: "clock.example.com" } }, (res) => { res.resume(); resolve({ status: res.statusCode ?? 0, type: String(res.headers["content-type"] ?? "") }); });
+    r.on("error", reject);
+    r.end();
+  });
+  process.env.KIOSK_HOST = "clock.example.com";
+  try {
+    // Allowed paths fall through (no static files in tests); blocked ones get the guard's plain-text 404.
+    for (const p of ["/kiosk.webmanifest", "/sw.js", "/icons/icon-192.png"]) assert.doesNotMatch((await get(p)).type, /text\/plain/, p);
+    assert.match((await get("/manifest.webmanifest")).type, /text\/plain/);
+  } finally {
+    delete process.env.KIOSK_HOST;
+  }
+});
