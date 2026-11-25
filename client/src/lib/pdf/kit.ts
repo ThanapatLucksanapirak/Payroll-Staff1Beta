@@ -252,8 +252,8 @@ export interface Totals {
 export function totalsOf(list: EmployeeSummary[]): Totals {
   const t: Totals = { count: list.length, base: 0, dock: 0, pay: 0, net: 0, gross: 0, bonus: 0, ded: 0, hrs: 0, ot: 0, full: 0, half: 0, flagged: 0, hourly: 0, daily: 0 };
   for (const e of list) {
-    t.base += e.totalBasePay + e.totalDocked; t.dock += e.totalDocked; t.pay += e.totalPay;
-    if (e.isNetPay) t.net += e.totalPay; else t.gross += e.totalPay;
+    t.base += e.totalBasePay + e.totalDocked; t.dock += e.totalDocked; t.pay += Math.max(0, e.totalPay);
+    if (e.isNetPay) t.net += Math.max(0, e.totalPay); else t.gross += Math.max(0, e.totalPay);
     t.bonus += e.totalBonuses; t.ded += e.totalDeductions; t.hrs += e.hoursWorked; t.ot += e.overtimeHours;
     t.full += e.fullDays; t.half += e.halfDays; t.flagged += e.flaggedDays;
     if (!e.isManual) { if (e.payBasis === "hourly") t.hourly++; else t.daily++; }

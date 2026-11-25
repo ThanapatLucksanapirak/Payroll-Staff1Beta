@@ -254,27 +254,37 @@ wait_healthy() {
 }
 
 restart_app() {
-  if has_systemd; then systemctl restart payroll.service
+  # Clear systemd's start-limit counter first: after a crashing version, a plain
+  # restart is refused with "start request repeated too quickly".
+  if has_systemd; then systemctl reset-failed payroll.service 2>/dev/null || true; systemctl restart payroll.service
   else warn "systemd is not running; start the app manually."; fi
 }
 
 # Snapshot DATA_DIR before risky changes. Prints the archive path.
 snapshot_data() {
-  local reason="${1:-manual}" f
-  mkdir -p "$PAYROLL_BACKUPS"; chmod 700 "$PAYROLL_BACKUPS"
+  # Fails (non-zero, no path printed) if any step fails, e.g. a full disk, so
+  # callers never go ahead on a partial backup.
+  local reason="${1:-manual}" f tmp db rel
+  mkdir -p "$PAYROLL_BACKUPS" && chmod 700 "$PAYROLL_BACKUPS" || return 1
   f="$PAYROLL_BACKUPS/data-$(date -u +%Y%m%d-%H%M%S)-$reason.tar.gz"
-  # SQLite in WAL mode: copy with sqlite3 .backup when available for a consistent snapshot.
-  local tmp; tmp="$(mktemp -d)"
-  cp -a "$PAYROLL_DATA/." "$tmp/" 2>/dev/null || true
+  tmp="$(mktemp -d)" || return 1
+  if ! cp -a "$PAYROLL_DATA/." "$tmp/"; then
+    warn "Backup failed: could not copy $PAYROLL_DATA (is the disk full?)"; rm -rf "$tmp"; return 1
+  fi
   rm -rf "$tmp/backups" "$tmp/.npm"
+  # SQLite in WAL mode: copy with sqlite3 .backup when available for a consistent snapshot.
   if command -v sqlite3 >/dev/null; then
-    local db
     while IFS= read -r db; do
-      rm -f "$tmp/${db#"$PAYROLL_DATA"/}-wal" "$tmp/${db#"$PAYROLL_DATA"/}-shm"
-      sqlite3 "$db" ".backup '$tmp/${db#"$PAYROLL_DATA"/}'" 2>/dev/null || true
+      rel="${db#"$PAYROLL_DATA"/}"
+      rm -f "$tmp/$rel-wal" "$tmp/$rel-shm"
+      if ! sqlite3 "$db" ".backup '$tmp/$rel'"; then
+        warn "Backup failed: could not copy the database $rel"; rm -rf "$tmp"; return 1
+      fi
     done < <(find "$PAYROLL_DATA" -maxdepth 2 -type f -name '*.db' -not -path '*/backups/*')
   fi
-  tar -czf "$f" -C "$tmp" .
+  if ! tar -czf "$f" -C "$tmp" . || ! gzip -t "$f" 2>/dev/null; then
+    warn "Backup failed: could not write $f (is the disk full?)"; rm -rf "$tmp"; rm -f "$f"; return 1
+  fi
   rm -rf "$tmp"
   chmod 600 "$f"
   ls -1t "$PAYROLL_BACKUPS"/data-*.tar.gz 2>/dev/null | tail -n +11 | xargs -r rm -f

@@ -134,7 +134,7 @@ export function HomePage() {
             />
           </div>
 
-          <div className="grid gap-6 lg:grid-cols-[1.35fr_1fr]">
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)]">
             {/* Recent timesheets */}
             <section>
               <SectionLabel action={<Link href="/timesheets" className="inline-flex items-center gap-0.5 text-[13px] font-medium text-primary hover:underline" data-testid="link-all-timesheets">See all<ChevronRight className="h-3.5 w-3.5" /></Link>}>Recent timesheets</SectionLabel>

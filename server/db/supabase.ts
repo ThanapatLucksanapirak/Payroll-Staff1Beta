@@ -4,7 +4,7 @@ import type { DatabaseHealth } from "@shared/schema";
 import { randomUUID } from "node:crypto";
 import { fetchWithTimeout } from "../http";
 import type { Punch } from "@shared/punches";
-import { type DataStore, type PunchPatch, type PunchQuery, type TimesheetRow, type TimesheetWrite, StoreError, patchToRow, punchToRow, rowToPunch, toSummary } from "./types";
+import { MAX_PUNCH_QUERY, type DataStore, type ImportData, type ImportOptions, type PunchPatch, type PunchQuery, type TimesheetRow, type TimesheetWrite, StoreError, patchToRow, punchToRow, rowToPunch, toSummary } from "./types";
 
 const EXT_COLS = ["site_id", "meta_json"] as const;
 const ROW_COLS = [
@@ -183,7 +183,7 @@ export class SupabaseStore implements DataStore {
     if (q.employeeId) f.push(`employee_id=eq.${encodeURIComponent(q.employeeId)}`);
     if (q.from) f.push(`at=gte.${encodeURIComponent(q.from)}`);
     if (q.to) f.push(`at=lt.${encodeURIComponent(q.to)}`);
-    f.push("order=at.asc,id.asc", `limit=${Math.max(1, Math.min(q.limit ?? 20000, 50000))}`);
+    f.push("order=at.asc,id.asc", `limit=${Math.max(1, Math.min(q.limit ?? 20000, MAX_PUNCH_QUERY + 1))}`);
     return ((await this.punchReq("GET", `/punches?${f.join("&")}`)) ?? []).map(rowToPunch);
   }
   async getPunch(id: string) {
@@ -217,22 +217,48 @@ export class SupabaseStore implements DataStore {
    * with a single request: a bad row fails the whole batch. Timesheets go
    * first so a failure never leaves settings pointing at missing data.
    */
-  async importAll(data: { settings: { key: string; value: string }[]; timesheets: TimesheetWrite[] }) {
+  async importAll(data: ImportData, opts: ImportOptions = {}) {
     const now = new Date().toISOString();
-    if (data.timesheets.length) {
-      const rows = data.timesheets.map((t) => {
-        const r = this.encode({ ...t, updated_at: now } as any);
-        if (!r.id) r.id = randomUUID();
-        return r;
-      });
-      await this.write("POST", `/recent_uploads?on_conflict=id`, rows, "resolution=merge-duplicates,return=minimal");
-    }
-    if (data.settings.length) {
-      await this.req("POST", `/app_settings?on_conflict=key`, data.settings.map((s) => ({ key: s.key, value: s.value, updated_at: now })), {
+    const keep = opts.keepSetting ?? (() => false);
+    const settings = data.settings.filter((x) => !keep(x.key));
+    const rows = data.timesheets.map((t) => {
+      const r = this.encode({ ...t, updated_at: now } as any);
+      if (!r.id) r.id = randomUUID();
+      return r;
+    });
+    // Upsert first, then delete what the import doesn't contain: if a request
+    // fails part-way, nothing from the backup is missing.
+    if (rows.length) await this.write("POST", `/recent_uploads?on_conflict=id`, rows, "resolution=merge-duplicates,return=minimal");
+    if (settings.length) {
+      await this.req("POST", `/app_settings?on_conflict=key`, settings.map((s) => ({ key: s.key, value: s.value, updated_at: now })), {
         Prefer: "resolution=merge-duplicates,return=minimal",
       });
     }
-    return { settings: data.settings.length, timesheets: data.timesheets.length };
+    if (data.punches?.length) {
+      await this.punchReq("POST", `/punches?on_conflict=id`, data.punches.map(punchToRow), {
+        Prefer: `resolution=${opts.replace ? "merge" : "ignore"}-duplicates,return=minimal`,
+      });
+    }
+    if (opts.replace) {
+      const ids = new Set(rows.map((r: any) => String(r.id)));
+      const extra = ((await this.req("GET", `/recent_uploads?select=id`)) ?? []).map((r: any) => String(r.id)).filter((id: string) => !ids.has(id));
+      await this.deleteIn("/recent_uploads", "id", extra);
+      const keys = new Set(settings.map((s) => s.key));
+      const extraKeys = ((await this.req("GET", `/app_settings?select=key`)) ?? []).map((r: any) => String(r.key)).filter((k: string) => !keys.has(k) && !keep(k));
+      await this.deleteIn("/app_settings", "key", extraKeys);
+      if (data.punches) {
+        const pids = new Set(data.punches.map((p) => p.id));
+        const extraP = ((await this.punchReq("GET", `/punches?select=id`)) ?? []).map((r: any) => String(r.id)).filter((id: string) => !pids.has(id));
+        await this.deleteIn("/punches", "id", extraP);
+      }
+    }
+    return { settings: settings.length, timesheets: rows.length, punches: data.punches?.length ?? 0 };
+  }
+  private async deleteIn(table: string, col: string, values: string[]) {
+    for (let i = 0; i < values.length; i += 100) {
+      const list = values.slice(i, i + 100).map((v) => `"${v.replace(/"/g, '\\"')}"`).join(",");
+      await this.req("DELETE", `${table}?${col}=in.(${encodeURIComponent(list)})`, undefined, { Prefer: "return=minimal" });
+    }
   }
 
   async health(): Promise<DatabaseHealth> {

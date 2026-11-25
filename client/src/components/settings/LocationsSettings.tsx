@@ -166,7 +166,7 @@ function SquareSection({ site }: { site: Site }) {
     <Section title="Square" description="Pull closed timecards straight from Square for this location." actions={connected ? <Badge variant="success"><Link2 />Connected</Badge> : <Badge variant="secondary">Not connected</Badge>}>
       {connected ? (
         <div className="flex flex-wrap items-end gap-3">
-          <Field label="Square location" className="min-w-[16rem] flex-1">
+          <Field label="Square location" className="min-w-0 flex-1 basis-64">
             {locations === null ? <div className="flex h-9 items-center text-sm text-muted-foreground"><Loader2 className="mr-2 h-4 w-4 animate-spin" />Loading…</div> : (
               <Select value={site.squareLocationId || undefined} onValueChange={pick}>
                 <SelectTrigger data-testid="select-square-location"><SelectValue placeholder={locations.length ? "Choose a location" : "No locations found"} /></SelectTrigger>
@@ -178,7 +178,7 @@ function SquareSection({ site }: { site: Site }) {
         </div>
       ) : (
         <form className="flex flex-wrap items-end gap-2" onSubmit={(e) => { e.preventDefault(); void connect(); }}>
-          <Field label="Access token" hint="From developer.squareup.com → your app → Credentials → Production access token. Needs Timecards and Merchant profile read access." className="min-w-[16rem] flex-1">
+          <Field label="Access token" hint="From developer.squareup.com → your app → Credentials → Production access token. Needs Timecards and Merchant profile read access." className="min-w-0 flex-1 basis-64">
             <Input type="password" autoComplete="off" value={token} onChange={(e) => setToken(e.target.value)} placeholder="EAAA…" data-testid="input-square-token" />
           </Field>
           <Button type="submit" disabled={token.trim().length < 10 || busy} className="mb-5" data-testid="button-square-connect">{busy && <Loader2 className="animate-spin" />}Connect</Button>

@@ -212,12 +212,14 @@ function CsvStep({ onResult }: { onResult: (r: ImportResult) => void }) {
   const [parsed, setParsed] = useState<CsvParseResult | null>(null);
   const [mapping, setMapping] = useState<CsvMapping>({});
   const [error, setError] = useState("");
+  const { prefs } = useApp();
+  const dayFirst = prefs?.dateFormat === "D/M/YY";
 
   const load = async (f: File) => {
     setError("");
     if (f.size > 15 * 1024 * 1024) { setError("That file is larger than 15 MB."); return; }
     const text = await f.text();
-    const r = parseCsvText(text);
+    const r = parseCsvText(text, { dayFirst });
     setFile({ name: f.name, text });
     setParsed(r);
     setMapping(r.mapping);
@@ -225,7 +227,7 @@ function CsvStep({ onResult }: { onResult: (r: ImportResult) => void }) {
   };
   const remap = () => {
     if (!file) return;
-    const r = parseCsvText(file.text, { mapping });
+    const r = parseCsvText(file.text, { mapping, dayFirst });
     setParsed(r);
     if (r.shifts.length) onResult({ shifts: r.shifts, source: "csv", filename: file.name, label: "", warnings: r.warnings });
     else setError(r.warnings.join(" ") || "No shifts found with that mapping.");

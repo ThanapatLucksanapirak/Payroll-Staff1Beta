@@ -220,6 +220,7 @@ test("sign out, sign out everywhere, and password changes end sessions", async (
   const out = await call("POST", "/api/auth/logout", undefined, { as: "v1" });
   assert.equal(out.status, 200);
   assert.match(out.headers.get("set-cookie") ?? "", /payroll_session=;.*Expires=Thu, 01 Jan 1970/);
+  assert.equal((await call("GET", "/api/bootstrap", undefined, { as: "v1" })).status, 401, "a copied cookie stops working after sign out");
 
   assert.equal((await call("GET", "/api/bootstrap", undefined, { as: "v2" })).status, 200);
   assert.equal((await call("POST", "/api/auth/logout-all", undefined, { as: "v2" })).status, 200);

@@ -1,6 +1,7 @@
 // PDF + CSV exports. The builders in ./pdf/* are pure (they run in Node for
 // tests); this module adds the browser download wrappers.
 import { PAYMENT_LABELS, type AnalysisResult } from "@shared/schema";
+import { csvCell } from "@shared/csvSafe";
 import { downloadBlob, safeFilename } from "./doc";
 import type { PdfOptions } from "./pdf/kit";
 import { buildPayrollPdf } from "./pdf/report";
@@ -39,10 +40,9 @@ export function downloadPayoutSheetPdf(o: DownloadOptions) {
 
 /** Summary CSV (one row per employee) — opens cleanly in Excel / Sheets. */
 export function payrollSummaryCsv(result: AnalysisResult): string {
-  const esc = (v: unknown) => { const s = String(v ?? ""); return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
   const rows = [["Employee", "Category", "Pay basis", "Full days", "Half days", "Flagged days", "Hours", "Overtime hours", "Base pay", "Docked", "Bonuses", "Deductions", "Total pay", "Net/Gross", "Paid by", "Cash", "Bank transfer", "Check", "Included"]];
   for (const e of result.employees) {
     rows.push([e.name, e.isManual ? "Manual" : e.categoryName ?? "Custom", e.payBasis, e.fullDays, e.halfDays, e.flaggedDays, e.hoursWorked, e.overtimeHours, e.totalBasePay, e.totalDocked, e.totalBonuses, e.totalDeductions, e.totalPay, e.isNetPay ? "Net" : "Gross", PAYMENT_LABELS[e.payment.method], e.payment.cash, e.payment.bank, e.payment.check, e.excluded ? "No" : "Yes"].map(String));
   }
-  return rows.map((r) => r.map(esc).join(",")).join("\r\n");
+  return rows.map((r) => r.map(csvCell).join(",")).join("\r\n");
 }
