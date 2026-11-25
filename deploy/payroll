@@ -572,7 +572,7 @@ cmd_doctor() {
   else flag "Low disk space: $(human_size $(( ${avail:-0} * 1024 ))) free" "Fix: free space, or delete old backups in $PAYROLL_BACKUPS"; fi
 
   own="$(stat -c '%U:%G' "$PAYROLL_DATA" 2>/dev/null || echo missing)"
-  if [[ "$own" == "$PAYROLL_USER:$PAYROLL_USER" ]] && [[ -z "$(find "$PAYROLL_DATA" ! -user "$PAYROLL_USER" -print -quit 2>/dev/null)" ]]; then
+  if [[ "$own" == "$PAYROLL_USER:$PAYROLL_USER" ]] && [[ -z "$(find "$PAYROLL_DATA" ! -user "$PAYROLL_USER" ! -name update-status.json -print -quit 2>/dev/null)" ]]; then
     pass "Data folder owned by $PAYROLL_USER"
   else flag "Data folder ownership is wrong ($own or files inside)" "Fix: sudo chown -R $PAYROLL_USER:$PAYROLL_USER $PAYROLL_DATA"; fi
 
