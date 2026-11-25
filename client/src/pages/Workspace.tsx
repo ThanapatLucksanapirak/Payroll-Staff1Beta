@@ -8,7 +8,7 @@ import { useTimesheet, type SaveState } from "@/hooks/useTimesheet";
 import { downloadBlob, safeFilename, timeAgo } from "@/lib/doc";
 import { shiftsToCsv } from "@shared/importers/csv";
 import { errorMessage } from "@/lib/api";
-import { can, canEdit } from "@/lib/roles";
+import { can, canEdit, isAccountant } from "@/lib/roles";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -27,11 +27,13 @@ import { invalidatePay, usePaySettings, useYtd } from "@/lib/pay";
 import { ExtrasTab } from "@/components/pay/ExtrasTab";
 import { ReopenDialog } from "@/components/pay/ReopenDialog";
 import { VarianceCard } from "@/components/pay/VarianceCard";
+import { PublishPanel } from "@/components/pay/PublishPanel";
 
 export function WorkspacePage({ id }: { id: string }) {
   const app = useApp();
   const { toast } = useToast();
   const readOnly = !canEdit(app.user);
+  const accountant = isAccountant(app.user);
   const ts = useTimesheet(id, { autosave: app.prefs.autosave && !readOnly });
   const [tab, setTab] = useState("payroll");
   const [checklist, setChecklist] = useState(false);
@@ -120,8 +122,10 @@ export function WorkspacePage({ id }: { id: string }) {
             {can(app.user, "export") && <DropdownMenu>
               <DropdownMenuTrigger asChild><Button size="sm" className="ml-1" aria-label="Export" data-testid="button-export"><Download /><span className="hidden sm:inline">Export</span></Button></DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-56">
-                <DropdownMenuItem onClick={() => setChecklist(true)} data-testid="button-payroll-checklist"><ListChecks />Check before export…</DropdownMenuItem>
-                <DropdownMenuSeparator />
+                {!accountant && <>
+                  <DropdownMenuItem onClick={() => setChecklist(true)} data-testid="button-payroll-checklist"><ListChecks />Check before export…</DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                </>}
                 <DropdownMenuLabel>Export</DropdownMenuLabel>
                 <DropdownMenuItem onClick={() => exportPdf("report")} data-testid="button-export-pdf"><FileDown />Full report (PDF)</DropdownMenuItem>
                 <DropdownMenuItem onClick={() => exportPdf("summary")} data-testid="button-export-summary-pdf"><FileText />Manager summary (PDF)</DropdownMenuItem>
@@ -146,19 +150,20 @@ export function WorkspacePage({ id }: { id: string }) {
             <Button size="sm" onClick={() => ts.save(true)} data-testid="button-overwrite">Keep mine</Button>
           </div>
         )}
-        {readOnly && (
+        {readOnly && !accountant && (
           <div className="flex flex-wrap items-center gap-3 rounded-xl border border-border/80 bg-card px-4 py-2.5 text-[13px] shadow-card" data-testid="banner-view-only">
             <Lock className="h-4 w-4 shrink-0 text-muted-foreground" />
             <span className="flex-1">Your account is view-only. You can look through and export this timesheet, but not change it.</span>
           </div>
         )}
-        {doc.status === "final" && (
+        {doc.status === "final" && !accountant && (
           <div className="flex flex-wrap items-center gap-3 rounded-xl border border-border/80 bg-card px-4 py-2.5 text-[13px] shadow-card" data-testid="banner-locked">
             <Lock className="h-4 w-4 shrink-0 text-muted-foreground" />
             <span className="flex-1">This pay period is closed and the timesheet is locked.{app.user.role === "owner" ? "" : " Only an owner can reopen it."}</span>
             {app.user.role === "owner" && <Button size="sm" variant="tinted" onClick={() => setReopening(true)} data-testid="button-reopen">Reopen…</Button>}
           </div>
         )}
+        {doc.status === "final" && !ts.dirty && <PublishPanel id={id} title={title} />}
         {ts.saveState === "error" && ts.saveError && /finalized|locked/i.test(ts.saveError) && (
           <div className="flex flex-wrap items-center gap-3 rounded-xl bg-warning-soft px-4 py-3 text-[13px]" role="alert">
             <Lock className="h-4 w-4 shrink-0 text-warning" />

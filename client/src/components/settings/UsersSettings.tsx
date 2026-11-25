@@ -94,7 +94,7 @@ export function UsersSettings() {
                     <tr key={u.id} className="border-b last:border-0" data-testid={`row-user-${u.username}`}>
                       <td className="px-4 py-2.5">
                         <p className="font-medium">{u.displayName || u.username}{self && <span className="ml-1.5 text-xs font-normal text-muted-foreground">(you)</span>}</p>
-                        <p className="text-xs text-muted-foreground">{u.username}</p>
+                        <p className="text-xs text-muted-foreground">{u.username}{u.notificationEmail ? ` · ${u.notificationEmail}` : ""}</p>
                       </td>
                       <td className="px-4 py-2.5">
                         <div className="flex flex-wrap items-center gap-1">
@@ -164,6 +164,7 @@ function UserDialog({ user, open, onClose, onSaved, lastOwner }: { user: Session
   const [role, setRole] = useState<Role>("manager");
   const [siteIds, setSiteIds] = useState<string[]>([]);
   const [active, setActive] = useState(true);
+  const [email, setEmail] = useState("");
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
@@ -174,19 +175,21 @@ function UserDialog({ user, open, onClose, onSaved, lastOwner }: { user: Session
     setRole(user?.role ?? "manager");
     setSiteIds(user?.siteIds ?? []);
     setActive(user?.active ?? true);
+    setEmail(user?.notificationEmail ?? "");
   }, [open, user]);
 
   const roles = (Object.keys(ROLE_LABELS) as Role[]).filter((r) => r !== "owner" || me.role === "owner");
   const roleLocked = self || lastOwner;
-  const limited = role === "manager" || role === "viewer";
+  const limited = role === "manager" || role === "viewer" || role === "accountant";
+  const emailOk = !email.trim() || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
   const toggleSite = (id: string, on: boolean) => setSiteIds((cur) => (on ? [...new Set([...cur, id])] : cur.filter((x) => x !== id)));
 
   const save = async () => {
     setBusy(true);
     try {
-      const body = { username: username.trim(), displayName: displayName.trim(), role, siteIds: limited ? siteIds : [], active };
+      const body = { username: username.trim(), displayName: displayName.trim(), role, siteIds: limited ? siteIds : [], active, notificationEmail: email.trim() };
       if (isNew) await api("POST", "/api/users", { ...body, password });
-      else await api("PATCH", `/api/users/${user!.id}`, roleLocked ? { username: body.username, displayName: body.displayName, siteIds: body.siteIds } : body);
+      else await api("PATCH", `/api/users/${user!.id}`, roleLocked ? { username: body.username, displayName: body.displayName, siteIds: body.siteIds, notificationEmail: body.notificationEmail } : body);
       if (self) await app.refresh();
       onSaved();
       onClose();
@@ -196,7 +199,7 @@ function UserDialog({ user, open, onClose, onSaved, lastOwner }: { user: Session
     } finally { setBusy(false); }
   };
 
-  const valid = username.trim().length >= 2 && (!isNew || password.length >= MIN);
+  const valid = username.trim().length >= 2 && (!isNew || password.length >= MIN) && emailOk;
 
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
@@ -229,6 +232,9 @@ function UserDialog({ user, open, onClose, onSaved, lastOwner }: { user: Session
               </div>
             </Field>
           )}
+          <Field label="Notification email" hint={!emailOk ? "Enter a valid email address, like name@example.com." : role === "accountant" ? "They get an email here when you publish payroll. Leave empty for no emails." : "Optional. Where the app sends this person emails."}>
+            <Input type="email" inputMode="email" autoCapitalize="none" spellCheck={false} maxLength={200} value={email} onChange={(e) => setEmail(e.target.value)} placeholder="name@example.com" data-testid="input-user-email" />
+          </Field>
           {!self && (
             <label className="flex items-center justify-between gap-3 text-sm">
               <span>Active <span className="block text-xs text-muted-foreground">Inactive users can't sign in.</span></span>

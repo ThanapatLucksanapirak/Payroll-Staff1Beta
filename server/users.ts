@@ -11,10 +11,10 @@ import type { DataStore } from "./db/types";
 import { loadConfig, saveConfig } from "./config";
 import { MIN_PASSWORD, burnHash, hashPassword, isLegacyPlain, verifyHash } from "./passwords";
 
-export const ROLES = ["owner", "admin", "manager", "viewer"] as const;
+export const ROLES = ["owner", "admin", "manager", "viewer", "accountant"] as const;
 export type Role = (typeof ROLES)[number];
 
-export const ROLE_LABELS: Record<Role, string> = { owner: "Owner", admin: "Administrator", manager: "Manager", viewer: "Viewer" };
+export const ROLE_LABELS: Record<Role, string> = { owner: "Owner", admin: "Administrator", manager: "Manager", viewer: "Viewer", accountant: "Accountant" };
 
 export interface UserRecord {
   id: string;
@@ -31,6 +31,8 @@ export interface UserRecord {
   sessionVersion: number;
   /** Two-factor sign-in (server/twofactor.ts). Missing on accounts that never set it up. */
   twoFactor?: TwoFactorState | null;
+  /** Where email notifications go (e.g. "payroll published" for accountants). Empty = no emails. */
+  notificationEmail?: string;
 }
 
 /** Stored two-factor state. The secret never leaves the server after enrollment. */
@@ -67,6 +69,7 @@ const recordSchema = z.object({
   createdAt: z.string().default(() => new Date().toISOString()),
   lastLoginAt: z.string().nullable().default(null),
   sessionVersion: z.number().int().default(0),
+  notificationEmail: z.string().max(200).default("").catch(""),
   twoFactor: z.object({
     enabled: z.boolean().default(false),
     secret: z.string().nullable().default(null),
@@ -84,6 +87,9 @@ export const usernameSchema = z.string().trim()
   .regex(/^[A-Za-z0-9._@-]+$/, "Use letters, numbers, dots, dashes, underscores or @.");
 export const passwordSchema = z.string().min(MIN_PASSWORD, `Use at least ${MIN_PASSWORD} characters.`).max(200);
 export const displayNameSchema = z.string().trim().max(100);
+const EMAIL_RE = /^[^\s@<>(),;:"]+@[^\s@<>(),;:"]+\.[^\s@<>(),;:"]+$/;
+/** An email address, or "" for none. */
+export const notificationEmailSchema = z.string().trim().max(200).refine((v) => v === "" || EMAIL_RE.test(v), "Enter a valid email address, like name@example.com.");
 
 export class UserError extends Error {
   constructor(message: string, public status = 400) { super(message); }
@@ -95,7 +101,9 @@ const activeOwners = (users: UserRecord[]) => users.filter((u) => u.role === "ow
 
 // ── Permissions ─────────────────────────────────────────────────────────────
 export const isAdmin = (u: Pick<UserRecord, "role">) => u.role === "owner" || u.role === "admin";
-export const canEdit = (u: Pick<UserRecord, "role">) => u.role !== "viewer";
+/** Accountants only ever read published payroll (see ACCOUNTANT_RULES in access.ts). */
+export const isAccountant = (u: Pick<UserRecord, "role">) => u.role === "accountant";
+export const canEdit = (u: Pick<UserRecord, "role">) => u.role !== "viewer" && u.role !== "accountant";
 export function canAccessSite(u: Pick<UserRecord, "role" | "siteIds">, siteId: string | null | undefined) {
   if (isAdmin(u) || !u.siteIds.length) return true;
   return !!siteId && u.siteIds.includes(siteId);
@@ -244,6 +252,7 @@ export const createUserSchema = z.object({
   role: z.enum(ROLES).default("viewer"),
   siteIds: z.array(z.string().max(100)).max(500).default([]),
   active: z.boolean().default(true),
+  notificationEmail: notificationEmailSchema.optional(),
 });
 export type CreateUserInput = z.input<typeof createUserSchema>;
 
@@ -253,6 +262,7 @@ export const updateUserSchema = z.object({
   role: z.enum(ROLES).optional(),
   siteIds: z.array(z.string().max(100)).max(500).optional(),
   active: z.boolean().optional(),
+  notificationEmail: notificationEmailSchema.optional(),
 });
 export type UpdateUserInput = z.infer<typeof updateUserSchema>;
 
@@ -281,6 +291,7 @@ export async function createUser(actor: Actor, raw: CreateUserInput, opts: { onl
       createdAt: new Date().toISOString(),
       lastLoginAt: null,
       sessionVersion: 0,
+      notificationEmail: input.notificationEmail ?? "",
     };
     users.push(user);
     return user;
@@ -306,6 +317,7 @@ export async function updateUser(actor: Actor, id: string, raw: UpdateUserInput)
     if (patch.role) u.role = patch.role;
     if (patch.siteIds) u.siteIds = patch.siteIds;
     if (patch.active !== undefined) u.active = patch.active;
+    if (patch.notificationEmail !== undefined) u.notificationEmail = patch.notificationEmail;
     if (isAdmin(u)) u.siteIds = [];
     if (before.role === "owner" && before.active && !activeOwners(users).length) {
       throw new UserError("This is the last owner. Make someone else an owner first.", 409);
@@ -362,12 +374,14 @@ export async function bumpSessionVersion(id: string): Promise<UserRecord | null>
   });
 }
 
-export async function updateProfile(id: string, patch: { displayName: string }): Promise<UserRecord> {
-  const displayName = displayNameSchema.parse(patch.displayName);
+export async function updateProfile(id: string, patch: { displayName?: string; notificationEmail?: string }): Promise<UserRecord> {
+  const displayName = patch.displayName === undefined ? undefined : displayNameSchema.parse(patch.displayName);
+  const email = patch.notificationEmail === undefined ? undefined : notificationEmailSchema.parse(patch.notificationEmail);
   return mutate((users) => {
     const u = users.find((x) => x.id === id);
     if (!u) throw new UserError("That user no longer exists.", 404);
-    u.displayName = displayName || u.username;
+    if (displayName !== undefined) u.displayName = displayName || u.username;
+    if (email !== undefined) u.notificationEmail = email;
     return { ...u };
   });
 }

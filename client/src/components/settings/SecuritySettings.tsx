@@ -17,6 +17,9 @@ export function SecuritySettings() {
   const { toast } = useToast();
   const confirm = useConfirm();
   const [displayName, setDisplayName] = useState(app.user.displayName);
+  const [email, setEmail] = useState(app.user.notificationEmail ?? "");
+  const emailOk = !email.trim() || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
+  const profileChanged = displayName.trim() !== app.user.displayName || email.trim() !== (app.user.notificationEmail ?? "");
   const [current, setCurrent] = useState("");
   const [next, setNext] = useState("");
   const [confirmPw, setConfirmPw] = useState("");
@@ -37,7 +40,7 @@ export function SecuritySettings() {
 
   const saveProfile = async () => {
     try {
-      await api("PUT", "/api/auth/profile", { displayName: displayName.trim() });
+      await api("PUT", "/api/auth/profile", { displayName: displayName.trim(), notificationEmail: email.trim() });
       await app.refresh();
       toast({ title: "Saved" });
     } catch (e) { toast({ title: "Couldn't save", description: errorMessage(e), variant: "destructive" }); }
@@ -53,7 +56,10 @@ export function SecuritySettings() {
       <Section title="Your account" description={`Signed in as ${app.user.username} · ${ROLE_LABELS[app.user.role]}`}>
         <form className="flex flex-wrap items-end gap-3" onSubmit={(e) => { e.preventDefault(); void saveProfile(); }}>
           <Field label="Display name" className="w-full sm:w-72"><Input value={displayName} maxLength={100} onChange={(e) => setDisplayName(e.target.value)} data-testid="input-profile-name" /></Field>
-          <Button type="submit" variant="outline" disabled={displayName.trim() === app.user.displayName || !displayName.trim()} data-testid="button-profile-save">Save</Button>
+          <Field label="Notification email" className="w-full sm:w-72" hint={!emailOk ? <span className="text-destructive">Enter a valid email address</span> : app.user.role === "accountant" ? "You get an email here when payroll is published." : "Optional. Where the app sends you emails."}>
+            <Input type="email" inputMode="email" autoCapitalize="none" spellCheck={false} maxLength={200} value={email} onChange={(e) => setEmail(e.target.value)} placeholder="name@example.com" data-testid="input-profile-email" />
+          </Field>
+          <Button type="submit" variant="outline" disabled={!profileChanged || !displayName.trim() || !emailOk} data-testid="button-profile-save">Save</Button>
         </form>
       </Section>
       <Section title="Change password" description="Changing it signs out every other device.">

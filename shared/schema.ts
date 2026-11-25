@@ -260,6 +260,8 @@ export interface TimesheetSummary {
   updatedAt: string | null;
   /** Set when the timesheet is in the Trash (ISO timestamp). */
   deletedAt?: string | null;
+  /** Set when the (finalized) timesheet is published to the accountant (ISO timestamp). */
+  publishedAt?: string | null;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

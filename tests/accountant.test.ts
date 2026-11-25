@@ -1,0 +1,281 @@
+// Accountant role, publishing finalized payroll, and email notifications.
+import { test, before, after } from "node:test";
+import assert from "node:assert/strict";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import type { AddressInfo } from "node:net";
+import type { Server } from "node:http";
+
+const dir = fs.mkdtempSync(path.join(os.tmpdir(), "payroll-accountant-"));
+process.env.DATA_DIR = dir;
+process.env.BACKUPS = "off";
+delete process.env.SETUP_CODE;
+delete process.env.SUPABASE_URL;
+delete process.env.APP_PASSWORD;
+
+let base = "";
+let server: Server;
+const jar: Record<string, string> = {};
+const sent: { to: string[]; subject: string; text: string; host: string }[] = [];
+let failSend: string | null = null;
+
+async function call(method: string, url: string, body?: unknown, as?: string) {
+  const headers: Record<string, string> = { "X-Requested-With": "payroll" };
+  if (body !== undefined) headers["Content-Type"] = "application/json";
+  if (as) headers.Cookie = jar[as] ?? "";
+  const res = await fetch(base + url, { method, headers, body: body === undefined ? undefined : JSON.stringify(body) });
+  const text = await res.text();
+  let json: any = null;
+  try { json = text ? JSON.parse(text) : null; } catch { json = text; }
+  return { status: res.status, body: json, text };
+}
+
+async function login(as: string, username: string, password: string) {
+  const res = await fetch(base + "/api/auth/login", { method: "POST", headers: { "Content-Type": "application/json", "X-Requested-With": "payroll" }, body: JSON.stringify({ username, password }) });
+  assert.equal(res.status, 200, `login ${username}: ${await res.text()}`);
+  jar[as] = (res.headers.get("set-cookie") ?? "").split(";")[0];
+}
+
+function sampleDoc(siteId: string, label: string, day: string) {
+  return {
+    siteId, label, filename: `${label}.csv`, source: "csv", status: "draft", notes: "",
+    periodStart: day, periodEnd: day,
+    shifts: [{ id: "s1", employee: "Ana Ruiz", date: day, start: 600, end: 1260, breakMinutes: 0, role: "", source: "csv", note: "" }],
+    employees: [{ name: "Ana Ruiz", categoryId: "custom", payBasis: "day_rate", fullDayRate: 120, halfDayRate: 60, hourlyRate: 0, isNetPay: true, excluded: false, adjustments: {}, bonuses: [], deductions: [] }],
+    manualEmployees: [],
+    rules: {},
+  };
+}
+
+let siteId = "";
+let otherSiteId = "";
+let tsA = "";
+let tsB = "";
+
+before(async () => {
+  const express = (await import("express")).default;
+  const { createServer } = await import("node:http");
+  const routes = await import("../server/routes");
+  const { initDatabase } = await import("../server/db");
+  const users = await import("../server/users");
+  const email = await import("../server/email");
+  await initDatabase();
+  await users.createUser(null, { username: "owner", password: "owner password", role: "owner" });
+  await users.createUser(null, { username: "acct", password: "acct password", role: "accountant", notificationEmail: "acct@example.com" });
+  await users.createUser(null, { username: "viewer", password: "viewer password", role: "viewer", notificationEmail: "viewer@example.com" });
+  email.setEmailSenderForTests(async (cfg, msg) => {
+    if (failSend) throw Object.assign(new Error(failSend + " " + cfg.password), { code: "EAUTH", response: `535 ${failSend}` });
+    sent.push({ to: msg.to, subject: msg.subject, text: msg.text, host: cfg.host });
+  });
+  const app = express();
+  app.use(express.json({ limit: "8mb" }));
+  routes.registerRoutes(app);
+  server = createServer(app);
+  await new Promise<void>((r) => server.listen(0, "127.0.0.1", () => r()));
+  base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+  await login("owner", "owner", "owner password");
+  await login("acct", "acct", "acct password");
+  const boot = await call("GET", "/api/bootstrap", undefined, "owner");
+  siteId = boot.body.defaultSiteId;
+  const other = await call("POST", "/api/sites", { name: "Second shop" }, "owner");
+  otherSiteId = other.body.id;
+});
+
+after(async () => {
+  await new Promise<void>((r) => server.close(() => r()));
+  const { closeDatabase } = await import("../server/db");
+  closeDatabase();
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test("accountant role exists with fixed read-only permissions", async () => {
+  const me = await call("GET", "/api/bootstrap", undefined, "acct");
+  assert.equal(me.status, 200);
+  assert.equal(me.body.user.role, "accountant");
+  assert.deepEqual([...me.body.user.permissions].sort(), ["export", "pay.view", "reports.view"]);
+  assert.equal(me.body.user.notificationEmail, "acct@example.com");
+});
+
+test("drafts and unpublished final timesheets are hidden from the accountant", async () => {
+  const a = await call("POST", "/api/timesheets", { doc: sampleDoc(siteId, "Week 1", "2026-01-05") }, "owner");
+  assert.equal(a.status, 200);
+  tsA = a.body.id;
+  const b = await call("POST", "/api/timesheets", { doc: sampleDoc(siteId, "Week 2", "2026-01-12") }, "owner");
+  tsB = b.body.id;
+  const list = await call("GET", "/api/timesheets", undefined, "acct");
+  assert.equal(list.status, 200);
+  assert.deepEqual(list.body, []);
+  assert.equal((await call("GET", `/api/timesheets/${tsA}`, undefined, "acct")).status, 403);
+  // Publishing needs a finalized timesheet.
+  const early = await call("POST", `/api/timesheets/${tsA}/publish`, {}, "owner");
+  assert.equal(early.status, 409);
+  const fin = await call("PATCH", `/api/timesheets/${tsA}`, { status: "final" }, "owner");
+  assert.equal(fin.status, 200);
+  assert.deepEqual((await call("GET", "/api/timesheets", undefined, "acct")).body, []);
+  assert.equal((await call("GET", `/api/timesheets/${tsA}`, undefined, "acct")).status, 403);
+});
+
+test("accountant can't reach anything else", async () => {
+  const denied: [string, string, unknown?][] = [
+    ["GET", `/api/sites/${siteId}/employees`],
+    ["GET", `/api/sites/${siteId}/punches`],
+    ["GET", `/api/sites/${siteId}/timeclock`],
+    ["GET", `/api/sites/${siteId}/schedule/week/2026-01-05`],
+    ["GET", `/api/sites/${siteId}/wages`],
+    ["GET", `/api/sites/${siteId}/pay/advances`],
+    ["POST", "/api/live/ticket", {}],
+    ["GET", "/api/users"],
+    ["GET", "/api/email"],
+    ["GET", "/api/backup"],
+    ["PUT", `/api/timesheets/${tsA}`, { doc: sampleDoc(siteId, "x", "2026-01-05") }],
+    ["PATCH", `/api/timesheets/${tsA}`, { label: "renamed" }],
+    ["DELETE", `/api/timesheets/${tsA}`],
+    ["POST", "/api/timesheets", { doc: sampleDoc(siteId, "new", "2026-01-05") }],
+    ["POST", `/api/timesheets/${tsA}/publish`, {}],
+    ["DELETE", `/api/timesheets/${tsA}/publish`],
+    ["GET", `/api/timesheets/${tsA}/publish`],
+  ];
+  for (const [m, u, b] of denied) {
+    const r = await call(m, u, b, "acct");
+    assert.equal(r.status, 403, `${m} ${u} should be denied, got ${r.status}`);
+  }
+  assert.deepEqual((await call("GET", "/api/timesheets?trash=1", undefined, "acct")).body, []);
+});
+
+test("email settings: saved server-side, password never returned", async () => {
+  const off = await call("GET", "/api/email", undefined, "owner");
+  assert.equal(off.body.ready, false);
+  const bad = await call("PUT", "/api/email", { config: { enabled: true, host: "", fromAddress: "x" } }, "owner");
+  assert.equal(bad.status, 400);
+  const put = await call("PUT", "/api/email", { config: { enabled: true, host: "smtp.example.com", port: 587, security: "starttls", username: "me@example.com", password: "s3cret-app-pass", fromAddress: "payroll@example.com", fromName: "Payroll", appUrl: "https://payroll.example.com" } }, "owner");
+  assert.equal(put.status, 200, JSON.stringify(put.body));
+  assert.equal(put.body.config.hasPassword, true);
+  assert.ok(!put.text.includes("s3cret-app-pass"));
+  const get = await call("GET", "/api/email", undefined, "owner");
+  assert.ok(!get.text.includes("s3cret-app-pass"));
+  assert.equal(get.body.ready, true);
+  // A blank password keeps the saved one.
+  await call("PUT", "/api/email", { config: { fromName: "Shop payroll", password: "" } }, "owner");
+  const { getEmailConfig } = await import("../server/email");
+  assert.equal((await getEmailConfig()).password, "s3cret-app-pass");
+  assert.equal((await getEmailConfig()).fromName, "Shop payroll");
+  // Not in downloaded backups (without secrets), nor in the activity log.
+  const backup = await call("GET", "/api/backup", undefined, "owner");
+  assert.ok(!backup.text.includes("s3cret-app-pass"));
+  const auditLog = await call("GET", "/api/audit?limit=50", undefined, "owner");
+  assert.ok(!auditLog.text.includes("s3cret-app-pass"));
+  const { isSecretSetting } = await import("../server/offsite");
+  assert.equal(isSecretSetting("email:config"), true);
+});
+
+test("send test email", async () => {
+  const r = await call("POST", "/api/email/test", { to: "owner@example.com" }, "owner");
+  assert.equal(r.body.ok, true, JSON.stringify(r.body));
+  assert.deepEqual(sent.at(-1)!.to, ["owner@example.com"]);
+  failSend = "Authentication failed";
+  const f = await call("POST", "/api/email/test", { to: "owner@example.com" }, "owner");
+  failSend = null;
+  assert.equal(f.body.ok, false);
+  assert.ok(!f.text.includes("s3cret-app-pass"), "the password is scrubbed from errors");
+  const noTo = await call("POST", "/api/email/test", {}, "owner");
+  assert.equal(noTo.status, 400);
+});
+
+test("publish shows the payroll to the accountant and emails them", async () => {
+  sent.length = 0;
+  const info = await call("GET", `/api/timesheets/${tsA}/publish`, undefined, "owner");
+  assert.equal(info.status, 200);
+  assert.equal(info.body.published, null);
+  assert.deepEqual(info.body.accountants.map((a: any) => a.email), ["acct@example.com"]);
+  const pub = await call("POST", `/api/timesheets/${tsA}/publish`, {}, "owner");
+  assert.equal(pub.status, 200, JSON.stringify(pub.body));
+  assert.ok(pub.body.published.at);
+  assert.equal(pub.body.published.email.ok, true);
+  assert.equal(sent.length, 1);
+  assert.deepEqual(sent[0].to, ["acct@example.com"], "only accountants are emailed");
+  assert.match(sent[0].subject, /Payroll published/);
+  assert.match(sent[0].text, /https:\/\/payroll\.example\.com\/#\/timesheet\//);
+
+  const list = await call("GET", "/api/timesheets", undefined, "acct");
+  assert.deepEqual(list.body.map((t: any) => t.id), [tsA]);
+  assert.ok(list.body[0].publishedAt);
+  assert.ok(list.body[0].totalPay > 0, "accountants see pay");
+  const one = await call("GET", `/api/timesheets/${tsA}`, undefined, "acct");
+  assert.equal(one.status, 200);
+  assert.ok(one.body.publishedAt);
+  assert.equal((await call("GET", `/api/sites/${siteId}/pay/settings`, undefined, "acct")).status, 200);
+  assert.equal((await call("GET", `/api/timesheets/${tsA}/pay/previous`, undefined, "acct")).status, 200);
+  const ytd = await call("GET", `/api/sites/${siteId}/pay/ytd?year=2026`, undefined, "acct");
+  assert.equal(ytd.status, 200);
+  assert.equal(ytd.body.timesheets, 1);
+  // Owners see publishedAt on the list too.
+  const ownerList = await call("GET", "/api/timesheets", undefined, "owner");
+  assert.ok(ownerList.body.find((t: any) => t.id === tsA).publishedAt);
+  assert.equal(ownerList.body.find((t: any) => t.id === tsB).publishedAt, null);
+});
+
+test("unpublished final timesheets stay out of the accountant's YTD", async () => {
+  await call("PATCH", `/api/timesheets/${tsB}`, { status: "final" }, "owner");
+  const ytd = await call("GET", `/api/sites/${siteId}/pay/ytd?year=2026`, undefined, "acct");
+  assert.equal(ytd.body.timesheets, 1);
+  const ownerYtd = await call("GET", `/api/sites/${siteId}/pay/ytd?year=2026`, undefined, "owner");
+  assert.equal(ownerYtd.body.timesheets, 2);
+});
+
+test("publishing still works when email fails or is off", async () => {
+  failSend = "Server down";
+  const r = await call("POST", `/api/timesheets/${tsB}/publish`, {}, "owner");
+  failSend = null;
+  assert.equal(r.status, 200);
+  assert.equal(r.body.published.email.ok, false);
+  assert.ok(!JSON.stringify(r.body).includes("s3cret-app-pass"));
+  assert.equal((await call("GET", `/api/timesheets/${tsB}`, undefined, "acct")).status, 200);
+  const st = await call("GET", "/api/email", undefined, "owner");
+  assert.ok(st.body.status.lastError);
+
+  await call("PUT", "/api/email", { config: { enabled: false } }, "owner");
+  await call("DELETE", `/api/timesheets/${tsB}/publish`, undefined, "owner");
+  assert.equal((await call("GET", `/api/timesheets/${tsB}`, undefined, "acct")).status, 403, "unpublished again");
+  const again = await call("POST", `/api/timesheets/${tsB}/publish`, {}, "owner");
+  assert.equal(again.status, 200);
+  assert.equal(again.body.published.email.ok, false);
+  assert.match(again.body.published.email.message, /not set up/);
+  await call("PUT", "/api/email", { config: { enabled: true } }, "owner");
+});
+
+test("reopening unpublishes; finalizing again does not republish", async () => {
+  const re = await call("POST", `/api/timesheets/${tsA}/reopen`, { reason: "fix a rate" }, "owner");
+  assert.equal(re.status, 200, JSON.stringify(re.body));
+  assert.equal((await call("GET", `/api/timesheets/${tsA}`, undefined, "acct")).status, 403);
+  await call("PATCH", `/api/timesheets/${tsA}`, { status: "final" }, "owner");
+  assert.equal((await call("GET", `/api/timesheets/${tsA}`, undefined, "acct")).status, 403);
+  const list = await call("GET", "/api/timesheets", undefined, "acct");
+  assert.deepEqual(list.body.map((t: any) => t.id), [tsB]);
+});
+
+test("accountants limited to a location only see that location's payroll and emails", async () => {
+  const users = await import("../server/users");
+  await users.createUser(null, { username: "acct2", password: "acct2 password", role: "accountant", siteIds: [otherSiteId], notificationEmail: "acct2@example.com" });
+  await login("acct2", "acct2", "acct2 password");
+  assert.deepEqual((await call("GET", "/api/timesheets", undefined, "acct2")).body, []);
+  assert.equal((await call("GET", `/api/timesheets/${tsB}`, undefined, "acct2")).status, 403);
+  sent.length = 0;
+  await call("POST", `/api/timesheets/${tsA}/publish`, {}, "owner");
+  assert.deepEqual(sent.flatMap((s) => s.to), ["acct@example.com"]);
+});
+
+test("people set their own notification email; admins set others'", async () => {
+  const bad = await call("PUT", "/api/auth/profile", { notificationEmail: "not an email" }, "acct");
+  assert.equal(bad.status, 400);
+  const ok = await call("PUT", "/api/auth/profile", { notificationEmail: "books@example.com" }, "acct");
+  assert.equal(ok.status, 200);
+  assert.equal(ok.body.notificationEmail, "books@example.com");
+  assert.equal(ok.body.displayName, "acct", "display name unchanged");
+  const list = await call("GET", "/api/users", undefined, "owner");
+  const acct = list.body.find((u: any) => u.username === "acct");
+  const patch = await call("PATCH", `/api/users/${acct.id}`, { notificationEmail: "" }, "owner");
+  assert.equal(patch.body.notificationEmail, "");
+  // The accountant can't make themselves an editor.
+  assert.equal((await call("PATCH", `/api/users/${acct.id}`, { role: "admin" }, "acct")).status, 403);
+});
