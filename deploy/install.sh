@@ -350,8 +350,8 @@ create_admin() {
     fi
   fi
   code="$(setup_code)"
-  json="$(P="$pw" U="$user" C="$code" "$(node_bin)" -e 'process.stdout.write(JSON.stringify({username:process.env.U,password:process.env.P,setupCode:process.env.C}))')"
-  status="$(curl -sS -o /tmp/payroll-setup.$$ -w '%{http_code}' --max-time 15 -H 'Content-Type: application/json' \
+  json="$(P="$pw" U="$user" C="$code" "$(node_bin)" -e 'process.stdout.write(JSON.stringify({username:process.env.U,displayName:process.env.U,password:process.env.P,setupCode:process.env.C}))')"
+  status="$(curl -sS -o /tmp/payroll-setup.$$ -w '%{http_code}' --max-time 15 -H 'Content-Type: application/json' -H 'X-Requested-With: payroll' \
     --data-binary @- "http://127.0.0.1:$(app_port)/api/auth/setup" <<<"$json" || true)"
   if [[ "$status" =~ ^2 ]]; then
     ok "Administrator account created"
