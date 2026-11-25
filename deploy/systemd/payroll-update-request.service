@@ -1,0 +1,14 @@
+[Unit]
+Description=Payroll update requested from the app
+After=network-online.target
+Wants=network-online.target
+# Deleting the request file can itself fire the path unit; skip that spurious run.
+ConditionPathExists=/var/lib/payroll/update-request
+
+[Service]
+Type=oneshot
+# Runs even when automatic updates are off; the result goes to update-status.json.
+ExecStart=/usr/local/bin/payroll update
+ExecStopPost=/bin/rm -f /var/lib/payroll/update-request
+Nice=10
+TimeoutStartSec=45min
