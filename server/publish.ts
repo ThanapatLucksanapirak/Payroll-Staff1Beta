@@ -97,7 +97,7 @@ export async function recipientsFor(siteId: string): Promise<UserRecord[]> {
   return users.filter((u) => u.active && isAccountant(u) && canAccessSite(u, siteId));
 }
 
-const periodText = (start: string | null | undefined, end: string | null | undefined) => {
+export const periodText = (start: string | null | undefined, end: string | null | undefined) => {
   const f = (d: string) => {
     const [y, m, day] = d.split("-").map(Number);
     if (!y || !m || !day) return d;

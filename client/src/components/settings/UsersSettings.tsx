@@ -197,7 +197,7 @@ function UserDialog({ user, open, onClose, onSaved, lastOwner }: { user: Session
         const patch = roleLocked ? { username: body.username, displayName: body.displayName, siteIds: body.siteIds, notificationEmail: body.notificationEmail } : body;
         await api("PATCH", `/api/users/${user!.id}`, { ...patch, ...(emailChanged ? { actorPassword: myPassword } : {}) });
       }
-      if (self) await app.refresh();
+      if (self) { await app.refresh(); void queryClient.invalidateQueries({ queryKey: ["/api/auth/2fa"] }); }
       onSaved();
       onClose();
       const signIn = body.username;

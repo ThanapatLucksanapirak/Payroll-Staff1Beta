@@ -1,14 +1,14 @@
 import { useState } from "react";
 import { Loader2, MonitorSmartphone } from "lucide-react";
 import { useApp } from "@/context/AppData";
-import { api, errorMessage, signOut } from "@/lib/api";
+import { api, errorMessage, queryClient, signOut } from "@/lib/api";
 import { ROLE_LABELS, isAdmin } from "@/lib/roles";
 import { useToast } from "@/hooks/use-toast";
 import { useConfirm } from "@/components/ConfirmDialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Field, NumberInput, Section } from "@/components/workspace/fields";
-import { TwoFactorSettings } from "@/components/settings/TwoFactorSettings";
+import { TWO_FACTOR_KEY, TwoFactorSettings } from "@/components/settings/TwoFactorSettings";
 
 const MIN = 8;
 
@@ -48,6 +48,8 @@ export function SecuritySettings() {
       await api("PUT", "/api/auth/profile", { ...(canRename ? { username: u } : {}), displayName: displayName.trim(), notificationEmail: email.trim(), ...(emailChanged ? { password: emailPw } : {}) });
       setEmailPw("");
       await app.refresh();
+      // Two-step verification depends on this email: show its new state straight away.
+      void queryClient.invalidateQueries({ queryKey: TWO_FACTOR_KEY });
       toast({ title: "Saved", description: u !== app.user.username ? `From now on, sign in as "${u}".` : undefined });
     } catch (e) { toast({ title: "Couldn't save", description: errorMessage(e), variant: "destructive" }); }
   };

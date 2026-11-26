@@ -10,6 +10,7 @@ import { securityHeaders } from "./security";
 import { runAdminCliAndExit } from "./cli";
 import { endLiveStreams } from "./live";
 import { startAutoCloseJob, stopAutoCloseJob } from "./timeclock";
+import { SHARE_PATH } from "./share";
 
 const app = express();
 const httpServer = createServer(app);
@@ -20,7 +21,8 @@ app.disable("x-powered-by");
 app.use(securityHeaders(process.env.NODE_ENV === "production"));
 
 app.use((req, res, next) => {
-  if (req.path.startsWith("/api/backup/restore") || req.path.startsWith("/api/import/pdf")) return next();
+  // These routes read bigger bodies with their own parser.
+  if (req.path.startsWith("/api/backup/restore") || req.path.startsWith("/api/import/pdf") || SHARE_PATH.test(req.path)) return next();
   return express.json({ limit: "8mb" })(req, res, next);
 });
 

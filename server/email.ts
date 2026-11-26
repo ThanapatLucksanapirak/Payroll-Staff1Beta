@@ -46,11 +46,15 @@ export const emailConfigSchema = z.object({
   /** Set only by the Google sign-in callback (never from the browser). */
   googleRefreshToken: z.string().max(2000).default(""),
   googleAccount: z.string().trim().max(200).default(""),
+  /** Replies go to no-reply@<from domain> (they bounce) and emails say the mailbox isn't read. */
+  blockReplies: z.boolean().default(true),
+  /** Gmail (Connect with Google): label the app's emails and keep copies out of the inbox. */
+  tidySent: z.boolean().default(true),
 });
 export type EmailConfig = z.infer<typeof emailConfigSchema>;
 
-export interface EmailStatus { lastSentAt: string | null; lastFailureAt: string | null; lastError: string | null }
-const emptyStatus = (): EmailStatus => ({ lastSentAt: null, lastFailureAt: null, lastError: null });
+export interface EmailStatus { lastSentAt: string | null; lastFailureAt: string | null; lastError: string | null; tidyError?: string | null }
+const emptyStatus = (): EmailStatus => ({ lastSentAt: null, lastFailureAt: null, lastError: null, tidyError: null });
 
 export async function getEmailConfig(): Promise<EmailConfig> {
   const raw = await (await db()).getSetting(EMAIL_CONFIG_KEY).catch(() => null);
@@ -71,6 +75,17 @@ export async function getEmailStatus(): Promise<EmailStatus> {
 }
 
 let statusChain: Promise<unknown> = Promise.resolve();
+/** Remember whether tidying sent Gmail worked (shown in Settings → Email). */
+export function recordTidyStatus(error: string | null) {
+  const p = statusChain.then(async () => {
+    const st = await getEmailStatus();
+    if ((st.tidyError ?? null) === error) return;
+    await (await db()).setSetting(EMAIL_STATUS_KEY, JSON.stringify({ ...st, tidyError: error }));
+  });
+  statusChain = p.catch(() => undefined);
+  return p;
+}
+
 function recordStatus(ok: boolean, error?: string) {
   const p = statusChain.then(async () => {
     const st = await getEmailStatus();
@@ -153,7 +168,36 @@ function transportFor(cfg: EmailConfig) {
   });
 }
 
-export interface OutgoingEmail { to: string[]; subject: string; text: string; html?: string }
+export interface EmailAttachment { filename: string; content: Buffer; contentType: string }
+export interface OutgoingEmail {
+  to: string[];
+  cc?: string[];
+  subject: string;
+  text: string;
+  html?: string;
+  attachments?: EmailAttachment[];
+  /** Where replies should go (a person). Without it, replies are blocked when blockReplies is on. */
+  replyTo?: string;
+}
+
+/** The address replies go to when they're blocked: no-reply at the sender's domain. */
+export const noReplyAddress = (cfg: Pick<EmailConfig, "fromAddress">) => `no-reply@${cfg.fromAddress.split("@")[1] || "invalid"}`;
+export const NO_REPLY_NOTE = "This mailbox isn't monitored, so please don't reply to this email.";
+/** Where brandedHtml leaves room for the no-reply note. */
+const NOTE_SLOT = "<!--email-note-->";
+
+/** Reply-To, headers and the no-reply note for one message. */
+export function replyPolicy(cfg: Pick<EmailConfig, "fromAddress" | "blockReplies">, msg: Pick<OutgoingEmail, "replyTo" | "text" | "html">) {
+  const block = cfg.blockReplies && !msg.replyTo;
+  const note = block ? NO_REPLY_NOTE : "";
+  return {
+    replyTo: msg.replyTo || (block ? noReplyAddress(cfg) : undefined),
+    // Ask mail servers not to send out-of-office or other automatic replies.
+    headers: { "Auto-Submitted": msg.replyTo ? "no" : "auto-generated", "X-Auto-Response-Suppress": "All", ...(block ? { Precedence: "bulk" } : {}) },
+    text: note ? `${msg.text}\n\n${note}` : msg.text,
+    html: msg.html?.replace(NOTE_SLOT, note ? `<br><br>${escapeHtml(note)}` : ""),
+  };
+}
 
 /** Test seam: replaces the SMTP transport (tests only). */
 let sendOverride: ((cfg: EmailConfig, msg: OutgoingEmail) => Promise<void>) | null = null;
@@ -161,18 +205,29 @@ export function setEmailSenderForTests(fn: typeof sendOverride) { sendOverride =
 
 /** Send one email with the given settings. Throws a cleaned-up error. */
 async function deliver(cfg: EmailConfig, msg: OutgoingEmail) {
-  if (sendOverride) return sendOverride(cfg, msg);
+  const policy = replyPolicy(cfg, msg);
+  if (sendOverride) return sendOverride(cfg, { ...msg, text: policy.text, html: policy.html, replyTo: policy.replyTo });
   const transport = transportFor(cfg);
+  let messageId = "";
   try {
-    await transport.sendMail({
+    const info = await transport.sendMail({
       from: cfg.fromName ? { name: cfg.fromName, address: cfg.fromAddress } : cfg.fromAddress,
       to: msg.to,
+      ...(msg.cc?.length ? { cc: msg.cc } : {}),
+      ...(policy.replyTo ? { replyTo: policy.replyTo } : {}),
+      headers: policy.headers,
       subject: msg.subject,
-      text: msg.text,
-      ...(msg.html ? { html: msg.html } : {}),
+      text: policy.text,
+      ...(policy.html ? { html: policy.html } : {}),
+      ...(msg.attachments?.length ? { attachments: msg.attachments } : {}),
     });
+    messageId = String(info?.messageId ?? "");
   } finally {
     transport.close();
+  }
+  // Gmail keeps a copy of everything sent (and in the inbox when you email yourself): label it and archive it, in the background.
+  if (messageId && cfg.provider === "google" && cfg.tidySent) {
+    void import("./emailGoogle").then((g) => g.tidySentGmail(cfg, messageId)).catch(() => undefined);
   }
 }
 
@@ -259,7 +314,7 @@ ${e.preheader ? `<div style="display:none;max-height:0;overflow:hidden;opacity:0
 <h1 style="margin:0 0 14px;font-size:22px;line-height:28px;font-weight:700;color:#1d1d1f">${x(e.heading)}</h1>
 ${e.paragraphs.map(para).join("\n")}${code}${details}${button}
 </td></tr>
-<tr><td style="padding:18px 8px 0;font-size:12px;line-height:18px;color:#8e8e93;text-align:center">${x(e.footer ?? `Sent by ${e.brand}.`)}</td></tr>
+<tr><td style="padding:18px 8px 0;font-size:12px;line-height:18px;color:#8e8e93;text-align:center">${x(e.footer ?? `Sent by ${e.brand}.`)}${NOTE_SLOT}</td></tr>
 </table></td></tr></table></body></html>`;
 }
 

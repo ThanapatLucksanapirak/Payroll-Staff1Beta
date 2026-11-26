@@ -35,6 +35,7 @@ import { registerOffsiteRoutes } from "./offsite";
 import { registerPortalAdminRoutes, registerPortalRoutes } from "./portal";
 import { registerEmailRoutes } from "./email";
 import { registerGoogleEmailRoutes } from "./emailGoogle";
+import { registerShareRoutes } from "./share";
 import { getPublishedMap, invalidatePublishedCache, publishedRecord, registerPublishRoutes } from "./publish";
 
 type Handler = (req: Request, res: Response) => Promise<unknown>;
@@ -185,6 +186,7 @@ export function registerRoutes(app: Express) {
   registerEmailRoutes(app);
   registerGoogleEmailRoutes(app); // Settings → Email (owner / admin)
   registerPublishRoutes(app); // publish finalized payroll to accountants
+  registerShareRoutes(app); // email finalized payroll PDFs to accountants
 
   // ── Public ──────────────────────────────────────────────────────────────────
   app.get("/api/health", h(async (_req, res) => {

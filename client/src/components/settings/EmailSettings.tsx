@@ -19,10 +19,11 @@ interface EmailCfg {
   enabled: boolean; provider: Provider; host: string; port: number; security: Security; username: string;
   fromAddress: string; fromName: string; appUrl: string; hasPassword: boolean;
   googleClientId: string; googleAccount: string; hasGoogleSecret: boolean; googleConnected: boolean;
+  blockReplies: boolean; tidySent: boolean;
 }
 interface EmailInfo {
   config: EmailCfg;
-  status: { lastSentAt: string | null; lastFailureAt: string | null; lastError: string | null };
+  status: { lastSentAt: string | null; lastFailureAt: string | null; lastError: string | null; tidyError?: string | null };
   ready: boolean;
 }
 const KEY = ["/api/email"];
@@ -85,7 +86,8 @@ export function EmailSettings() {
   if (!cfg || !q.data) return <Section title="Email"><Skeleton className="h-48" /></Section>;
 
   const saved = q.data.config;
-  const plain = (c: EmailCfg) => [c.enabled, c.provider, c.host, c.port, c.security, c.username, c.fromAddress, c.fromName, c.appUrl, c.googleClientId].join("|");
+  const st0 = q.data.status;
+  const plain = (c: EmailCfg) => [c.enabled, c.provider, c.host, c.port, c.security, c.username, c.fromAddress, c.fromName, c.appUrl, c.googleClientId, c.blockReplies, c.tidySent].join("|");
   const google = cfg.provider === "google";
   // The saved password only goes to the server it was entered for (the server enforces this too).
   const dest = (c: EmailCfg) => [c.host.trim().toLowerCase(), c.port, c.security, c.username.trim().toLowerCase()].join("|");
@@ -94,6 +96,7 @@ export function EmailSettings() {
   const body = () => ({
     enabled: cfg.enabled, provider: cfg.provider, host: cfg.host.trim(), port: cfg.port, security: cfg.security, username: cfg.username.trim(),
     fromAddress: cfg.fromAddress.trim(), fromName: cfg.fromName.trim(), appUrl: cfg.appUrl.trim(), googleClientId: cfg.googleClientId.trim(),
+    blockReplies: cfg.blockReplies, tidySent: cfg.tidySent,
     ...(password ? { password } : {}), ...(googleSecret ? { googleClientSecret: googleSecret.trim() } : {}),
   });
   // The connection belongs to the saved client ID: changing it means connecting again.
@@ -150,6 +153,8 @@ export function EmailSettings() {
       const r = await api<EmailInfo>("PUT", "/api/email", { config: body() });
       queryClient.setQueryData(KEY, r);
       load(r.config);
+      // Whether email sign-in codes can be offered depends on these settings.
+      void queryClient.invalidateQueries({ queryKey: ["/api/auth/2fa"] });
       toast({ title: "Saved", description: r.ready ? "Email notifications are on." : "Email notifications are off." });
     } catch (e) { toast({ title: "Couldn't save", description: errorMessage(e), variant: "destructive" }); }
     finally { setBusy(null); }
@@ -251,6 +256,18 @@ export function EmailSettings() {
                 <Field label="From name"><Input value={cfg.fromName} maxLength={100} placeholder={app.prefs.appName} onChange={(e) => set({ fromName: e.target.value })} /></Field>
                 <Field label="App address" hint="Used for the link in emails." className="sm:col-span-2"><Input value={cfg.appUrl} spellCheck={false} autoCapitalize="none" placeholder="https://payroll.yourcompany.com" onChange={(e) => set({ appUrl: e.target.value })} data-testid="input-email-appurl" /></Field>
               </div>
+              <ToggleRow
+                label="Block replies"
+                hint={`Replies go to no-reply@${cfg.fromAddress.split("@")[1] || "your domain"} and bounce, and each email says the mailbox isn't read. Emails a person sends (like payroll PDFs) still let the accountant reply to that person.`}
+                checked={cfg.blockReplies} onChange={(v) => set({ blockReplies: v })} testid="switch-email-block-replies"
+              />
+              {google && (
+                <ToggleRow
+                  label="Keep the app's emails out of your inbox"
+                  hint={<>Puts a copy of each email under a “{cfg.fromName || app.prefs.appName}” label in Gmail and archives it, so test emails and codes sent to yourself don't fill your inbox. Needs the Gmail API turned on in your Google Cloud project.{st0.tidyError ? <span className="mt-1 block text-warning">{st0.tidyError}</span> : null}</>}
+                  checked={cfg.tidySent} onChange={(v) => set({ tidySent: v })} testid="switch-email-tidy"
+                />
+              )}
             </>
           )}
           {(cfg.enabled || saved.enabled) && (
