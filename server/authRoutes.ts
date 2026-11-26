@@ -7,7 +7,7 @@ import { clearSessionCookie, clearSetupCode, currentUser, loginThrottle, recordL
 import { actorOf, audit, queryAudit } from "./audit";
 import {
   type UserRecord, ROLE_LABELS, bumpSessionVersion, createUser, createUserSchema, deleteUser, displayNameSchema, getUser, listUsers,
-  notificationEmailSchema, passwordSchema, setUserPassword, setupRequired, toPublic, updateProfile, updateUser, updateUserSchema, usernameSchema, authenticate,
+  isAdmin, notificationEmailSchema, passwordSchema, setUserPassword, setupRequired, toPublic, updateProfile, updateUser, updateUserSchema, usernameSchema, authenticate,
 } from "./users";
 import { verifyHash } from "./passwords";
 import { loginStep } from "./twofactor";
@@ -119,6 +119,10 @@ export function registerAuthRoutes(app: Express) {
     const { password, ...body } = z.object({ displayName: displayNameSchema.optional(), username: usernameSchema.optional(), notificationEmail: notificationEmailSchema.optional(), password: z.string().max(200).optional() }).parse(req.body ?? {});
     // Changing the email needs the password: sign-in codes and payroll notices go there,
     // so a borrowed or stolen session must not be able to redirect them.
+    // Only owners and administrators may change a sign-in username (their own included).
+    if (body.username !== undefined && body.username.trim().toLowerCase() !== u.username.toLowerCase() && !isAdmin(u)) {
+      return res.status(403).json({ error: "Only an owner or administrator can change a sign-in username." });
+    }
     if (body.notificationEmail !== undefined) {
       const fresh = await getUser(u.id, { fresh: true });
       if (fresh && body.notificationEmail !== (fresh.notificationEmail ?? "")) {

@@ -244,22 +244,22 @@ test("changing your own sign-in username and password on the Account page", asyn
   const bad = await login("x", "Viewer Person", "password-456");
   assert.equal(bad.status, 401);
   assert.match(bad.body.error, /not your display name/);
-  // Username change
-  assert.equal((await call("PUT", "/api/auth/profile", { username: "BOSS2" }, { as: "me1" })).status, 409, "taken (any case)");
-  const un = await call("PUT", "/api/auth/profile", { username: "viewer2" }, { as: "me1" });
+  // Only owners and administrators can change a sign-in username
+  const denied = await call("PUT", "/api/auth/profile", { username: "viewer2" }, { as: "me1" });
+  assert.equal(denied.status, 403);
+  assert.match(denied.body.error, /owner or administrator/);
+  assert.equal((await call("PUT", "/api/auth/profile", { username: "VIEW", displayName: "Viewer Person" }, { as: "me1" })).status, 200, "sending the same username is fine");
+  assert.equal((await login("y", "view", "password-456")).status, 200, "the viewer still signs in as before");
+  // Owner changes their own
+  assert.equal((await call("PUT", "/api/auth/profile", { username: "BOSS2" }, { as: "owner" })).status, 409, "taken (any case)");
+  const un = await call("PUT", "/api/auth/profile", { username: "owner2" }, { as: "owner" });
   assert.equal(un.status, 200);
-  assert.equal(un.body.username, "viewer2");
-  assert.equal(un.body.displayName, "Viewer Person");
-  assert.equal((await call("GET", "/api/bootstrap", undefined, { as: "me1" })).status, 200, "still signed in");
-  const ch = await call("POST", "/api/auth/change-password", { current: "password-456", next: "password-789" }, { as: "me1" });
-  assert.match(ch.body.message, /sign in as "viewer2"/);
-  assert.equal((await login("y", "view", "password-789")).status, 401);
-  assert.equal((await login("y", "viewer2", "password-789")).status, 200);
-  assert.equal((await login("y", "VIEWER2", "password-789")).status, 200, "usernames ignore case");
+  assert.equal(un.body.username, "owner2");
+  assert.equal((await call("GET", "/api/bootstrap", undefined, { as: "owner" })).status, 200, "still signed in");
+  assert.equal((await login("y", "owner2", "legacy secret")).status, 200);
+  assert.equal((await login("y", "admin", "legacy secret")).status, 401);
   // Put it back for later tests
-  jar.me1 = jar.y;
-  await call("PUT", "/api/auth/profile", { username: "view" }, { as: "me1" });
-  await call("POST", "/api/auth/change-password", { current: "password-789", next: "password-456" }, { as: "me1" });
+  assert.equal((await call("PUT", "/api/auth/profile", { username: "admin" }, { as: "owner" })).status, 200);
 });
 
 test("activity log records sign-ins, changes and folds autosaves together", async () => {
