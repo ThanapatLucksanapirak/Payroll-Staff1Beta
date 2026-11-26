@@ -11,6 +11,12 @@ import { runAdminCliAndExit } from "./cli";
 import { endLiveStreams } from "./live";
 import { startAutoCloseJob, stopAutoCloseJob } from "./timeclock";
 import { SHARE_PATH } from "./share";
+import { getPinKey } from "./config";
+
+// Say at start-up (not on the first PIN change) when PIN_KEY is unusable.
+if (process.env.PIN_KEY) {
+  try { getPinKey(); } catch (err) { console.error(`[config] ${(err as Error).message} Setting or changing employee PINs fails until this is fixed.`); }
+}
 
 const app = express();
 const httpServer = createServer(app);

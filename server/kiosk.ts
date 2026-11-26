@@ -491,10 +491,20 @@ export function registerKioskRoutes(app: Express) {
       const station = matchStation((await getSiteConfig(site.id)).stations, body.station);
       if (station) meta.station = station;
     }
+    // Photos on: a live punch must come with a photo (the kiosk checks it shows a
+    // face before sending). Punches queued while offline are still accepted
+    // without one, so a punch saved on the tablet is never lost over a photo.
+    if (options.photo && !body.at && !body.photo) {
+      return res.status(422).json({ error: "Face not detected. This time clock takes a photo with each punch: look at the camera and try again.", code: "photo" });
+    }
+    const photoBytes = options.photo && body.photo ? decodePhoto(body.photo) : null;
+    if (options.photo && !body.at && !photoBytes) {
+      return res.status(422).json({ error: "The photo didn't come through. Look at the camera and try again.", code: "photo" });
+    }
     let photoSaved = false;
-    if (options.photo && body.photo !== undefined) {
-      const bytes = body.photo ? decodePhoto(body.photo) : null;
-      photoSaved = !!bytes && savePhoto(site.id, body.id, bytes);
+    // Photos on: every punch records whether it has one ("none" for a queued punch without one).
+    if (options.photo) {
+      photoSaved = !!photoBytes && savePhoto(site.id, body.id, photoBytes);
       meta.photo = photoSaved ? "saved" : "none";
     }
 
@@ -605,6 +615,9 @@ function kioskAssetSet(): Set<string> {
   return set;
 }
 
+/** The face-check model and runtime the kiosk loads (see client/src/kiosk/face.ts). */
+const FACE_FILES = new Set(["blaze_face_short_range.tflite", "vision_wasm_internal.js", "vision_wasm_internal.wasm", "vision_wasm_nosimd_internal.js", "vision_wasm_nosimd_internal.wasm"].map((f) => `/face/${f}`));
+
 const DEV_PREFIXES = ["/@vite/", "/@fs/", "/@id/", "/@react-refresh", "/node_modules/", "/src/", "/vite-hmr"];
 
 /**
@@ -625,6 +638,8 @@ export function kioskHostGuard() {
     // Installable kiosk (home-screen icon, manifest, the static-shell service worker,
     // and the Android app's Digital Asset Links file)
     if (p === "/kiosk.webmanifest" || p === "/sw.js" || p === "/.well-known/assetlinks.json" || /^\/icons\/[\w.-]+$/.test(p)) return next();
+    // Face check for photo on punch (model and WebAssembly runtime)
+    if (FACE_FILES.has(p)) return next();
     if (kioskAssetSet().has(p)) return next();
     if (process.env.NODE_ENV !== "production" && DEV_PREFIXES.some((x) => p.startsWith(x))) return next();
     if (p.startsWith("/api/")) return res.status(404).json({ error: "Not found." });

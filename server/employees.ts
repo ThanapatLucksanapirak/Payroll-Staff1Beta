@@ -1,7 +1,7 @@
 // Employee directory for the time clock, one per location. Stored in the
 // app_settings key/value table so it works on SQLite and Supabase alike.
 import { parsePatch } from "@shared/patch";
-import { randomBytes, randomUUID, scrypt as nodeScrypt, timingSafeEqual } from "node:crypto";
+import { createCipheriv, createDecipheriv, randomBytes, randomUUID, scrypt as nodeScrypt, timingSafeEqual } from "node:crypto";
 import { promisify } from "node:util";
 import type { Express, NextFunction, Request, Response } from "express";
 import { z } from "zod";
@@ -11,6 +11,10 @@ import { db } from "./db";
 import type { DataStore } from "./db/types";
 import * as settings from "./settings";
 import { verifyHash } from "./passwords";
+import { getPinKey } from "./config";
+import { actorOf, audit } from "./audit";
+import { loginThrottle, recordLogin } from "./auth";
+import { getUser, type UserRecord } from "./users";
 
 const scrypt = promisify(nodeScrypt) as (pw: string, salt: string, len: number) => Promise<Buffer>;
 
@@ -20,19 +24,50 @@ export interface StoredEmployee {
   role: string;
   active: boolean;
   pinHash: string | null;
+  /**
+   * The PIN encrypted (AES-256-GCM) with a key kept only on the server in
+   * DATA_DIR/config.json, so owners can look it up after re-entering their
+   * password. Absent for PINs set before this existed (only the hash is kept).
+   */
+  pinEnc?: string | null;
   createdAt: string;
   updatedAt: string;
 }
 /** What the admin app sees: never the PIN hash. */
-export interface EmployeeView { id: string; name: string; role: string; active: boolean; hasPin: boolean; createdAt: string; updatedAt: string }
+export interface EmployeeView { id: string; name: string; role: string; active: boolean; hasPin: boolean; pinViewable: boolean; createdAt: string; updatedAt: string }
 interface Directory { salt: string; employees: StoredEmployee[] }
 
 const key = (siteId: string) => `employees:${siteId}`;
 export const PIN_RE = /^\d{4,6}$/;
 
 export const view = (e: StoredEmployee): EmployeeView => ({
-  id: e.id, name: e.name, role: e.role, active: e.active, hasPin: !!e.pinHash, createdAt: e.createdAt, updatedAt: e.updatedAt,
+  id: e.id, name: e.name, role: e.role, active: e.active, hasPin: !!e.pinHash, pinViewable: !!e.pinHash && !!e.pinEnc, createdAt: e.createdAt, updatedAt: e.updatedAt,
 });
+
+// ── Viewable PINs (owners only) ───────────────────────────────────────────────
+/** Encrypt a PIN, bound to its location and employee so a value can't be moved to someone else. */
+export function encryptPin(pin: string, siteId: string, employeeId: string): string {
+  const iv = randomBytes(12);
+  const c = createCipheriv("aes-256-gcm", getPinKey(), iv);
+  c.setAAD(Buffer.from(`pin:${siteId}:${employeeId}`));
+  const body = Buffer.concat([c.update(pin, "utf8"), c.final()]);
+  return `v1.${iv.toString("base64url")}.${body.toString("base64url")}.${c.getAuthTag().toString("base64url")}`;
+}
+/** The PIN, or null when it can't be read (no copy kept, another server's key, tampered). */
+export function decryptPin(enc: string | null | undefined, siteId: string, employeeId: string): string | null {
+  if (!enc) return null;
+  try {
+    const [v, iv, body, tag] = enc.split(".");
+    if (v !== "v1" || !iv || !body || !tag) return null;
+    const d = createDecipheriv("aes-256-gcm", getPinKey(), Buffer.from(iv, "base64url"));
+    d.setAAD(Buffer.from(`pin:${siteId}:${employeeId}`));
+    d.setAuthTag(Buffer.from(tag, "base64url"));
+    const pin = Buffer.concat([d.update(Buffer.from(body, "base64url")), d.final()]).toString("utf8");
+    return PIN_RE.test(pin) ? pin : null;
+  } catch {
+    return null;
+  }
+}
 
 // Small in-memory cache keyed by store; writes go through it so reads after a
 // write on this server are always fresh. A short TTL picks up restores.
@@ -134,7 +169,8 @@ export async function createEmployee(siteId: string, input: z.input<typeof emplo
     await checkUnique(dir, null, name, pinHash);
     if (data.pin && (await isManagerPin(siteId, data.pin))) throw err(409, MANAGER_CLASH);
     const now = new Date().toISOString();
-    const e: StoredEmployee = { id: `emp_${randomUUID().replace(/-/g, "").slice(0, 12)}`, name, role: data.role, active: data.active, pinHash, createdAt: now, updatedAt: now };
+    const id = `emp_${randomUUID().replace(/-/g, "").slice(0, 12)}`;
+    const e: StoredEmployee = { id, name, role: data.role, active: data.active, pinHash, pinEnc: data.pin ? encryptPin(data.pin, siteId, id) : null, createdAt: now, updatedAt: now };
     await save(siteId, { ...dir, employees: [...dir.employees, e] });
     return e;
   });
@@ -150,7 +186,10 @@ export async function updateEmployee(siteId: string, id: string, patch: Partial<
     if (data.name !== undefined) next.name = normalizeName(data.name);
     if (data.role !== undefined) next.role = data.role;
     if (data.active !== undefined) next.active = data.active;
-    if (data.pin !== undefined) next.pinHash = data.pin ? await hashPin(data.pin, dir.salt) : null;
+    if (data.pin !== undefined) {
+      next.pinHash = data.pin ? await hashPin(data.pin, dir.salt) : null;
+      next.pinEnc = data.pin ? encryptPin(data.pin, siteId, id) : null;
+    }
     await checkUnique(dir, id, next.name, data.pin ? next.pinHash : null);
     if (data.pin && (await isManagerPin(siteId, data.pin))) throw err(409, MANAGER_CLASH);
     await save(siteId, { ...dir, employees: dir.employees.map((e) => (e.id === id ? next : e)) });
@@ -221,6 +260,31 @@ export function registerEmployeeRoutes(app: Express) {
   app.delete("/api/sites/:siteId/employees/:id", h(async (req, res) => {
     const site = await siteOr404(req, res); if (!site) return;
     res.json({ ok: await deleteEmployee(site.id, String(req.params.id)) });
+  }));
+  // Owners: show the location's PINs after re-entering their password. Every
+  // look-up is written to Settings → Activity.
+  app.post("/api/sites/:siteId/employee-pins/reveal", h(async (req, res) => {
+    const site = await siteOr404(req, res); if (!site) return;
+    const user = res.locals.user as UserRecord | undefined;
+    if (!user || user.role !== "owner") return res.status(403).json({ error: "Only an owner can see employee PINs." });
+    const { password, employeeId } = z.object({ password: z.string().max(200).default(""), employeeId: z.string().max(64).optional() }).parse(req.body ?? {});
+    if (!password) return res.status(400).json({ error: "Enter your password to see PINs.", needPassword: true });
+    const ip = req.ip ?? "unknown";
+    const blocked = loginThrottle(ip, res);
+    if (blocked) return res.status(429).json({ error: blocked });
+    const fresh = await getUser(user.id, { fresh: true });
+    const ok = !!fresh && fresh.role === "owner" && (await verifyHash(password, fresh.passwordHash));
+    recordLogin(ip, ok);
+    if (!ok) return res.status(400).json({ error: "Your password is incorrect.", needPassword: true });
+    const list = (await listEmployees(site.id)).filter((e) => !employeeId || e.id === employeeId);
+    if (employeeId && !list.length) return res.status(404).json({ error: "Employee not found." });
+    const pins = list.map((e) => ({ id: e.id, name: e.name, pin: e.pinHash ? decryptPin(e.pinEnc, site.id, e.id) : null, hasPin: !!e.pinHash }));
+    audit({
+      ...actorOf(req, res), action: "employee.pins-viewed", target: `site:${site.id}`,
+      detail: employeeId ? `PIN of ${list[0].name}` : `${pins.filter((p) => p.pin).length} PIN(s) at ${site.name}`,
+    });
+    res.setHeader("Cache-Control", "no-store");
+    res.json({ pins });
   }));
   app.get("/api/sites/:siteId/employee-suggestions", h(async (req, res) => {
     const site = await siteOr404(req, res); if (!site) return;

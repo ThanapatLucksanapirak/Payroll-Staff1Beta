@@ -17,6 +17,7 @@ import { SiteDot } from "@/components/AppShell";
 import { RulesEditor } from "./RulesEditor";
 import { TimeClockSection } from "./TimeClockSettings";
 import { cn } from "@/lib/utils";
+import { PendingChangesProvider, usePendingRegistry } from "./pendingChanges";
 
 const COLORS = ["#0f766e", "#2563eb", "#7c3aed", "#db2777", "#ea580c", "#ca8a04", "#16a34a", "#475569"];
 
@@ -25,45 +26,84 @@ export function LocationsSettings() {
   const [selected, setSelected] = useState(app.site.id);
   const [creating, setCreating] = useState(false);
   const site = app.sites.find((s) => s.id === selected) ?? app.sites[0];
+  const confirm = useConfirm();
+  const [editorDirty, setEditorDirty] = useState(false);
+  // Switching location drops the open editor's drafts: ask first.
+  const choose = async (id: string) => {
+    if (id === site.id) return;
+    if (editorDirty && !(await confirm({ title: "Discard unsaved changes?", description: `Your changes to ${site.name} haven't been saved. Press Cancel, then Save changes, to keep them.`, confirmLabel: "Discard changes", destructive: true }))) return;
+    setEditorDirty(false);
+    setSelected(id);
+  };
 
   return (
     <div className="grid gap-5 xl:grid-cols-[13rem_1fr]">
       <div className="h-fit rounded-xl border border-card-border bg-card p-1.5 shadow-card" role="list" aria-label="Locations">
         {app.sites.map((s) => (
-          <button key={s.id} role="listitem" aria-current={s.id === site.id ? "true" : undefined} onClick={() => setSelected(s.id)} className={cn("flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-[13px] transition-colors hover:bg-foreground/[0.04] focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/35", s.id === site.id && "bg-primary/10 font-semibold text-primary hover:bg-primary/10")} data-testid={`button-location-${s.id}`}>
+          <button key={s.id} role="listitem" aria-current={s.id === site.id ? "true" : undefined} onClick={() => void choose(s.id)} className={cn("flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-[13px] transition-colors hover:bg-foreground/[0.04] focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/35", s.id === site.id && "bg-primary/10 font-semibold text-primary hover:bg-primary/10")} data-testid={`button-location-${s.id}`}>
             <SiteDot color={s.color} /><span className="truncate flex-1">{s.name}</span>
             {s.archived && <Archive className="h-3.5 w-3.5 text-muted-foreground" />}
           </button>
         ))}
         <Button variant="ghost" size="sm" className="mt-1 w-full justify-start text-primary" onClick={() => setCreating(true)} data-testid="button-new-location"><Plus /> Add location</Button>
       </div>
-      <SiteEditor key={site.id} site={site} onDeleted={() => setSelected(app.sites.find((s) => s.id !== site.id)?.id ?? "")} />
-      <NewSiteDialog open={creating} onOpenChange={setCreating} onCreated={(s) => setSelected(s.id)} />
+      <SiteEditor key={site.id} site={site} onDirtyChange={setEditorDirty} onDeleted={() => setSelected(app.sites.find((s) => s.id !== site.id)?.id ?? "")} />
+      <NewSiteDialog open={creating} onOpenChange={setCreating} onCreated={(s) => void choose(s.id)} />
     </div>
   );
 }
 
-function SiteEditor({ site, onDeleted }: { site: Site; onDeleted: () => void }) {
+function SiteEditor({ site, onDeleted, onDirtyChange }: { site: Site; onDeleted: () => void; onDirtyChange?: (dirty: boolean) => void }) {
   const app = useApp();
   const { toast } = useToast();
   const confirm = useConfirm();
   const [draft, setDraft] = useState<Site>(site);
   const [saving, setSaving] = useState(false);
   useEffect(() => setDraft(site), [site]);
-  const dirty = JSON.stringify(draft) !== JSON.stringify(site);
+  const pending = usePendingRegistry();
+  const siteDirty = JSON.stringify(draft) !== JSON.stringify(site);
+  const dirty = siteDirty || pending.count > 0;
+  const unsavedLabels = [...(siteDirty ? ["Location"] : []), ...pending.labels];
+
+  useEffect(() => { onDirtyChange?.(dirty); }, [dirty, onDirtyChange]);
+  useEffect(() => () => onDirtyChange?.(false), [onDirtyChange]);
+
+  // Warn before leaving the page with unsaved changes: closing or reloading the
+  // tab, and following a link elsewhere in the app (sidebar, tabs, buttons).
+  useEffect(() => {
+    if (!dirty) return;
+    const warn = (e: BeforeUnloadEvent) => { e.preventDefault(); e.returnValue = ""; };
+    const leave = (e: MouseEvent) => {
+      if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+      const a = (e.target as Element | null)?.closest?.("a[href]") as HTMLAnchorElement | null;
+      if (!a || a.target === "_blank" || a.hasAttribute("download")) return;
+      const to = new URL(a.href, window.location.href);
+      if (to.origin !== window.location.origin) return;
+      const samePage = to.pathname === window.location.pathname && (to.hash === window.location.hash || !to.hash.startsWith("#/")); // e.g. "Skip to content"
+      if (samePage) return;
+      if (!window.confirm("You have unsaved changes on this location. Leave without saving?")) { e.preventDefault(); e.stopPropagation(); }
+    };
+    window.addEventListener("beforeunload", warn);
+    document.addEventListener("click", leave, true);
+    return () => { window.removeEventListener("beforeunload", warn); document.removeEventListener("click", leave, true); };
+  }, [dirty]);
 
   const save = async () => {
     if (!draft.name.trim()) { toast({ title: "Give the location a name", variant: "destructive" }); return; }
     setSaving(true);
     try {
-      const { id, createdAt, ...patch } = draft;
-      await api("PUT", `/api/sites/${site.id}`, { ...patch, name: patch.name.trim() });
+      if (siteDirty) {
+        const { id, createdAt, ...patch } = draft;
+        await api("PUT", `/api/sites/${site.id}`, { ...patch, name: patch.name.trim() });
+      }
+      await pending.saveAll();
       await app.refresh();
-      toast({ title: "Location saved", description: "New timesheets use these rules. Existing ones keep theirs until you reapply." });
+      toast({ title: "Changes saved", description: siteDirty ? "New timesheets use these rules. Existing ones keep theirs until you reapply." : undefined });
     } catch (e) {
       toast({ title: "Couldn't save", description: errorMessage(e), variant: "destructive" });
     } finally { setSaving(false); }
   };
+  const discard = () => { setDraft(site); pending.discardAll(); };
 
   const remove = async () => {
     if (!(await confirm({ title: `Delete ${site.name}?`, description: "Its saved rates, Square connection and location-only categories are removed. Timesheets must be moved or deleted first.", confirmLabel: "Delete location", destructive: true, typeToConfirm: "DELETE" }))) return;
@@ -78,6 +118,7 @@ function SiteEditor({ site, onDeleted }: { site: Site; onDeleted: () => void }) 
   };
 
   return (
+    <PendingChangesProvider registry={pending.registry}>
     <div className="min-w-0 space-y-5">
       <Section
         title="Location"
@@ -109,20 +150,24 @@ function SiteEditor({ site, onDeleted }: { site: Site; onDeleted: () => void }) 
         <RulesEditor rules={draft.rules} siteLevel onChange={(rules) => setDraft({ ...draft, rules })} />
       </Section>
 
-      <SquareSection site={site} />
+      <SquareSection site={site} draft={draft} onChange={setDraft} />
 
       <TimeClockSection site={site} draft={draft} onChange={setDraft} />
 
       <div className={cn("z-10 -mx-1 flex items-center justify-end gap-2 rounded-xl border px-3 py-2.5 transition-shadow duration-200", dirty ? "glass sticky bottom-[calc(3.5rem+env(safe-area-inset-bottom))] border-border/70 shadow-float md:bottom-4" : "border-transparent")} data-testid="bar-save">
-        <span className="mr-auto text-xs text-muted-foreground">{dirty ? "Unsaved changes" : "All changes saved"}</span>
-        <Button variant="outline" disabled={!dirty || saving} onClick={() => setDraft(site)}>Discard</Button>
-        <Button disabled={!dirty || saving} onClick={save} data-testid="button-save-location">{saving && <Loader2 className="animate-spin" />}Save location</Button>
+        <span className="mr-auto min-w-0 text-xs text-muted-foreground" data-testid="text-save-status">
+          {dirty ? <><b className="font-semibold text-foreground">Unsaved changes</b><span className="hidden sm:inline">: {unsavedLabels.join(", ")}</span></> : "All changes saved"}
+        </span>
+        <Button variant="outline" disabled={!dirty || saving} onClick={discard} data-testid="button-discard-location">Discard</Button>
+        <Button disabled={!dirty || saving} onClick={save} data-testid="button-save-location">{saving && <Loader2 className="animate-spin" />}Save changes</Button>
       </div>
+      <p className="-mt-3 px-1 text-xs text-muted-foreground">Settings on this page are saved together with Save changes. Adding or removing a kiosk device, connecting Square and the manager PIN happen right away.</p>
     </div>
+    </PendingChangesProvider>
   );
 }
 
-function SquareSection({ site }: { site: Site }) {
+function SquareSection({ site, draft, onChange }: { site: Site; draft: Site; onChange: (s: Site) => void }) {
   const app = useApp();
   const { toast } = useToast();
   const confirm = useConfirm();
@@ -153,13 +198,10 @@ function SquareSection({ site }: { site: Site }) {
     await api("DELETE", `/api/sites/${site.id}/square`).catch(() => undefined);
     await app.refresh();
   };
-  const pick = async (id: string) => {
+  // Part of the location draft: saved with the page's Save changes button.
+  const pick = (id: string) => {
     const l = locations?.find((x) => x.id === id);
-    try {
-      await api("PUT", `/api/sites/${site.id}`, { squareLocationId: id, squareLocationName: l?.name ?? "" });
-      await app.refresh();
-      toast({ title: `Pulling timecards from ${l?.name ?? id}` });
-    } catch (e) { toast({ title: "Couldn't save", description: errorMessage(e), variant: "destructive" }); }
+    onChange({ ...draft, squareLocationId: id, squareLocationName: l?.name ?? "" });
   };
 
   return (
@@ -168,7 +210,7 @@ function SquareSection({ site }: { site: Site }) {
         <div className="flex flex-wrap items-end gap-3">
           <Field label="Square location" className="min-w-0 flex-1 basis-64">
             {locations === null ? <div className="flex h-9 items-center text-sm text-muted-foreground"><Loader2 className="mr-2 h-4 w-4 animate-spin" />Loading…</div> : (
-              <Select value={site.squareLocationId || undefined} onValueChange={pick}>
+              <Select value={draft.squareLocationId || undefined} onValueChange={pick}>
                 <SelectTrigger data-testid="select-square-location"><SelectValue placeholder={locations.length ? "Choose a location" : "No locations found"} /></SelectTrigger>
                 <SelectContent>{locations.map((l) => <SelectItem key={l.id} value={l.id}>{l.name}{l.timezone ? ` · ${l.timezone}` : ""}</SelectItem>)}</SelectContent>
               </Select>

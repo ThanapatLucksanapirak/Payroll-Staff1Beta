@@ -22,8 +22,8 @@
 - Click a card -> opens the timesheet workspace (Payroll, Rates, Shifts, Details tabs); Export menu: Full report (PDF), Manager summary (PDF), Pay statements (PDF), Summary CSV, Shifts CSV; per-employee "Pay statement" on the Payroll tab
 
 ## Live (`/live`) and Employees (`/employees`)
-- Live: who is working / on break right now, updated in real time; today's punches; editors can add or fix punches (with a note)
-- Employees: the people who can use the time clock, each with a 4–6 digit PIN; owners and admins add, edit, import names and remove
+- Live: who is working / on break right now, updated in real time; today's punches; editors can add or fix punches (with a note), and on each working card Clock out (adds the clock-out) or Cancel clock-in (removes the open clock-in and breaks, with a note, logged in Activity)
+- Employees: the people who can use the time clock, each with a 4–6 digit PIN; owners and admins add, edit, import names and remove; owners can Show PINs after re-entering their password (hidden after 2 minutes, logged in Activity)
 
 ## Pull from Square
 - Steps: "Pull from Square" -> pick From/To -> Fetch Timecards

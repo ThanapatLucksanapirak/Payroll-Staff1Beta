@@ -12,6 +12,8 @@ export function serveStatic(app: Express) {
   }
 
   app.use(express.static(distPath));
+  // Face-check files: a missing one is a 404, never the app's index.html.
+  app.use("/face", (_req, res) => { res.status(404).type("text/plain").send("Not found"); });
 
   // The time-clock kiosk is a separate page. Its asset URLs are relative, so
   // it must be served at exactly /kiosk.
