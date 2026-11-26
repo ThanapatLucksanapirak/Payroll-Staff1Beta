@@ -90,8 +90,11 @@ export function parseCsvText(text: string, opts: { mapping?: CsvMapping; source?
   // otherwise the date-format preference does.
   const dateValues = mapping.date ? parsed.data.map((r) => String(r[mapping.date!] ?? "")) : [];
   const detected = detectDayFirst(dateValues);
-  const dayFirst = detected ?? !!opts.dayFirst;
-  if (detected != null && detected !== !!opts.dayFirst && dateValues.some((v) => /\d\/\d/.test(v))) {
+  // Square timecards (and this app's own Shifts CSV, which uses Square's
+  // columns) are always month-first, whatever the preference says.
+  const prefDayFirst = format.startsWith("Square") ? false : !!opts.dayFirst;
+  const dayFirst = detected ?? prefDayFirst;
+  if (detected != null && detected !== prefDayFirst && dateValues.some((v) => /\d\/\d/.test(v))) {
     base.warnings.push(detected ? "Dates in this file are day-first (D/M/Y), so they were read that way." : "Dates in this file are month-first (M/D/Y), so they were read that way.");
   }
   const dateOpts = { defaultYear: opts.defaultYear, dayFirst };
@@ -122,7 +125,7 @@ export function parseCsvText(text: string, opts: { mapping?: CsvMapping; source?
     else if (mapping.breakHours) brk = Math.round((Number(get("breakHours")) || 0) * 60);
 
     shifts.push({
-      id: row["Shift ID"]?.trim() || newShiftId(), employee: name, date, start, end: Math.min(end, 4320),
+      id: unneutralize(row["Shift ID"]?.trim() ?? "") || newShiftId(), employee: name, date, start, end: Math.min(end, 4320),
       breakMinutes: Math.max(0, Math.min(brk, 1440)), role: get("role"), source, note: "",
     });
   }
@@ -154,7 +157,7 @@ export function shiftsToCsv(shifts: Shift[]): string {
     fields: ["Team Member", "Clockin date", "Clockin time", "Clockout time", "Clockout date", "Break minutes", "Role", "Source", "Shift ID"],
     data: rows.map((s) => [
       neutralizeFormula(s.employee), legacyDate(s.date), fmtT(s.start), fmtT(s.end), legacyDate(addDays(s.date, Math.floor(s.end / 1440))),
-      s.breakMinutes, neutralizeFormula(s.role), s.source, s.id,
+      s.breakMinutes, neutralizeFormula(s.role), neutralizeFormula(s.source), neutralizeFormula(s.id),
     ]),
   });
 }

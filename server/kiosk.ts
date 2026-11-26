@@ -44,6 +44,7 @@ const sha = (s: string) => createHash("sha256").update(s).digest("hex");
 const eqHex = (a: string, b: string) => a.length === b.length && timingSafeEqual(Buffer.from(a), Buffer.from(b));
 
 let devCache: { store: DataStore; list: KioskDevice[]; at: number } | null = null;
+export function invalidateDeviceCache() { devCache = null; }
 async function loadDevices(): Promise<KioskDevice[]> {
   const store = await db();
   if (devCache && devCache.store === store && Date.now() - devCache.at < 30_000) return devCache.list;

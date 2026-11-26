@@ -20,6 +20,7 @@ import {
 } from "@shared/punchIssues";
 import { punchChecklist } from "@shared/payrollChecklist";
 import { db } from "./db";
+import { listPunchesChecked } from "./db/types";
 import * as settings from "./settings";
 import { getEmployee, listEmployees } from "./employees";
 import { PunchError, recordPunch } from "./punches";
@@ -96,7 +97,7 @@ async function updateApprovals(siteId: string, today: string, fn: (m: ApprovalMa
 /** Punches that can belong to work days starting in [start, end] (padded for overnight and forgotten shifts). */
 async function punchesFor(site: Site, start: string, end: string): Promise<Punch[]> {
   const r = localRange(addDays(start, -1), addDays(end, 2), site.rules.timezone);
-  return (await db()).listPunches({ siteId: site.id, from: r.from, to: r.to, limit: 50000 });
+  return listPunchesChecked(await db(), { siteId: site.id, from: r.from, to: r.to });
 }
 
 export async function workDays(site: Site, start: string, end: string, now = Date.now()): Promise<WorkDay[]> {
@@ -134,7 +135,7 @@ export function autoPunchId(siteId: string, inPunchId: string, kind: "b" | "o") 
 async function autoCloseSite(site: Site, now: number): Promise<AutoCloseResult[]> {
   const cfg = await getAutoClose(site.id);
   if (!autoCloseEnabled(cfg)) return [];
-  const punches = await (await db()).listPunches({ siteId: site.id, from: new Date(now - AUTO_CLOSE_LOOKBACK_DAYS * DAY).toISOString(), to: new Date(now + 1).toISOString(), limit: 50000 });
+  const punches = await listPunchesChecked(await db(), { siteId: site.id, from: new Date(now - AUTO_CLOSE_LOOKBACK_DAYS * DAY).toISOString(), to: new Date(now + 1).toISOString() });
   const done: AutoCloseResult[] = [];
   for (const a of planAutoClose(punches, cfg, site.rules.timezone, now)) {
     try {
@@ -329,7 +330,7 @@ export function registerTimeclockRoutes(app: Express) {
     if (!base.enabled) return res.json({ ...base, employees: [] });
     const range = localRange(addDays(weekStart, -1), today, r.timezone);
     const [punches, directory, profile, categories] = await Promise.all([
-      (await db()).listPunches({ siteId: site.id, from: range.from, to: new Date(now + 60_000).toISOString(), limit: 50000 }),
+      listPunchesChecked(await db(), { siteId: site.id, from: range.from, to: new Date(now + 60_000).toISOString() }),
       listEmployees(site.id), settings.getWageProfile(site.id), settings.getCategories(),
     ]);
     const names = new Map(directory.map((e) => [e.id, e.name]));

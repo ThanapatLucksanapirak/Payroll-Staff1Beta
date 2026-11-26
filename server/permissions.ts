@@ -66,8 +66,17 @@ export async function hasPermission(user: Pick<UserRecord, "role">, perm: Permis
 }
 
 // ── Money redaction ──────────────────────────────────────────────────────────
-const MONEY_KEY = /^(amount|rate|pay|wage|wages|cash|bank|check|tips?|lumpSum|total_pay|totalPay|cost|salary)$|(Rate|Pay|Amount|Wages?|Cost|Tips|Salary|Cash|Total)$/;
+const MONEY_KEY = /^(amount|rate|pay|wage|wages|cash|bank|check|tips?|gross|net|deductions|lumpSum|total_pay|totalPay|cost|salary)$|(Rate|Pay|Amount|Wages?|Cost|Tips|Salary|Cash|Total)$/;
 const NOT_MONEY = new Set(["employeeTotal", "shiftTotal", "hoursTotal", "minutesTotal"]);
+
+// A tips pool ({ total, perDay: { date: amount } }) keeps its money under plain names.
+const TIP_POOL = /^tips?$/i;
+function redactTipPool(t: any): any {
+  const out = { ...t };
+  if (typeof out.total === "number") out.total = 0;
+  if (out.perDay && typeof out.perDay === "object") out.perDay = Object.fromEntries(Object.keys(out.perDay).map((d) => [d, 0]));
+  return out;
+}
 
 /** Replace every numeric money field with 0 (in place on a copy). */
 export function redactMoney<T>(value: T): T {
@@ -77,6 +86,7 @@ export function redactMoney<T>(value: T): T {
     const out: Record<string, unknown> = {};
     for (const [k, x] of Object.entries(v)) {
       if (typeof x === "number" && MONEY_KEY.test(k) && !NOT_MONEY.has(k)) out[k] = 0;
+      else if (TIP_POOL.test(k) && x && typeof x === "object" && !Array.isArray(x)) out[k] = redactTipPool(walk(x, depth + 1));
       else out[k] = walk(x, depth + 1);
     }
     return out;

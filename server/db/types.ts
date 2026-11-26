@@ -74,6 +74,18 @@ export function patchToRow(patch: PunchPatch): Partial<PunchRow> {
 /** Most punches one query may return (callers ask for one more to detect overflow). */
 export const MAX_PUNCH_QUERY = 100_000;
 
+/**
+ * Every punch matching `q`, or a clear 413 error past MAX_PUNCH_QUERY. Never
+ * returns a cut-off list (missing punches would mean missing hours or pay).
+ */
+export async function listPunchesChecked(store: Pick<DataStore, "listPunches">, q: Omit<PunchQuery, "limit">): Promise<Punch[]> {
+  const list = await store.listPunches({ ...q, limit: MAX_PUNCH_QUERY + 1 });
+  if (list.length > MAX_PUNCH_QUERY) {
+    throw new StoreError(`More than ${MAX_PUNCH_QUERY.toLocaleString("en-US")} punches in that range. Choose a shorter date range.`, 413);
+  }
+  return list;
+}
+
 export interface ImportData {
   settings: { key: string; value: string }[];
   timesheets: TimesheetWrite[];

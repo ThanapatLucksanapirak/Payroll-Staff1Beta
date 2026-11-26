@@ -236,6 +236,32 @@ test("sign out, sign out everywhere, and password changes end sessions", async (
   assert.equal((await call("GET", "/api/bootstrap", undefined, { as: "v2" })).status, 401, "other devices are signed out");
 });
 
+test("changing your own sign-in username and password on the Account page", async () => {
+  assert.equal((await login("me1", "view", "password-456")).status, 200);
+  // Display name only: still signs in with the old username
+  const dn = await call("PUT", "/api/auth/profile", { displayName: "Viewer Person" }, { as: "me1" });
+  assert.equal(dn.body.username, "view");
+  const bad = await login("x", "Viewer Person", "password-456");
+  assert.equal(bad.status, 401);
+  assert.match(bad.body.error, /not your display name/);
+  // Username change
+  assert.equal((await call("PUT", "/api/auth/profile", { username: "BOSS2" }, { as: "me1" })).status, 409, "taken (any case)");
+  const un = await call("PUT", "/api/auth/profile", { username: "viewer2" }, { as: "me1" });
+  assert.equal(un.status, 200);
+  assert.equal(un.body.username, "viewer2");
+  assert.equal(un.body.displayName, "Viewer Person");
+  assert.equal((await call("GET", "/api/bootstrap", undefined, { as: "me1" })).status, 200, "still signed in");
+  const ch = await call("POST", "/api/auth/change-password", { current: "password-456", next: "password-789" }, { as: "me1" });
+  assert.match(ch.body.message, /sign in as "viewer2"/);
+  assert.equal((await login("y", "view", "password-789")).status, 401);
+  assert.equal((await login("y", "viewer2", "password-789")).status, 200);
+  assert.equal((await login("y", "VIEWER2", "password-789")).status, 200, "usernames ignore case");
+  // Put it back for later tests
+  jar.me1 = jar.y;
+  await call("PUT", "/api/auth/profile", { username: "view" }, { as: "me1" });
+  await call("POST", "/api/auth/change-password", { current: "password-789", next: "password-456" }, { as: "me1" });
+});
+
 test("activity log records sign-ins, changes and folds autosaves together", async () => {
   const got = (await call("GET", `/api/timesheets/${tsA}`, undefined, { as: "owner" })).body;
   for (let i = 0; i < 3; i++) {
@@ -310,6 +336,18 @@ test("operator CLI: create an owner, reset a password, list", async () => {
   assert.match(text, /^ops\s+Owner\s+active\s+Ops Person/m);
   assert.match(text, /^admin\s+Owner/m);
   assert.equal(await cli.runAdminCli(["frobnicate"], io().io), 2);
+
+  // Rename keeps the password and role
+  const rn = io();
+  assert.equal(await cli.runAdminCli(["rename", "--from", "OPS", "--to", "ops-renamed"], rn.io), 0, rn.err.join("\n"));
+  assert.match(rn.out.join(""), /Renamed "ops" to "ops-renamed"/);
+  assert.equal((await login("ops", "ops", "cli password two")).status, 401);
+  const rl = await login("ops", "ops-renamed", "cli password two");
+  assert.equal(rl.status, 200);
+  assert.equal(rl.body.user.role, "owner");
+  assert.equal(await cli.runAdminCli(["rename", "--from", "ops-renamed", "--to", "admin"], io().io), 1, "taken");
+  assert.equal(await cli.runAdminCli(["rename", "--from", "ghost", "--to", "x2"], io().io), 1);
+  assert.equal(await cli.runAdminCli(["rename", "--from", "ops-renamed", "--to", "ops"], io().io), 0);
 
   // With two owners, password-only sign-in needs a username
   const blank = await call("POST", "/api/auth/login", { password: "legacy secret" });

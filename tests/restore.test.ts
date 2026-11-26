@@ -118,3 +118,33 @@ test("backup -> change -> restore round trip", async () => {
   const kept = (await call("GET", `/api/sites/${siteId}/punches?start=2026-01-01&end=2026-01-10`)).body;
   assert.equal(kept.length, 2);
 });
+
+test("restore keeps Square tokens and paired kiosk devices, and refuses incomplete files", async () => {
+  const boot = await call("GET", "/api/bootstrap");
+  const siteId = boot.body.sites[0].id;
+  const { db } = await import("../server/db");
+  const store = await db();
+  await store.setSetting(`square_token:${siteId}`, "SECRET-TOKEN");
+
+  // A kiosk device, then a backup without secrets, then the device is removed
+  const dev = await call("POST", `/api/sites/${siteId}/kiosk-devices`, { name: "Door" });
+  assert.equal(dev.status, 200, JSON.stringify(dev.body));
+  const snap = (await call("GET", "/api/backup?secrets=0")).body;
+  assert.ok(!snap.settings.some((s: any) => s.key.startsWith("square_token:")), "default download leaves tokens out");
+  assert.equal((await call("DELETE", `/api/sites/${siteId}/kiosk-devices/${dev.body.device.id}`)).status, 200);
+
+  assert.equal((await call("POST", "/api/backup/restore", snap)).status, 200);
+  assert.equal(await store.getSetting(`square_token:${siteId}`), "SECRET-TOKEN", "Square stays connected");
+  const devices = (await call("GET", `/api/sites/${siteId}/kiosk-devices`)).body;
+  assert.ok(!devices.some((d: any) => d.id === dev.body.device.id), "a removed device stays removed");
+  const k = await fetch(base + "/api/kiosk/state", { headers: { "X-Kiosk-Token": dev.body.token } });
+  assert.equal(k.status, 401, "and its token doesn't work");
+
+  // Nearly empty files are refused and change nothing
+  const before = (await call("GET", "/api/timesheets")).body.length;
+  for (const bad of [{ app: "payroll-admin" }, { app: "payroll-admin", settings: [], timesheets: [] }, { app: "payroll-admin", settings: snap.settings }]) {
+    const r = await call("POST", "/api/backup/restore", bad);
+    assert.equal(r.status, 400, JSON.stringify(bad).slice(0, 60));
+  }
+  assert.equal((await call("GET", "/api/timesheets")).body.length, before);
+});

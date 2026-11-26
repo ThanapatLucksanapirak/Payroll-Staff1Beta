@@ -19,6 +19,7 @@ import {
 } from "@shared/schedule";
 import { type DayCost, dailyFromEmployees, forecastPayroll, laborFromShifts, laborReport, mergeSales } from "@shared/labor";
 import { db } from "./db";
+import { listPunchesChecked } from "./db/types";
 import * as settings from "./settings";
 import { listEmployees } from "./employees";
 import { broadcast } from "./live";
@@ -149,7 +150,7 @@ export async function applyScheduleRules<T extends ShiftResult>(site: Site, resu
 /** Shifts from punches for local dates [start, end], with the schedule rules applied. */
 async function punchShifts(site: Site, start: string, end: string): Promise<ShiftResult> {
   const r = localRange(addDays(start, -1), addDays(end, 2), site.rules.timezone);
-  const punches = await (await db()).listPunches({ siteId: site.id, from: r.from, to: r.to, limit: 50000 });
+  const punches = await listPunchesChecked(await db(), { siteId: site.id, from: r.from, to: r.to });
   const names = Object.fromEntries((await listEmployees(site.id)).map((e) => [e.id, e.name]));
   return applyScheduleRules(site, punchesToShifts(punches, { timezone: site.rules.timezone, start, end, names }), start, end);
 }

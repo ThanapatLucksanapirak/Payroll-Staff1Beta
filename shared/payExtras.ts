@@ -9,6 +9,7 @@ import type {
   PayrollWarning, SiteRules, TimesheetDoc,
 } from "./schema";
 import { DEFAULT_RULES } from "./schema";
+import { csvCell } from "./csvSafe";
 import { computePayroll, employeeKey, normalizeName, paymentFor, round2, shiftEmployeeNames, totalsOf } from "./engine";
 import type {
   Accounts, Advance, AdvanceSchedule, CashConfig, DocAdvance, DocPayExtras, DocRecurring, Holiday, PayContext, RateSegment, Repayment, Tips,
@@ -231,9 +232,28 @@ export function applyPayExtras(result: AnalysisResult, input: ExtrasInput): Anal
 }
 
 /** The whole calculation for a timesheet: the engine, then the extras. Used by the workspace and the server. */
-export function computeTimesheet(doc: Pick<TimesheetDoc, "shifts" | "employees" | "manualEmployees" | "rules" | "payExtras">, categories: Category[]): AnalysisResult {
+export function computeTimesheet(doc: Pick<TimesheetDoc, "shifts" | "employees" | "manualEmployees" | "rules" | "payExtras"> & Partial<Pick<TimesheetDoc, "status" | "paidResult">>, categories: Category[]): AnalysisResult {
   const base = computePayroll({ shifts: doc.shifts, employees: doc.employees, manualEmployees: doc.manualEmployees, categories, rules: doc.rules });
-  return applyPayExtras(base, { employees: doc.employees, manualEmployees: doc.manualEmployees, rules: doc.rules, payExtras: doc.payExtras });
+  const result = applyPayExtras(base, { employees: doc.employees, manualEmployees: doc.manualEmployees, rules: doc.rules, payExtras: doc.payExtras });
+  return doc.status === "final" && doc.paidResult ? asPaid(result, doc.paidResult) : result;
+}
+
+/**
+ * A finalized timesheet shows what was paid: the totals saved when it was
+ * finalized. Fields added by later versions come from today's calculation.
+ */
+function asPaid(now: AnalysisResult, paid: { periodStart?: string; periodEnd?: string; employees: any[]; totals: any }): AnalysisResult {
+  const nowBy = new Map(now.employees.map((e) => [e.sourceId || employeeKey(e.name), e]));
+  const employees = paid.employees.filter((e) => e && typeof e === "object").map((e) => {
+    const cur = nowBy.get(e.sourceId || employeeKey(String(e.name ?? "")));
+    return (cur ? { ...cur, ...e } : e) as EmployeeSummary;
+  });
+  const totals = { ...now.totals, ...paid.totals };
+  const warnings = [...now.warnings];
+  if (Math.abs((Number(totals.totalPay) || 0) - now.totals.totalPay) >= 0.005) {
+    warnings.unshift({ level: "info", message: "Showing the totals saved when this timesheet was finalized, which is what was paid. Today's rules would work them out a little differently. Reopen it to recalculate." });
+  }
+  return { ...now, periodStart: paid.periodStart || now.periodStart, periodEnd: paid.periodEnd || now.periodEnd, employees, totals, warnings };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -492,7 +512,6 @@ export function ytdStatementMap(rows: YtdRow[], current: AnalysisResult): Record
   return out;
 }
 
-const csvCell = (v: unknown) => { const s = String(v ?? ""); return /[",\r\n]/.test(s) || /^[=+\-@]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
 export const toCsv = (rows: (string | number)[][]) => rows.map((r) => r.map(csvCell).join(",")).join("\r\n");
 
 export function ytdCsv(rows: YtdRow[], year: number | string): string {

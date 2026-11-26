@@ -10,6 +10,15 @@ few short bullets written for the people who use the app, not for developers.
 - Settings → About shows the installed version, when it was installed and when it last checked for updates.
 - Version history lists every update with notes on what changed.
 
+## 2026-11-25 · Fixes from the final stress test (#14)
+- Double shifts worked straight through keep all their hours under the early clock-in rule.
+- Restoring a backup keeps your Square connection and paired kiosks.
+- Finalized timesheets show the totals saved when they were finalized.
+- Spreadsheet exports are safe to open and keep their dates the right way round.
+
+## 2026-11-25 · Clearer sign-in username (#12)
+- Your sign-in username is shown clearly and can be changed.
+
 ## 2026-11-25 · Update now button and safer reinstall (#10)
 - Settings → Software update shows the installed version and has an Update now button.
 - Running the installer again recovers a half-finished install instead of failing.
