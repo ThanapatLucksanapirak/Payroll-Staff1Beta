@@ -12,7 +12,7 @@ const STATE_KEY = "kiosk.state";
 const QUEUE_KEY = "kiosk.queue";
 const OFFSET_KEY = "kiosk.clockOffset";
 
-export interface RosterEmployee { id: string; name: string; role: string; status: ClockStatus; since: string | null }
+export interface RosterEmployee { id: string; name: string; role: string; status: ClockStatus; since: string | null; /** Face match on: take a photo even when this device's photos are off. */ facePhoto?: boolean }
 /** Per-device options and location extras (older servers send none). */
 export interface KioskOptions { photo: boolean; idleSeconds: number; stations: string[]; breakReminderHours: number | null }
 export interface KioskState {
@@ -40,6 +40,8 @@ export interface Identified extends DayInfo {
   employee: { id: string; name: string; role: string };
   actions: PunchType[];
   ticket?: string;
+  /** Face match on for them: take a photo even when this device's photos are off. */
+  facePhoto?: boolean;
 }
 export interface KioskNote { id: string; text: string; createdAt: string; createdBy: string }
 export interface PunchResult extends DayInfo {

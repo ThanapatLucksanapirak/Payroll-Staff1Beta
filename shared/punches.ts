@@ -76,9 +76,12 @@ export interface PunchMeta {
    * A punch saved offline, kept but flagged for a manager: "missing" when it has
    * no photo (Live: "No photo") or its photo showed no face ("No face"),
    * "unchecked" ("Not checked") when the server's face
-   * check couldn't run on its photo.
+   * check couldn't run on its photo, "mismatch" ("Face didn't match") when
+   * face match is on for the person and the face in the photo wasn't theirs.
    */
-  face?: "missing" | "unchecked";
+  face?: "missing" | "unchecked" | "mismatch";
+  /** Face match: distance from the person's closest reference photo (lower is closer; 0.5 or less matches). */
+  faceMatch?: number;
   /** The kiosk fix request this punch was created from. */
   fixRequestId?: string;
   [key: string]: unknown;

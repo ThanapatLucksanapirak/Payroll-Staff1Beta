@@ -11,6 +11,7 @@ import { useConfirm } from "@/components/ConfirmDialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Switch } from "@/components/ui/switch";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -71,8 +72,8 @@ function PhotoGrid({ siteId, employeeId, tz, showNames, onOpen }: { siteId: stri
       {photos.length ? (
         <ul className="grid grid-cols-3 gap-2 sm:grid-cols-4" data-testid="grid-photos">
           {photos.map((p) => {
-            const flagged = p.face === "missing" || p.face === "unchecked";
-            const label = `${showNames ? `${p.employeeName} · ` : ""}${PUNCH_LABELS[p.type as PunchType] ?? p.type} · ${when(p.at, tz)}`;
+            const flagged = p.face === "missing" || p.face === "unchecked" || p.face === "mismatch";
+            const label = `${showNames ? `${p.employeeName}${p.removed ? " (removed)" : ""} · ` : ""}${PUNCH_LABELS[p.type as PunchType] ?? p.type} · ${when(p.at, tz)}`;
             return (
               <li key={p.punchId} className="min-w-0">
                 <button
@@ -86,7 +87,7 @@ function PhotoGrid({ siteId, employeeId, tz, showNames, onOpen }: { siteId: stri
                   {p.reference && <span className="absolute right-1 top-1 inline-flex h-5 w-5 items-center justify-center rounded-full bg-primary text-primary-foreground shadow" title="Reference photo"><Check className="h-3 w-3" /></span>}
                 </button>
                 <p className="mt-1 truncate text-[11px] leading-tight text-muted-foreground">
-                  {showNames && <span className="font-medium text-foreground">{firstName(p.employeeName)} · </span>}
+                  {showNames && <span className="font-medium text-foreground">{p.employeeName}{p.removed ? " (removed)" : ""} · </span>}
                   {PUNCH_LABELS[p.type as PunchType] ?? p.type}
                 </p>
                 <p className="truncate text-[11px] leading-tight text-muted-foreground tabular">{when(p.at, tz)}</p>
@@ -133,6 +134,7 @@ function PhotoViewer({ siteId, photo, tz, canAddRef, onClose }: { siteId: string
         <img src={photoUrl(photo.punchId)} alt={`Kiosk photo: ${label}`} className="w-full rounded-lg bg-foreground/[0.04]" />
         {photo.face === "missing" && <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-950 ring-1 ring-amber-200 dark:bg-amber-950/30 dark:text-amber-100 dark:ring-amber-800">No face was found in this photo when it arrived.</p>}
         {photo.face === "unchecked" && <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-950 ring-1 ring-amber-200 dark:bg-amber-950/30 dark:text-amber-100 dark:ring-amber-800">This photo wasn't checked for a face when it arrived.</p>}
+        {photo.face === "mismatch" && <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-950 ring-1 ring-amber-200 dark:bg-amber-950/30 dark:text-amber-100 dark:ring-amber-800">This face didn't match their reference photos (the punch was saved offline, so it was kept).</p>}
         {photo.reference && <p className="flex items-center gap-2 text-[13px] text-muted-foreground"><Check className="h-4 w-4 text-primary" />One of {firstName(photo.employeeName)}'s reference photos.</p>}
         {error && <p className="rounded-lg bg-destructive/10 px-3 py-2 text-[13px] text-destructive" role="alert" data-testid="text-ref-error">{error}</p>}
         {canAddRef && !photo.reference && (
@@ -234,7 +236,17 @@ function FaceMatchCard({ siteId, employee, tz, canManage }: { siteId: string; em
       toast({ title: "Consent recorded", description: `Now pick ${FACE_MIN_REFS} clear photos of ${first} below as reference photos.` });
     } catch (e) { toast({ title: "Couldn't record consent", description: errorMessage(e), variant: "destructive" }); } finally { setBusy(false); }
   };
+  const setRequired = async (required: boolean) => {
+    if (required && !(await confirm({ title: `Turn on face match for ${first}?`, description: `At the time clock, ${first}'s face must match their reference photos to punch. If it doesn't, the punch is refused, ${first} is told to ask a manager, and it shows on Live. Punches saved while the tablet was offline are kept but flagged. Every time clock takes a photo of ${first}, even one with photos turned off.`, confirmLabel: "Turn on" }))) return;
+    setBusy(true);
+    try {
+      await api("PUT", `/api/sites/${siteId}/employees/${employee.id}/face/required`, { required });
+      invalidateFace(siteId, employee.id);
+      toast({ title: required ? `Face match is on for ${first}` : `Face match is off for ${first}` });
+    } catch (e) { toast({ title: "Couldn't change face match", description: errorMessage(e), variant: "destructive" }); } finally { setBusy(false); }
+  };
   const removeRef = async (r: FaceRefView) => {
+    if (d?.required && d.refs <= FACE_MIN_REFS && !(await confirm({ title: "Turn off face match?", description: `Face match needs ${FACE_MIN_REFS} reference photos, so removing this one turns it off for ${first} until you add another.`, confirmLabel: "Remove and turn off", destructive: true }))) return;
     try {
       await api("DELETE", `/api/sites/${siteId}/employees/${employee.id}/face/refs/${r.id}`);
       invalidateFace(siteId, employee.id);
@@ -257,6 +269,12 @@ function FaceMatchCard({ siteId, employee, tz, canManage }: { siteId: string; em
         </div>
       </div>
 
+      {d.unreadable && (
+        <p className="flex items-start gap-2 rounded-lg bg-destructive/10 px-3 py-2 text-[13px] text-destructive" role="alert" data-testid="text-face-unreadable">
+          <ScanFace className="mt-0.5 h-4 w-4 shrink-0" />
+          <span>{first}'s face data can't be read (the file is damaged, or the server's key changed). To be safe, their time clock punches are refused until you delete it below and set face match up again.</span>
+        </p>
+      )}
       {!d.consentAt ? (
         <div className="space-y-2.5 rounded-lg bg-foreground/[0.03] p-3 text-[13px]">
           <p className="flex items-start gap-2"><FileText className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" /><span>First, {first} reads and signs the consent notice. Face data is biometric data, which some US states (for example Illinois, Texas and Washington) only allow with written consent.</span></p>
@@ -291,13 +309,24 @@ function FaceMatchCard({ siteId, employee, tz, canManage }: { siteId: string; em
               <p className="mt-1.5 text-xs text-muted-foreground" data-testid="text-refs-needed">
                 {canManage ? `Open clear photos of ${first} below and tap Use as reference photo.` : "An owner or administrator picks reference photos."} {FACE_MIN_REFS - d.refs} more needed (face only, looking at the camera, good light).
               </p>
-            ) : (
-              <p className="mt-1.5 flex items-center gap-1.5 text-xs text-muted-foreground" data-testid="text-refs-ready"><Check className="h-3.5 w-3.5 text-success" />Enough reference photos for face match.</p>
-            )}
+            ) : null}
+          </div>
+          <div className={cn("flex items-start justify-between gap-3 rounded-lg p-3", d.required ? "bg-success-soft" : "bg-foreground/[0.03]")}>
+            <div className="min-w-0">
+              <p className="text-[13px] font-medium">Require face match at the time clock</p>
+              <p className="mt-0.5 text-xs text-muted-foreground" data-testid="text-face-required">
+                {d.refs < FACE_MIN_REFS
+                  ? `Available once ${first} has ${FACE_MIN_REFS} reference photos.`
+                  : d.required
+                    ? `On. A punch is refused if the face isn't ${first}'s, and shows on Live. Every time clock takes a photo of ${first}, even one with photos turned off.`
+                    : `Off. ${first} clocks in with their PIN; photos are only checked for a face.`}
+              </p>
+            </div>
+            <Switch checked={d.required} disabled={!canManage || busy || (!d.required && d.refs < FACE_MIN_REFS)} onCheckedChange={(v) => void setRequired(v)} aria-label={`Require face match for ${employee.name}`} data-testid="switch-face-required" />
           </div>
         </>
       )}
-      {canManage && (d.consentAt || d.refs > 0) && (
+      {canManage && (d.consentAt || d.refs > 0 || d.unreadable) && (
         <div className="border-t border-border/70 pt-3">
           <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-destructive" onClick={() => setDeleting(true)} data-testid="button-delete-face"><Trash2 />Delete face data</Button>
         </div>
@@ -362,6 +391,7 @@ export function SitePhotosDialog({ siteId, employees, tz, onClose, onOpenEmploye
 /** Small "Face match" status badge for the employee list. */
 export function FaceBadge({ summary }: { summary?: FaceSummary }) {
   if (!summary) return null;
+  if (summary.unreadable) return <Badge variant="destructive" title="Face data can't be read: punches are refused until it's set up again"><ScanFace /><span className="sr-only sm:not-sr-only">Face data unreadable</span></Badge>;
   if (summary.required) return <Badge variant="success" title="Face match is on at the time clock"><ScanFace /><span className="sr-only sm:not-sr-only">Face match</span></Badge>;
   if (summary.consentAt && summary.refs < FACE_MIN_REFS) return <Badge variant="secondary" title={`${summary.refs} of ${FACE_MIN_REFS} reference photos`}><ScanFace /><span className="tabular">{summary.refs}/{FACE_MIN_REFS}</span></Badge>;
   if (summary.consentAt) return <Badge variant="secondary" title="Ready for face match"><ScanFace /><span className="sr-only sm:not-sr-only">Ready</span></Badge>;

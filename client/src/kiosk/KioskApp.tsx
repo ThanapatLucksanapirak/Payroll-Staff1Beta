@@ -130,7 +130,9 @@ export function KioskApp() {
 
   const options = state?.options ?? DEFAULT_OPTIONS;
   // The camera runs only while someone is choosing an action, so a snapshot is ready when they tap.
-  const cameraOn = !!state?.site.enabled && options.photo && (screen.k === "actions" || screen.k === "guard");
+  // Face match on for someone: their punches need a photo even when this device's photos are off.
+  const photoFor = (who: Identified) => options.photo || !!who.facePhoto;
+  const cameraOn = !!state?.site.enabled && (screen.k === "actions" || screen.k === "guard") && photoFor(screen.who);
   const camera = useCamera(cameraOn);
 
   const home = useCallback(() => { setBusy(false); setScreen({ k: "home" }); }, []);
@@ -157,7 +159,7 @@ export function KioskApp() {
         const status = employee.status;
         setScreen({
           k: "actions", pin, offline: true,
-          who: { employee: { id: employee.id, name: employee.name, role: employee.role }, status, since: employee.since, todayMinutes: 0, actions: allowedActions(status) },
+          who: { employee: { id: employee.id, name: employee.name, role: employee.role }, status, since: employee.since, todayMinutes: 0, actions: allowedActions(status), ...(employee.facePhoto ? { facePhoto: true } : {}) },
         });
         return;
       }
@@ -229,7 +231,7 @@ export function KioskApp() {
     if (type === "out" && sess.who.status === "break" && !sure) {
       return setScreen({ ...only(sess), k: "guard", message: "You're on a break.", question: "End your break, or clock out for the day?", suggest: "break_end", also: "out" });
     }
-    if (!options.photo) {
+    if (!photoFor(sess.who)) {
       if (type === "in" && options.stations.length) return setScreen({ ...only(sess), k: "station", type, photo: undefined });
       return void send(type, sess, undefined, null);
     }

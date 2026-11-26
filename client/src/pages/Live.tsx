@@ -23,7 +23,7 @@ import { Field } from "@/components/workspace/fields";
 import { ScheduleAlerts } from "@/components/schedule/ScheduleAlerts";
 import { LiveTimeclockPanel } from "@/components/timeclock/LiveTimeclockPanel";
 import { cn } from "@/lib/utils";
-import { BreakDueBadge, FixRequests, NoFaceBadge, PunchPhoto, ShiftNotes, StationTag } from "@/components/live/KioskLive";
+import { BreakDueBadge, FaceAlerts, FixRequests, NoFaceBadge, PunchPhoto, ShiftNotes, StationTag } from "@/components/live/KioskLive";
 
 interface EmployeeNow {
   id: string; name: string; role: string; active: boolean; inDirectory: boolean;
@@ -173,6 +173,7 @@ export function LivePage() {
           </section>
 
           <LiveTimeclockPanel site={site} />
+          {editable && <FaceAlerts siteId={site.id} tz={tz} editable={editable} />}
           <FixRequests siteId={site.id} tz={tz} editable={editable} />
           <ShiftNotes siteId={site.id} tz={tz} editable={editable} employees={data.employees.filter((e) => e.inDirectory)} />
 

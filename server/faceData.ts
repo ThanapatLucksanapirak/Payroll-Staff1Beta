@@ -15,8 +15,8 @@ import path from "node:path";
 import type { Express, NextFunction, Request, Response } from "express";
 import { z } from "zod";
 import {
-  FACE_MAX_REFS, FACE_MIN_REFS, FACE_REF_MAX_DISTANCE, type FaceRefView, type FaceSummary, type GalleryPhoto,
-  closestDistance, faceConsentNotice,
+  FACE_ALERT_DAYS, FACE_ALERT_MAX, FACE_MATCH_MAX_DISTANCE, FACE_MAX_REFS, FACE_MIN_REFS, FACE_REF_MAX_DISTANCE,
+  type FaceAlert, type FaceRefView, type FaceSummary, type GalleryPhoto, closestDistance, faceConsentNotice, roundDistance,
 } from "@shared/face";
 import type { Punch } from "@shared/punches";
 import { DATA_DIR, getPinKey } from "./config";
@@ -26,7 +26,8 @@ import * as settings from "./settings";
 import { actorOf, audit } from "./audit";
 import { employeeRemovedHooks, getEmployee, listEmployees } from "./employees";
 import { getSiteConfig } from "./kioskConfig";
-import { deletePhoto, photoPath, readPhoto } from "./kioskPhotos";
+import { deletePhoto, photoPath, readPhoto, savePhoto } from "./kioskPhotos";
+import { broadcast } from "./live";
 import { checkFaceJpeg } from "./faceCheck";
 
 const SAFE_ID = /^[A-Za-z0-9_-]{1,100}$/;
@@ -112,14 +113,29 @@ function sanitize(raw: any): FaceProfile {
 
 /** Someone's face data, or an empty profile when there is none (or it can't be read). */
 export function readProfile(siteId: string, employeeId: string): FaceProfile {
+  return readProfileState(siteId, employeeId).profile;
+}
+
+/**
+ * Someone's face data, and whether a profile exists but can't be read
+ * (damaged file, or the server's PIN key changed). An unreadable profile might
+ * have had face match on, so the time clock fails closed for that person.
+ */
+export function readProfileState(siteId: string, employeeId: string): { profile: FaceProfile; unreadable: boolean } {
   let enc: string;
-  try { enc = fs.readFileSync(profileFile(siteId, employeeId), "utf8"); } catch { return emptyProfile(); }
-  const json = decrypt(enc, `face:${siteId}:${employeeId}`);
-  if (json == null) {
-    console.error(`[face] face data for ${employeeId} at ${siteId} can't be read (the server's PIN key changed?); treating it as none`);
-    return emptyProfile();
+  try { enc = fs.readFileSync(profileFile(siteId, employeeId), "utf8"); } catch (err: any) {
+    if (err?.code === "ENOENT" || err?.code === "ENOTDIR") return { profile: emptyProfile(), unreadable: false };
+    console.error(`[face] face data for ${employeeId} at ${siteId} can't be read: ${err?.message ?? err}`);
+    return { profile: emptyProfile(), unreadable: true };
   }
-  try { return sanitize(JSON.parse(json)); } catch { return emptyProfile(); }
+  const json = decrypt(enc, `face:${siteId}:${employeeId}`);
+  let raw: unknown;
+  try { raw = json == null ? undefined : JSON.parse(json); } catch { raw = undefined; }
+  if (raw === undefined || !raw || typeof raw !== "object") {
+    console.error(`[face] face data for ${employeeId} at ${siteId} can't be read (damaged, or the server's PIN key changed). Their punches are refused until it's deleted and set up again.`);
+    return { profile: emptyProfile(), unreadable: true };
+  }
+  return { profile: sanitize(raw), unreadable: false };
 }
 
 function writeProfile(siteId: string, employeeId: string, p: FaceProfile) {
@@ -142,8 +158,8 @@ function withPerson<T>(siteId: string, employeeId: string, fn: () => Promise<T>)
   return next;
 }
 
-export function summaryOf(employeeId: string, p: FaceProfile): FaceSummary {
-  return { employeeId, consentAt: p.consentAt, consentBy: p.consentBy, refs: p.refs.length, required: p.required };
+export function summaryOf(employeeId: string, p: FaceProfile, unreadable = false): FaceSummary {
+  return { employeeId, consentAt: p.consentAt, consentBy: p.consentBy, refs: p.refs.length, required: p.required, ...(unreadable ? { unreadable: true } : {}) };
 }
 const refView = (r: FaceRef): FaceRefView => ({ id: r.id, punchId: r.punchId, takenAt: r.takenAt, addedAt: r.addedAt, addedBy: r.addedBy });
 
@@ -154,7 +170,10 @@ function peopleWithData(siteId: string): string[] {
 }
 
 export function faceSummaries(siteId: string): FaceSummary[] {
-  return peopleWithData(siteId).map((id) => summaryOf(id, readProfile(siteId, id))).filter((s) => s.consentAt || s.refs);
+  return peopleWithData(siteId).map((id) => {
+    const st = readProfileState(siteId, id);
+    return summaryOf(id, st.profile, st.unreadable);
+  }).filter((s) => s.consentAt || s.refs || s.unreadable);
 }
 
 // ── Changes ──────────────────────────────────────────────────────────────────
@@ -217,6 +236,35 @@ export function removeReference(siteId: string, employeeId: string, refId: strin
   });
 }
 
+/** Turn face match at the time clock on or off for someone. On needs consent and enough reference photos. */
+export function setRequired(siteId: string, employeeId: string, required: boolean): Promise<FaceProfile> {
+  return withPerson(siteId, employeeId, async () => {
+    const p = readProfile(siteId, employeeId);
+    if (required && !p.consentAt) throw new FaceError("Record their consent first.", 409, "consent");
+    if (required && p.refs.length < FACE_MIN_REFS) throw new FaceError(`Face match needs ${FACE_MIN_REFS} reference photos first.`, 409, "refs");
+    if (p.required === required) return p;
+    p.required = required;
+    writeProfile(siteId, employeeId, p);
+    return p;
+  });
+}
+
+/** Face match at the time clock: the person's face templates when face match is on for them, else null. */
+export function requiredTemplates(siteId: string, employeeId: string): number[][] | "unreadable" | null {
+  if (!SAFE_ID.test(siteId) || !SAFE_ID.test(employeeId)) return null;
+  const { profile: p, unreadable } = readProfileState(siteId, employeeId);
+  if (unreadable) return "unreadable"; // fail closed: it may have had face match on
+  return p.required ? p.refs.map((r) => r.d) : null;
+}
+
+export type MatchResult = { match: boolean; distance: number | null };
+/** Does this face match these templates? */
+export function matchFace(descriptor: number[] | undefined, templates: number[][]): MatchResult {
+  if (!descriptor) return { match: false, distance: null };
+  const d = closestDistance(descriptor, templates);
+  return { match: d <= FACE_MATCH_MAX_DISTANCE, distance: roundDistance(d) };
+}
+
 /**
  * Delete all of someone's face data: consent record, reference photos and face
  * templates. With `punchPhotos`, also their punch photos (the punches stay).
@@ -230,6 +278,7 @@ export function deleteFaceData(siteId: string, employeeId: string, opts: { punch
         const file = photoPath(siteId, p.id);
         if (file && fs.existsSync(file)) { deletePhoto(siteId, p.id); removed++; }
       }
+      await deleteAlertsFor(siteId, employeeId);
     }
     return { punchPhotos: removed };
   });
@@ -269,6 +318,7 @@ export async function galleryPage(siteId: string, opts: { employeeId?: string; b
     if (!s) { s = new Set(readProfile(siteId, employeeId).refs.map((r) => r.punchId ?? "")); refsByPerson.set(employeeId, s); }
     return s;
   };
+  const current = new Set((await listEmployees(siteId)).map((e) => e.id));
   const photos: GalleryPhoto[] = [];
   while (end > horizon && photos.length < limit) {
     const start = Math.max(horizon, end - windowDays * DAY);
@@ -279,12 +329,78 @@ export async function galleryPage(siteId: string, opts: { employeeId?: string; b
     for (const p of withPhoto) {
       const file = photoPath(siteId, p.id);
       if (!file || !fs.existsSync(file)) continue;
-      photos.push({ punchId: p.id, employeeId: p.employeeId, employeeName: p.employeeName, type: p.type, at: p.at, face: p.meta?.face ?? null, reference: refPunches(p.employeeId).has(p.id) });
+      photos.push({ punchId: p.id, employeeId: p.employeeId, employeeName: p.employeeName, type: p.type, at: p.at, face: p.meta?.face ?? null, reference: refPunches(p.employeeId).has(p.id), ...(current.has(p.employeeId) ? {} : { removed: true }) });
     }
     end = start;
     // A page always ends at a window boundary, so nothing is skipped or shown twice.
   }
   return { photos, nextBefore: end > horizon ? new Date(end).toISOString() : null };
+}
+
+// ── Face alerts (refused punches, shown on Live) ─────────────────────────────
+export const ALERTS_PREFIX = "face_alerts:";
+const alertPhotoId = (alertId: string) => `face-alert-${alertId}`;
+const alertLocks = new Map<string, Promise<unknown>>();
+function withAlerts<T>(siteId: string, fn: (list: FaceAlert[]) => Promise<{ list: FaceAlert[]; result: T }>): Promise<T> {
+  const prev = alertLocks.get(siteId) ?? Promise.resolve();
+  const next = prev.catch(() => undefined).then(async () => {
+    const store = await db();
+    const out = await fn(await listFaceAlertsRaw(siteId));
+    await store.setSetting(ALERTS_PREFIX + siteId, JSON.stringify(out.list));
+    return out.result;
+  });
+  const tail = next.catch(() => undefined);
+  alertLocks.set(siteId, tail);
+  void tail.then(() => { if (alertLocks.get(siteId) === tail) alertLocks.delete(siteId); });
+  return next;
+}
+async function listFaceAlertsRaw(siteId: string): Promise<FaceAlert[]> {
+  try {
+    const v = JSON.parse((await (await db()).getSetting(ALERTS_PREFIX + siteId)) ?? "[]");
+    return Array.isArray(v) ? v.filter((a) => a && typeof a.id === "string" && SAFE_ID.test(a.id)) : [];
+  } catch {
+    return [];
+  }
+}
+/** Newest first, with whether each photo is still kept. */
+export async function listFaceAlerts(siteId: string): Promise<FaceAlert[]> {
+  return (await listFaceAlertsRaw(siteId)).map((a) => {
+    const file = photoPath(siteId, alertPhotoId(a.id));
+    return { ...a, photo: !!file && fs.existsSync(file) };
+  }).reverse();
+}
+
+/** Record a punch refused because the face didn't match (with its photo), and tell Live. */
+export async function recordFaceAlert(siteId: string, a: Omit<FaceAlert, "id" | "photo" | "dismissedAt" | "dismissedBy">, photo: Buffer | null): Promise<FaceAlert> {
+  const alert: FaceAlert = { ...a, id: randomUUID().replace(/-/g, "").slice(0, 16), photo: false, dismissedAt: null, dismissedBy: null };
+  if (photo) alert.photo = savePhoto(siteId, alertPhotoId(alert.id), photo);
+  const cutoff = Date.now() - FACE_ALERT_DAYS * DAY;
+  await withAlerts(siteId, async (list) => {
+    const all = [...list, alert];
+    const keep = all.filter((x) => Date.parse(x.at) >= cutoff).slice(-FACE_ALERT_MAX);
+    const kept = new Set(keep.map((x) => x.id));
+    for (const x of all) if (!kept.has(x.id)) deletePhoto(siteId, alertPhotoId(x.id));
+    return { list: keep, result: undefined };
+  });
+  broadcast({ type: "kiosk", kind: "face_alert", siteId });
+  return alert;
+}
+
+export function dismissFaceAlert(siteId: string, id: string, by: string): Promise<FaceAlert> {
+  return withAlerts(siteId, async (list) => {
+    const cur = list.find((x) => x.id === id);
+    if (!cur) throw new FaceError("That alert no longer exists.", 404, "missing");
+    const next = { ...cur, dismissedAt: cur.dismissedAt ?? new Date().toISOString(), dismissedBy: cur.dismissedBy ?? by };
+    return { list: list.map((x) => (x.id === id ? next : x)), result: next };
+  });
+}
+
+/** Remove someone's alerts and their photos (when their punch photos are deleted). */
+async function deleteAlertsFor(siteId: string, employeeId: string) {
+  await withAlerts(siteId, async (list) => {
+    for (const x of list) if (x.employeeId === employeeId) deletePhoto(siteId, alertPhotoId(x.id));
+    return { list: list.filter((x) => x.employeeId !== employeeId), result: undefined };
+  });
 }
 
 // ── Retention ────────────────────────────────────────────────────────────────
@@ -385,10 +501,10 @@ export function registerFaceRoutes(app: Express) {
 
   app.get("/api/sites/:siteId/employees/:employeeId/face", h(async (req, res) => {
     const ctx = await personOr404(req, res); if (!ctx) return;
-    const p = readProfile(ctx.site.id, ctx.employee.id);
+    const { profile: p, unreadable } = readProfileState(ctx.site.id, ctx.employee.id);
     const { faceRetentionDays } = await getSiteConfig(ctx.site.id);
     res.json({
-      ...summaryOf(ctx.employee.id, p), refList: p.refs.map(refView).reverse(),
+      ...summaryOf(ctx.employee.id, p, unreadable), refList: p.refs.map(refView).reverse(),
       notice: faceConsentNotice(ctx.site.name, faceRetentionDays), retentionDays: faceRetentionDays,
     });
   }));
@@ -422,6 +538,33 @@ export function registerFaceRoutes(app: Express) {
     const p = await removeReference(ctx.site.id, ctx.employee.id, String(req.params.refId));
     audit({ ...actor, action: "face.reference.remove", target: `site:${ctx.site.id}`, detail: `${ctx.employee.name}: ${p.refs.length} reference photo(s) left` });
     res.json(summaryOf(ctx.employee.id, p));
+  }));
+
+  app.put("/api/sites/:siteId/employees/:employeeId/face/required", h(async (req, res) => {
+    const ctx = await personOr404(req, res); if (!ctx) return;
+    const { required } = z.object({ required: z.boolean() }).parse(req.body ?? {});
+    const p = await setRequired(ctx.site.id, ctx.employee.id, required);
+    audit({ ...actorOf(req, res), action: required ? "face.require.on" : "face.require.off", target: `site:${ctx.site.id}`, detail: ctx.employee.name });
+    res.json(summaryOf(ctx.employee.id, p));
+  }));
+
+  app.get("/api/sites/:siteId/face-alerts", h(async (req, res) => {
+    const site = await settings.getSite(String(req.params.siteId));
+    if (!site) return res.status(404).json({ error: "Location not found." });
+    res.json(await listFaceAlerts(site.id));
+  }));
+  app.get("/api/sites/:siteId/face-alerts/:id/photo", h(async (req, res) => {
+    const site = await settings.getSite(String(req.params.siteId));
+    if (!site) return res.status(404).json({ error: "Location not found." });
+    const id = String(req.params.id);
+    sendJpeg(res, SAFE_ID.test(id) ? readPhoto(site.id, alertPhotoId(id)) : null);
+  }));
+  app.post("/api/sites/:siteId/face-alerts/:id/dismiss", h(async (req, res) => {
+    const site = await settings.getSite(String(req.params.siteId));
+    if (!site) return res.status(404).json({ error: "Location not found." });
+    const out = await dismissFaceAlert(site.id, String(req.params.id), actorOf(req, res).userName);
+    broadcast({ type: "kiosk", kind: "face_alert", siteId: site.id });
+    res.json(out);
   }));
 
   app.delete("/api/sites/:siteId/employees/:employeeId/face", h(async (req, res) => {

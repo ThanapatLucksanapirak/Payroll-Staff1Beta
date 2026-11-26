@@ -92,7 +92,7 @@ export function EmployeesPage() {
   };
 
   const remove = async (e: EmployeeRow) => {
-    if (!(await confirm({ title: `Remove ${e.name}?`, description: "They can no longer use the time clock. Their past punches and timesheets are kept. To pause someone instead, turn off Active.", confirmLabel: "Remove", destructive: true }))) return;
+    if (!(await confirm({ title: `Remove ${e.name}?`, description: "They can no longer use the time clock. Their face data (if any) is deleted now. Their past punches, timesheets and punch photos are kept, because they're pay records; punch photos are deleted at the end of the photo retention period (Settings → Locations & rules). To pause someone instead, turn off Active.", confirmLabel: "Remove", destructive: true }))) return;
     try {
       await api("DELETE", `/api/sites/${site.id}/employees/${e.id}`);
       await queryClient.invalidateQueries({ queryKey: key });
@@ -125,6 +125,12 @@ export function EmployeesPage() {
             <span className="min-w-0 flex-1">The time clock is off at {site.name} (hours come from Square). You can still set up employees now.</span>
           </span>
           {settingsAdmin && <span className="shrink-0 pl-7 sm:pl-0"><Button asChild size="sm" variant="outline"><Link href="/settings/locations">Time clock settings</Link></Button></span>}
+        </div>
+      )}
+      {(faces.data ?? []).some((f) => f.unreadable) && (
+        <div className="mb-5 flex items-start gap-3 rounded-xl bg-destructive/10 px-4 py-3 text-[13px] text-destructive" role="alert" data-testid="banner-face-unreadable">
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+          <span>Face data for {(faces.data ?? []).filter((f) => f.unreadable).map((f) => (q.data ?? []).find((e) => e.id === f.employeeId)?.name ?? "a removed employee").join(", ")} can't be read (a damaged file, or the server's key changed). Their time clock punches are refused until you open them here, delete their face data and set face match up again.</span>
         </div>
       )}
       {noPin > 0 && (

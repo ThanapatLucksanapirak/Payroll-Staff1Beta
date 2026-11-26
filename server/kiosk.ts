@@ -16,6 +16,7 @@ import { type KioskDeviceOptions, DEVICE_LOGIN_MODES, IDLE_MAX, IDLE_MIN, breakD
 import { getSiteConfig, listNotes } from "./kioskConfig";
 import { decodePhoto, deletePhoto, savePhoto } from "./kioskPhotos";
 import { checkFaceJpeg, loadFaceModel } from "./faceCheck";
+import { matchFace, recordFaceAlert, requiredTemplates } from "./faceData";
 import { registerKioskDeviceFeatureRoutes } from "./kioskFeatures";
 import { getAuthSecret } from "./config";
 import { db } from "./db";
@@ -393,7 +394,7 @@ export function registerKioskRoutes(app: Express) {
       pinLockSeconds: Math.ceil(pinLockedFor(device.id) / 1000),
       employees: employees.map((e) => {
         const st = clockState(byEmp.get(e.id) ?? [], now);
-        return { id: e.id, name: e.name, role: e.role, status: st.status, since: st.since };
+        return { id: e.id, name: e.name, role: e.role, status: st.status, since: st.since, ...(requiredTemplates(site.id, e.id) ? { facePhoto: true } : {}) };
       }).sort((a, b) => a.name.localeCompare(b.name)),
     });
   }));
@@ -443,6 +444,8 @@ export function registerKioskRoutes(app: Express) {
     const st = await employeeClock(site, e.id);
     res.json({
       employee: { id: e.id, name: e.name, role: e.role }, ...clockView(st), actions: allowedActions(st.status), ticket: issueTicket(device.id, e.id),
+      // Face match on for them: the kiosk takes a photo even when this device's photos are off.
+      ...(requiredTemplates(site.id, e.id) ? { facePhoto: true } : {}),
     });
   }));
 
@@ -513,15 +516,51 @@ export function registerKioskRoutes(app: Express) {
     // server decides what counts as offline: only an `at` more than 2 minutes
     // old. A fresher `at` is treated as live, so sending one can't skip the check.
     const queuedOffline = !!body.at && at < now - 2 * 60_000;
-    if (options.photo && !queuedOffline && !body.photo) {
+    // Face match on for this person: a photo is needed whatever the device's photo setting.
+    const templates = requiredTemplates(site.id, e.id);
+    const takesPhoto = options.photo || !!templates;
+    if (takesPhoto && !queuedOffline && !body.photo) {
       return res.status(422).json({ error: "Face not detected. This time clock takes a photo with each punch: show your face to the camera and try again.", code: "photo" });
     }
-    const photoBytes = options.photo && body.photo ? decodePhoto(body.photo) : null;
-    if (options.photo && !queuedOffline && !photoBytes) {
+    const photoBytes = takesPhoto && body.photo ? decodePhoto(body.photo) : null;
+    if (takesPhoto && !queuedOffline && !photoBytes) {
       return res.status(422).json({ error: "The photo didn't come through. Show your face to the camera and try again.", code: "photo" });
     }
-    if (options.photo && photoBytes) {
-      const face = await checkFaceJpeg(photoBytes);
+    // Face match on for this person: the face must also be theirs (closest
+    // reference photo at most 0.5 away). A live punch that doesn't match is
+    // refused and shown on Live as an alert, with its photo; one queued offline
+    // is kept but flagged "Face didn't match". Their punches need a photo on
+    // every device, even one with photos off (the kiosk takes one for them).
+    // Face data that can't be read fails closed: refused live (with an alert on
+    // Live), kept but flagged "Not checked" when queued offline.
+    if (templates === "unreadable") {
+      if (!queuedOffline) {
+        await recordFaceAlert(site.id, { employeeId: e.id, employeeName: e.name, type: body.type, at: new Date(at).toISOString(), distance: null, reason: "unreadable", deviceName: device.name }, photoBytes)
+          .catch((err) => console.error(`[face] could not record a face alert: ${err?.message ?? err}`));
+        return res.status(422).json({
+          error: "Face match isn't working for you right now. Ask a manager to add your punch.",
+          code: "photo", reason: "unreadable",
+        });
+      }
+      meta.face = "unchecked";
+    }
+    if (takesPhoto && photoBytes) {
+      const face = await checkFaceJpeg(photoBytes, { descriptor: Array.isArray(templates) });
+      if (face.ok && Array.isArray(templates)) {
+        const m = matchFace(face.descriptor, templates);
+        if (m.distance != null) meta.faceMatch = m.distance;
+        if (!m.match) {
+          if (!queuedOffline) {
+            await recordFaceAlert(site.id, { employeeId: e.id, employeeName: e.name, type: body.type, at: new Date(at).toISOString(), distance: m.distance, reason: "mismatch", deviceName: device.name }, photoBytes)
+              .catch((err) => console.error(`[face] could not record a face alert: ${err?.message ?? err}`));
+            return res.status(422).json({
+              error: "Face not recognized. Look straight at the camera and try again. If it keeps happening, ask a manager to add your punch.",
+              code: "photo", reason: "mismatch",
+            });
+          }
+          meta.face = "mismatch";
+        }
+      }
       if (!face.ok) {
         if (!queuedOffline) {
           const error = face.reason === "busy"
@@ -537,10 +576,10 @@ export function registerKioskRoutes(app: Express) {
         meta.face = face.reason === "unavailable" || face.reason === "busy" ? "unchecked" : "missing";
       }
     }
-    if (options.photo && !photoBytes) meta.face = "missing"; // queued offline with no photo: kept, flagged
+    if (takesPhoto && !photoBytes) meta.face = "missing"; // queued offline with no photo: kept, flagged
     let photoSaved = false;
     // Photos on: every punch records whether it has one ("none" for a queued punch without one).
-    if (options.photo) {
+    if (takesPhoto) {
       photoSaved = !!photoBytes && savePhoto(site.id, body.id, photoBytes);
       meta.photo = photoSaved ? "saved" : "none";
     }

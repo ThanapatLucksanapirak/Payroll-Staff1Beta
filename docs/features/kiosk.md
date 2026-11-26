@@ -86,6 +86,49 @@ Setting up face match for someone:
 The server turns each reference photo into a face template (128 numbers from
 face-api's face recognition model, on the server, no outside service).
 
+3. **Require face match at the time clock**: the switch in the Face match
+   card, available once they have three reference photos (removing one below
+   three turns it off).
+
+With face match on for someone, every punch they make is checked against
+their reference photos, on every time clock: one with photos turned off still
+takes a photo of them (the kiosk is told per person), and a punch without one
+is refused. A match needs their closest reference photo to be at
+most 0.5 away (face-api's default is 0.6; 0.5 is stricter, so a lookalike
+coworker is less likely to pass, while the same person usually scores 0.25 to
+0.45). The distance is saved on the punch (`meta.faceMatch`).
+
+- **Doesn't match, live**: the punch is refused with "Face not recognized.
+  Look straight at the camera and try again. If it keeps happening, ask a
+  manager to add your punch." It shows on Live under **Face didn't match**,
+  with the photo, until a manager dismisses it. These alerts are kept for 14
+  days (200 at most); their photos follow the punch photo retention.
+- **Doesn't match, saved offline** (sent more than 2 minutes late): kept, so
+  nothing saved on the tablet is lost, but tagged **Face didn't match** on Live.
+- **No face** or the check isn't working: as for everyone (above).
+- **Saved offline without a photo** (for example, the tablet didn't know
+  face match was on yet): kept and tagged **No photo**.
+- Turning face match off, or deleting their face data, stops the check at once.
+- **Face data that can't be read** (a damaged `profile.enc`, or the server's
+  PIN key changed, for example after moving servers without `config.json` or
+  changing `PIN_KEY`): it fails closed. Live punches for that person are
+  refused ("Face match isn't working for you right now. Ask a manager to add
+  your punch.") with an alert on Live; offline ones are kept and tagged
+  **Not checked**. Employees shows a red banner and badge naming them: open
+  them, **Delete face data**, and set face match up again.
+
+Limits worth knowing:
+
+- **No liveness check.** A clear printed photo or a phone screen showing the
+  person's face can pass, including one of their own reference photos. Face
+  match stops someone casually using a coworker's PIN; it doesn't stop a
+  determined attempt. The refused-punch photos on Live, and the photo kept with
+  every punch, are the backstop.
+- **Two faces in the photo**: the check uses the face the detector is most sure
+  of. If the employee is in the frame and clearest, a punch made by someone
+  standing next to them can pass. Reference photos themselves must have only
+  one face.
+
 Where face data lives: `DATA_DIR/face-data/<location>/<employee>/` (set
 `FACE_DATA_DIR` to move it). The consent record and templates are in
 `profile.enc`, encrypted (AES-256-GCM, key derived from the server's PIN key);

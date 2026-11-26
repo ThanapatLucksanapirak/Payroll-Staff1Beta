@@ -59,6 +59,8 @@ export interface FaceSummary {
   refs: number;
   /** Face match required at the time clock. */
   required: boolean;
+  /** Their face data exists but can't be read (damaged, or the server's key changed). Their punches are refused until it's deleted. */
+  unreadable?: boolean;
 }
 
 /** One approved reference photo, as the admin app sees it. */
@@ -79,11 +81,38 @@ export interface GalleryPhoto {
   employeeName: string;
   type: string;
   at: string;
-  /** "missing" (no face found) or "unchecked" (the face check couldn't run), as on Live. */
+  /** "missing" (no face found), "unchecked" (the face check couldn't run) or "mismatch" (not their face), as on Live. */
   face: string | null;
   /** True when this photo is one of the person's reference photos. */
   reference: boolean;
+  /** True when the employee has since been removed from the list. */
+  removed?: boolean;
 }
+
+/**
+ * A punch refused because the face didn't match the person's reference photos,
+ * shown on Live until a manager dismisses it.
+ */
+export interface FaceAlert {
+  id: string;
+  employeeId: string;
+  employeeName: string;
+  /** The punch that was refused. */
+  type: string;
+  at: string;
+  /** How far the face was from their closest reference photo (null when unknown). */
+  distance: number | null;
+  /** "mismatch" (not their face) or "unreadable" (their face data couldn't be read). Missing on older alerts = mismatch. */
+  reason?: "mismatch" | "unreadable";
+  deviceName: string;
+  /** False once the photo has been deleted (retention or face data deletion). */
+  photo: boolean;
+  dismissedAt: string | null;
+  dismissedBy: string | null;
+}
+/** Face alerts kept per location: the newest this many, and none older than FACE_ALERT_DAYS. */
+export const FACE_ALERT_MAX = 200;
+export const FACE_ALERT_DAYS = 14;
 
 /**
  * The notice to give each employee before collecting face data. Plain words,

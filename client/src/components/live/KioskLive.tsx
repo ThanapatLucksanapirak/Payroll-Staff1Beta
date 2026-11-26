@@ -3,8 +3,9 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Camera, CameraOff, Check, Coffee, Loader2, MapPin, Megaphone, Plus, Trash2, Wrench, X } from "lucide-react";
-import type { Punch } from "@shared/punches";
+import { type Punch, type PunchType, PUNCH_LABELS } from "@shared/punches";
 import { type FixRequest, type ShiftNote, FIX_TYPE_LABELS } from "@shared/kiosk";
+import type { FaceAlert } from "@shared/face";
 import { instantToLocal, localToInstant, minutesToInput, inputToMinutes, todayISO, addDays } from "@shared/dates";
 import { api, errorMessage, queryClient } from "@/lib/api";
 import { useLiveEvents } from "@/lib/live";
@@ -34,9 +35,10 @@ export function PunchPhoto({ punch, canView, label }: { punch: Punch; canView: b
   const src = `/api/punches/${encodeURIComponent(punch.id)}/photo`;
   const noFace = punch.meta?.face === "missing";
   const unchecked = punch.meta?.face === "unchecked";
+  const mismatch = punch.meta?.face === "mismatch";
   return (
     <>
-      <button type="button" onClick={() => setOpen(true)} className={cn("h-8 w-8 shrink-0 overflow-hidden rounded-md bg-foreground/[0.05] transition hover:ring-primary/50 focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/35", noFace || unchecked ? "ring-2 ring-amber-500" : "ring-1 ring-border/70")} title={noFace ? "No face found in this photo" : unchecked ? "This photo wasn't checked for a face" : undefined} aria-label={`Photo: ${label}${noFace ? " (no face found)" : unchecked ? " (not checked for a face)" : ""}`} data-testid={`button-photo-${punch.id}`}>
+      <button type="button" onClick={() => setOpen(true)} className={cn("h-8 w-8 shrink-0 overflow-hidden rounded-md bg-foreground/[0.05] transition hover:ring-primary/50 focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/35", noFace || unchecked || mismatch ? "ring-2 ring-amber-500" : "ring-1 ring-border/70")} title={noFace ? "No face found in this photo" : unchecked ? "This photo wasn't checked for a face" : mismatch ? "The face didn't match their reference photos" : undefined} aria-label={`Photo: ${label}${noFace ? " (no face found)" : unchecked ? " (not checked for a face)" : mismatch ? " (face didn't match)" : ""}`} data-testid={`button-photo-${punch.id}`}>
         <img src={src} alt="" loading="lazy" className="h-full w-full object-cover" onError={() => setFailed(true)} />
       </button>
       {open && (
@@ -48,7 +50,8 @@ export function PunchPhoto({ punch, canView, label }: { punch: Punch; canView: b
             </DialogHeader>
             <img src={src} alt={`Kiosk photo: ${label}`} className="w-full rounded-lg bg-foreground/[0.04]" />
             {noFace && <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-950 ring-1 ring-amber-200 dark:bg-amber-950/30 dark:text-amber-100 dark:ring-amber-800">No face was found in this photo. The punch was saved on the tablet while it was offline, so it couldn't be refused. Check it's really them.</p>}
-            {unchecked && <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-950 ring-1 ring-amber-200 dark:bg-amber-950/30 dark:text-amber-100 dark:ring-amber-800">This photo wasn't checked for a face: the punch was saved on the tablet while it was offline, and the face check wasn't working when it arrived. Check it's really them.</p>}
+            {unchecked && <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-950 ring-1 ring-amber-200 dark:bg-amber-950/30 dark:text-amber-100 dark:ring-amber-800">{punch.meta?.photo === "saved" ? "This photo wasn't checked: the punch was saved on the tablet while it was offline, and the face check wasn't working when it arrived. Check it's really them." : "This photo wasn't checked for a face. Check it's really them."}</p>}
+            {mismatch && <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-950 ring-1 ring-amber-200 dark:bg-amber-950/30 dark:text-amber-100 dark:ring-amber-800" data-testid="text-face-mismatch">The face in this photo didn't match their reference photos. The punch was saved on the tablet while it was offline, so it couldn't be refused. Check it's really them.</p>}
           </DialogContent>
         </Dialog>
       )}
@@ -58,6 +61,9 @@ export function PunchPhoto({ punch, canView, label }: { punch: Punch; canView: b
 
 /** "No photo", "No face" or "Not checked" badge for a kiosk punch saved offline that a manager should check. */
 export function NoFaceBadge({ punch }: { punch: Punch }) {
+  if (punch.meta?.face === "mismatch") {
+    return <Badge variant="warning" className="shrink-0" title="Saved offline; the face didn't match their reference photos" data-testid={`badge-face-mismatch-${punch.id}`}>Face didn't match</Badge>;
+  }
   if (punch.meta?.face === "unchecked") {
     return <Badge variant="warning" className="shrink-0" title="Saved offline; the face check wasn't working when it arrived" data-testid={`badge-not-checked-${punch.id}`}>Not checked</Badge>;
   }
@@ -79,7 +85,7 @@ export function BreakDueBadge({ due }: { due?: boolean }) {
 }
 
 /** Refresh the kiosk extras when the kiosk or another admin changes them. */
-function useKioskEvents(siteId: string, kind: "fix_request" | "note", key: unknown[]) {
+function useKioskEvents(siteId: string, kind: "fix_request" | "note" | "face_alert", key: unknown[]) {
   useLiveEvents((e) => {
     if (e.type === "hello" || (e.type === "kiosk" && e.siteId === siteId && (e as any).kind === kind)) void queryClient.invalidateQueries({ queryKey: key });
   });
@@ -98,6 +104,59 @@ const when = (iso: string, tz: string) => {
 };
 
 // ── Fix requests ─────────────────────────────────────────────────────────────
+/** Punches refused because the face didn't match (face match on for that person), until a manager dismisses them. */
+export function FaceAlerts({ siteId, tz, editable }: { siteId: string; tz: string; editable: boolean }) {
+  const key = ["/api/sites", siteId, "face-alerts"];
+  const q = useQuery<FaceAlert[]>({ queryKey: key, staleTime: 0 });
+  useKioskEvents(siteId, "face_alert", key);
+  const { toast } = useToast();
+  const [open, setOpen] = useState<FaceAlert | null>(null);
+  const open_ = (q.data ?? []).filter((a) => !a.dismissedAt);
+  if (q.isLoading || !open_.length) return null;
+  const dismiss = async (a: FaceAlert) => {
+    try {
+      await api("POST", `/api/sites/${siteId}/face-alerts/${a.id}/dismiss`);
+      await queryClient.invalidateQueries({ queryKey: key });
+    } catch (e) { toast({ title: "Couldn't dismiss", description: errorMessage(e), variant: "destructive" }); }
+  };
+  const photo = (a: FaceAlert) => `/api/sites/${siteId}/face-alerts/${a.id}/photo`;
+  return (
+    <section data-testid="section-face-alerts">
+      <SectionLabel>Face match refused<Badge variant="warning" className="ml-2 align-middle">{open_.length}</Badge></SectionLabel>
+      <div className="overflow-hidden rounded-xl border border-card-border bg-card shadow-card">
+        <ul className="divide-y divide-border/70" data-testid="list-face-alerts">
+          {open_.map((a) => (
+            <li key={a.id} className="flex flex-wrap items-center gap-x-3 gap-y-1.5 px-4 py-2.5 text-[13px]">
+              {a.photo
+                ? <button type="button" onClick={() => setOpen(a)} className="h-9 w-9 shrink-0 overflow-hidden rounded-md ring-2 ring-amber-500 focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/35" aria-label={`Photo: ${a.employeeName}, refused ${PUNCH_LABELS[a.type as PunchType] ?? a.type}`} data-testid={`button-alert-photo-${a.id}`}><img src={photo(a)} alt="" className="h-full w-full object-cover" /></button>
+                : <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-foreground/[0.05] text-muted-foreground" title="Photo no longer kept"><CameraOff className="h-3.5 w-3.5" /></span>}
+              <div className="min-w-0 flex-1 basis-48">
+                <p className="break-words"><b className="font-semibold">{a.employeeName}</b>'s PIN · {PUNCH_LABELS[a.type as PunchType] ?? a.type} refused at <b className="font-medium">{when(a.at, tz)}</b></p>
+                <p className="text-xs text-muted-foreground">{a.reason === "unreadable" ? `Their face data can't be read, so face match couldn't check (${a.deviceName}). Add the punch if it was them, then delete their face data and set it up again (Employees).` : `The face didn't match their reference photos (${a.deviceName}). If it was them, add the punch.`}</p>
+              </div>
+              {editable && <Button size="sm" variant="ghost" className="text-muted-foreground" onClick={() => void dismiss(a)} data-testid={`button-dismiss-alert-${a.id}`}><Check /> Dismiss</Button>}
+            </li>
+          ))}
+        </ul>
+      </div>
+      {open && (
+        <Dialog open onOpenChange={(o) => !o && setOpen(null)}>
+          <DialogContent className="max-w-sm">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2"><Camera className="h-4 w-4 text-muted-foreground" />Refused punch</DialogTitle>
+              <DialogDescription className="break-words">{open.employeeName}'s PIN · {PUNCH_LABELS[open.type as PunchType] ?? open.type} at {when(open.at, tz)} · {open.deviceName}</DialogDescription>
+            </DialogHeader>
+            <img src={photo(open)} alt={`Photo of the refused punch for ${open.employeeName}`} className="w-full rounded-lg bg-foreground/[0.04]" />
+            <p className="text-sm text-muted-foreground">{open.reason === "unreadable"
+              ? `${open.employeeName}'s face data can't be read (damaged, or the server's key changed), so the punch was refused. Add it if it was them, then in Employees delete their face data and set face match up again.`
+              : `This face didn't match ${open.employeeName}'s reference photos, so the punch wasn't saved. If it was them (new glasses, bad light), add the punch on Live and consider adding a newer reference photo.`}</p>
+          </DialogContent>
+        </Dialog>
+      )}
+    </section>
+  );
+}
+
 export function FixRequests({ siteId, tz, editable }: { siteId: string; tz: string; editable: boolean }) {
   const key = ["/api/sites", siteId, "fix-requests"];
   const q = useQuery<FixRequest[]>({ queryKey: key, staleTime: 0 });
