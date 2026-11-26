@@ -476,6 +476,10 @@ test("sessions end on sign-out, PIN change, deactivation and portal off", async 
   const b = await signIn("Ben Lee", "5678");
   assert.equal((await A("PUT", `/api/sites/${siteId}/portal`, { enabled: false })).status, 200);
   assert.equal((await P(b, "GET", "/api/portal/me")).status, 401);
+  // Turning it back on doesn't bring old sessions back
+  assert.equal((await A("PUT", `/api/sites/${siteId}/portal`, { enabled: true })).status, 200);
+  assert.equal((await P(b, "GET", "/api/portal/me")).status, 401);
+  assert.equal((await P(await signIn("Ben Lee", "5678"), "GET", "/api/portal/me")).status, 200, "a fresh sign-in works");
 });
 
 test("sign-in status: an anonymous visitor can't tell which accounts exist", async () => {

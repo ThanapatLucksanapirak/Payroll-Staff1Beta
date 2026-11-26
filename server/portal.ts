@@ -71,8 +71,9 @@ async function portalSite(siteId: string): Promise<Site | null> {
 
 async function revokedBefore(siteId: string, employeeId: string): Promise<number> {
   const v = parseJson(await (await db()).getSetting(portalRevokedKey(siteId)));
-  const t = v && typeof v === "object" ? Number(v[employeeId]) : 0;
-  return Number.isFinite(t) ? t : 0;
+  const num = (x: unknown) => { const t = Number(x); return Number.isFinite(t) ? t : 0; };
+  // "*" is a location-wide cutoff, set when the portal is turned off.
+  return v && typeof v === "object" ? Math.max(num(v[employeeId]), num(v["*"])) : 0;
 }
 
 // ── Lockout (in memory) ───────────────────────────────────────────────────────
@@ -428,7 +429,15 @@ export function registerPortalAdminRoutes(app: Express) {
     if (!site) return res.status(404).json({ error: "Location not found." });
     const body = z.object({ enabled: z.boolean() }).strict().parse(req.body ?? {});
     const next = portalSettingsSchema.parse({ ...(await getPortalSettings(site.id)), ...body });
-    await (await db()).setSetting(portalKey(site.id), JSON.stringify(next));
+    const store = await db();
+    if (!next.enabled) {
+      // Turning the portal off signs everyone out for good: later sessions must be newer than this.
+      const cur = parseJson(await store.getSetting(portalRevokedKey(site.id)));
+      const map = cur && typeof cur === "object" ? { ...cur } : {};
+      map["*"] = Date.now();
+      await store.setSetting(portalRevokedKey(site.id), JSON.stringify(map));
+    }
+    await store.setSetting(portalKey(site.id), JSON.stringify(next));
     const u = res.locals.user;
     audit({ userId: u?.id ?? null, userName: u ? (u.displayName || u.username) : "", ip: req.ip ?? "", action: "portal.settings", target: `site:${site.id}`, detail: next.enabled ? "turned on" : "turned off" });
     res.json(next);

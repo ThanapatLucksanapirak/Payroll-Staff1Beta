@@ -27,7 +27,9 @@ export interface PublishRecord {
   byId: string | null;
   byName: string;
   /** The result of the notification email, when one was attempted. */
-  email?: { at: string; ok: boolean; sent: number; message: string } | null;
+  email?: { at: string; ok: boolean; sent: number; message: string; /** Still being sent in the background. */ pending?: boolean } | null;
+  /** The timesheet's updated_at when it was published (a repeat publish of the same version sends no second email). */
+  version?: string;
 }
 export type PublishedMap = Record<string, PublishRecord>;
 
@@ -149,6 +151,17 @@ async function notify(row: TimesheetRow, siteId: string, by: string): Promise<Se
 
 const describeResult = (r: SendResult) => (r.ok ? `Emailed ${r.sent} accountant${r.sent === 1 ? "" : "s"}.` : "skipped" in r && r.skipped ? r.reason : `Email failed: ${(r as any).error}`);
 
+/** How long a publish waits for the email before answering (the send carries on in the background). */
+const EMAIL_WAIT_MS = 1500;
+const locks = new Map<string, Promise<unknown>>();
+function withPublishLock<T>(id: string, fn: () => Promise<T>): Promise<T> {
+  const p = (locks.get(id) ?? Promise.resolve()).then(fn);
+  const tail = p.catch(() => undefined);
+  locks.set(id, tail);
+  void tail.then(() => { if (locks.get(id) === tail) locks.delete(id); });
+  return p;
+}
+
 // ── Routes ───────────────────────────────────────────────────────────────────
 type Handler = (req: Request, res: Response) => Promise<unknown>;
 const h = (fn: Handler) => (req: Request, res: Response, next: NextFunction) => { fn(req, res).catch(next); };
@@ -182,20 +195,36 @@ export function registerPublishRoutes(app: Express) {
     // do nothing but report "Published to your accountant".
     if (!(await recipientsFor(siteId)).length) return res.status(409).json({ error: "No accountant has access to this location yet. Add one in Settings → Users, then publish.", code: "no-accountant" });
     const byName = user.displayName || user.username;
-    const already = !!(await getPublishedMap())[id];
-    const rec: PublishRecord = { at: new Date().toISOString(), byId: user.id, byName, email: null };
-    await mutate((map) => { map[id] = rec; });
     const label = row.custom_label || row.filename || "Timesheet";
-    // Publishing is saved first: the email can only add to it, never undo it.
     const notifyParam = req.body?.notify !== false;
-    let email: (SendResult & { recipients: number }) | null = null;
-    if (notifyParam) {
-      email = await notify(row, siteId, byName);
-      const entry = { at: new Date().toISOString(), ok: email.ok, sent: email.ok ? email.sent : 0, message: describeResult(email) };
-      await mutate((map) => { if (map[id]) map[id] = { ...map[id], email: entry }; }).catch(() => undefined);
-      rec.email = entry;
+    const version = row.updated_at ?? "";
+    // One publish of a timesheet at a time, so parallel presses can't each send an email.
+    const decision = await withPublishLock(id, async () => {
+      const prev = (await getPublishedMap())[id];
+      // Same version already published and emailed (or being emailed): nothing more to do.
+      if (prev && prev.version === version && (prev.email?.ok || prev.email?.pending)) return { skip: prev } as const;
+      const rec: PublishRecord = { at: new Date().toISOString(), byId: user.id, byName, email: null, version };
+      if (notifyParam) rec.email = { at: rec.at, ok: false, sent: 0, message: "Sending the email…", pending: true };
+      await mutate((map) => { map[id] = rec; });
+      return { rec, already: !!prev } as const;
+    });
+    if ("skip" in decision) return res.json({ published: decision.skip });
+    const { rec, already } = decision;
+    // Publishing is saved first: the email can only add to it, never undo it. It is sent in the
+    // background (a hung mail server must not hold up the page); the result lands in the record and the log.
+    const finish = async (email: (SendResult & { recipients: number }) | null) => {
+      const entry = email ? { at: new Date().toISOString(), ok: email.ok, sent: email.ok ? email.sent : 0, message: describeResult(email) } : null;
+      if (entry) await mutate((map) => { if (map[id]?.at === rec.at) map[id] = { ...map[id], email: entry }; }).catch(() => undefined);
+      audit({ ...actorOf(req, res), action: already ? "timesheet.republish" : "timesheet.publish", target: `timesheet:${id}`, detail: `${label}${email ? ` · ${describeResult(email)}` : " · no email"}` });
+      return entry;
+    };
+    if (!notifyParam) {
+      await finish(null);
+      return res.json({ published: rec });
     }
-    audit({ ...actorOf(req, res), action: already ? "timesheet.republish" : "timesheet.publish", target: `timesheet:${id}`, detail: `${label}${email ? ` · ${describeResult(email)}` : " · no email"}` });
+    const sending = notify(row, siteId, byName).then(finish);
+    const quick = await Promise.race([sending, new Promise<null>((r) => setTimeout(() => r(null), EMAIL_WAIT_MS))]);
+    if (quick) rec.email = quick;
     res.json({ published: rec });
   }));
 

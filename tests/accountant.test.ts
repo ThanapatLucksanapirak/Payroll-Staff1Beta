@@ -223,6 +223,14 @@ test("unpublished final timesheets stay out of the accountant's YTD", async () =
   assert.equal(ownerYtd.body.timesheets, 2);
 });
 
+test("parallel publishes of one timesheet send one email", async () => {
+  sent.length = 0;
+  const rs = await Promise.all(Array.from({ length: 5 }, () => call("POST", `/api/timesheets/${tsB}/publish`, {}, "owner")));
+  assert.ok(rs.every((r) => r.status === 200));
+  assert.equal(sent.length, 1);
+  await call("DELETE", `/api/timesheets/${tsB}/publish`, undefined, "owner");
+});
+
 test("publishing still works when email fails or is off", async () => {
   failSend = "Server down";
   const r = await call("POST", `/api/timesheets/${tsB}/publish`, {}, "owner");

@@ -70,7 +70,7 @@ before(async () => {
     sent.push(msg);
   });
   const app = express();
-  app.use(express.json({ limit: "8mb" }));
+  app.use(express.json({ limit: "26mb" }));
   routes.registerRoutes(app);
   server = createServer(app);
   await new Promise<void>((r) => server.listen(0, "127.0.0.1", () => r()));
@@ -182,6 +182,20 @@ test("sends are limited per hour", async () => {
   for (let i = 0; i < 10; i++) assert.equal((await share(body)).status, 200);
   assert.equal((await share(body)).status, 429);
   assert.equal((await share({ ...body, send: false })).status, 200, "previews still work");
+  resetShareLimit();
+});
+
+test("an oversize PDF gets the friendly message, and failed sends don't count toward the limit", async () => {
+  const big = Buffer.concat([Buffer.from("%PDF-1.4\n"), Buffer.alloc(12 * 1024 * 1024, 32)]).toString("base64");
+  const r = await share({ emails: ["x@example.com"], files: [{ kind: "report", data: big }], send: true });
+  assert.equal(r.status, 413);
+  assert.match(r.body.error, /too big to email \(the limit is 10 MB\)/);
+  const { resetShareLimit } = await import("../server/share");
+  resetShareLimit();
+  const body = { emails: ["x@example.com"], files: [{ kind: "summary", data: pdf() }], send: true };
+  failSend = "down";
+  try { for (let i = 0; i < 12; i++) assert.equal((await share(body)).status, 502); } finally { failSend = null; }
+  assert.equal((await share(body)).status, 200, "failures didn't use up the limit");
   resetShareLimit();
 });
 
