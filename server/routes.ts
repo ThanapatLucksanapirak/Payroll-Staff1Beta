@@ -33,6 +33,7 @@ import { TWO_FACTOR_PUBLIC, registerTwoFactorRoutes } from "./twofactor";
 import { registerOffsiteRoutes } from "./offsite";
 import { registerPortalAdminRoutes, registerPortalRoutes } from "./portal";
 import { registerEmailRoutes } from "./email";
+import { registerGoogleEmailRoutes } from "./emailGoogle";
 import { getPublishedMap, invalidatePublishedCache, publishedRecord, registerPublishRoutes } from "./publish";
 
 type Handler = (req: Request, res: Response) => Promise<unknown>;
@@ -165,7 +166,7 @@ async function restoreFrom(raw: unknown) {
 
 export function registerRoutes(app: Express) {
   // /live checks its own short-lived ticket (EventSource cannot send headers).
-  const PUBLIC = new Set(["/health", "/auth/status", "/auth/login", "/auth/setup", "/auth/logout", "/live", ...TWO_FACTOR_PUBLIC]);
+  const PUBLIC = new Set(["/health", "/auth/status", "/auth/login", "/auth/setup", "/auth/logout", "/live", "/email/google/callback", ...TWO_FACTOR_PUBLIC]);
   app.use(kioskHostGuard()); // KIOSK_HOST: serve only the kiosk on that hostname
   // Never cache API responses (payroll data) in browsers or at the Cloudflare edge.
   app.use("/api", (_req, res, next) => { res.setHeader("Cache-Control", "no-store"); next(); });
@@ -180,7 +181,8 @@ export function registerRoutes(app: Express) {
   registerPayRoutes(app, { rowFromDoc }); // pay extras, lock on finalized timesheets (before the timesheet routes)
   registerTwoFactorRoutes(app);
   registerOffsiteRoutes(app);
-  registerEmailRoutes(app); // Settings → Email (owner / admin)
+  registerEmailRoutes(app);
+  registerGoogleEmailRoutes(app); // Settings → Email (owner / admin)
   registerPublishRoutes(app); // publish finalized payroll to accountants
 
   // ── Public ──────────────────────────────────────────────────────────────────
