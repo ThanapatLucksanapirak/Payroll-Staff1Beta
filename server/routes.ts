@@ -131,8 +131,16 @@ const restoreSchema = z.object({
  * devices are always kept, and so are Square tokens when the file was downloaded
  * without them.
  */
-async function restoreFrom(raw: unknown) {
-  const body = restoreSchema.parse(raw);
+const NOT_A_BACKUP = "This file isn't a Payroll Admin backup. Use a file from Settings → Data → Download backup. Nothing was restored.";
+
+async function restoreFrom(raw: unknown, opts: { allowEmpty?: boolean } = {}) {
+  if (!raw || typeof raw !== "object" || (raw as any).app !== "payroll-admin") throw Object.assign(new Error(NOT_A_BACKUP), { status: 400 });
+  const parsed = restoreSchema.safeParse(raw);
+  if (!parsed.success) {
+    const first = parsed.error.issues[0];
+    throw Object.assign(new Error(`This backup file is damaged or was edited${first ? ` (at ${first.path.slice(0, 3).join(".") || "the top"})` : ""}, so nothing was restored. Use a file from Download backup.`), { status: 400 });
+  }
+  const body = parsed.data;
   // A real export always has both lists; a file missing them would empty the database.
   const r0 = raw as any;
   if (!Array.isArray(r0?.settings) || !Array.isArray(r0?.timesheets) || !r0.settings.length) {
@@ -150,6 +158,20 @@ async function restoreFrom(raw: unknown) {
   // Restore replaces every punch, so a skipped row would be lost for good: refuse instead.
   if (badPunches) {
     throw Object.assign(new Error(`Nothing was restored: ${badPunches} of ${body.punches.length} time clock punches in that file can't be read${firstProblem ? ` (first problem: ${firstProblem})` : ""}. Your current data is unchanged.`), { status: 400 });
+  }
+  // An empty list replaces everything with nothing. A real backup of a store with
+  // data never has one, so ask first (the app shows what would be deleted).
+  if (!opts.allowEmpty) {
+    const cur = await db();
+    const haveTimesheets = (await cur.listTimesheets()).length;
+    const havePunches = hasPunches && !punches.length ? (await cur.allPunches()).length : 0;
+    const emptyTimesheets = !body.timesheets.length && haveTimesheets > 0;
+    if (emptyTimesheets || havePunches > 0) {
+      const lost = [emptyTimesheets ? (haveTimesheets === 1 ? "your 1 timesheet" : `all ${haveTimesheets} timesheets`) : "", havePunches ? (havePunches === 1 ? "your 1 time clock punch" : `all ${havePunches} time clock punches`) : ""].filter(Boolean).join(" and ");
+      throw Object.assign(new Error(`This backup has no ${[emptyTimesheets ? "timesheets" : "", havePunches ? "punches" : ""].filter(Boolean).join(" or ")}, so restoring it would delete ${lost}. Nothing was restored.`), {
+        status: 409, code: "empty_lists", wouldDelete: { timesheets: emptyTimesheets ? haveTimesheets : 0, punches: havePunches },
+      });
+    }
   }
   await runBackup("pre-restore").catch((err) => {
     throw Object.assign(new Error(`Restore cancelled: could not back up the current data first (${err.message}).`), { status: 500 });
@@ -171,7 +193,14 @@ async function restoreFrom(raw: unknown) {
   invalidateEmployeeCache();
   invalidateDeviceCache();
   resetTagCache();
-  return result;
+  // Counts are what the file holds: settings kept as they are (accounts, devices…)
+  // are still counted, and punches are null when the file has none, meaning "kept".
+  return {
+    settings: body.settings.filter((x) => !NEVER_BACKED_UP(x.key)).length,
+    timesheets: result.timesheets,
+    punches: hasPunches ? result.punches : null,
+    punchesKept: !hasPunches,
+  };
 }
 
 export function registerRoutes(app: Express) {
@@ -483,7 +512,7 @@ export function registerRoutes(app: Express) {
     });
   }));
   app.post("/api/backup/restore", express.json({ limit: "100mb" }), h(async (req, res) => {
-    res.json(await restoreFrom(req.body));
+    res.json(await restoreFrom(req.body, { allowEmpty: req.query.allowEmpty === "1" }));
   }));
 
   // ── Automatic backups on the server ─────────────────────────────────────────
@@ -499,7 +528,7 @@ export function registerRoutes(app: Express) {
     res.download(p);
   }));
   app.post("/api/backups/:name/restore", h(async (req, res) => {
-    res.json(await restoreFrom(readBackup(String(req.params.name))));
+    res.json(await restoreFrom(readBackup(String(req.params.name)), { allowEmpty: req.query.allowEmpty === "1" }));
   }));
 
   registerTimeClockAdminRoutes(app); // employees, punches, kiosk devices, live updates
@@ -517,6 +546,10 @@ export function registerRoutes(app: Express) {
       return res.status(400).json({ error: first ? `${first.path.join(".") || "input"}: ${first.message}` : "Invalid input.", details: err.issues.slice(0, 5) });
     }
     if (err?.type === "entity.too.large") return res.status(413).json({ error: "That file is too large." });
+    if (err?.type === "entity.parse.failed") {
+      return res.status(400).json({ error: /\/backup\/restore$/.test(_req.path) ? "This file isn't a valid backup (it may be cut off or edited). Use a file from Download backup. Nothing was restored." : "The request wasn't valid JSON." });
+    }
+    if (err?.code === "empty_lists") return res.status(409).json({ error: err.message, code: err.code, wouldDelete: err.wouldDelete });
     const status = Number(err?.status) || 500;
     if (status >= 500) console.error("[api]", err);
     res.status(status).json({ error: err?.message || "Something went wrong." });

@@ -2,7 +2,7 @@ import { useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Archive, Download, Loader2, RotateCcw, Upload } from "lucide-react";
 import { useApp } from "@/context/AppData";
-import { api, apiRequest, errorMessage, queryClient } from "@/lib/api";
+import { ApiError, api, apiRequest, errorMessage, queryClient } from "@/lib/api";
 import { timeAgo } from "@/lib/doc";
 import { downloadBlob } from "@/lib/doc";
 import { useToast } from "@/hooks/use-toast";
@@ -12,6 +12,26 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Skeleton } from "@/components/ui/skeleton";
 import { OffsiteBackupSettings } from "@/components/settings/OffsiteBackupSettings";
 import { Field, NumberInput, Section } from "@/components/workspace/fields";
+
+interface RestoreResult { settings: number; timesheets: number; punches: number | null; punchesKept?: boolean }
+
+const restoredSummary = (r: RestoreResult) =>
+  `${r.timesheets} timesheets, ${r.punches === null ? "time clock punches kept as they were (not in this file)" : `${r.punches} time clock punches`}, ${r.settings} settings.`;
+
+/**
+ * Run a restore. When the backup has an empty timesheet or punch list (which would
+ * delete everything of that kind), say what would be deleted and ask before going on.
+ * Returns null when the person cancels.
+ */
+async function restoreConfirmingEmpty(confirm: ReturnType<typeof useConfirm>, run: (allowEmpty: boolean) => Promise<RestoreResult>): Promise<RestoreResult | null> {
+  try {
+    return await run(false);
+  } catch (e) {
+    if (!(e instanceof ApiError) || e.status !== 409 || e.body?.code !== "empty_lists") throw e;
+    const ok = await confirm({ title: "Delete everything this backup doesn't have?", description: `${e.message.replace(/ Nothing was restored\.$/, "")} A backup of the current data is taken first. Restore anyway?`, confirmLabel: "Restore and delete", destructive: true });
+    return ok ? run(true) : null;
+  }
+}
 
 export function DataSettings() {
   const app = useApp();
@@ -39,9 +59,10 @@ export function DataSettings() {
     if (!(await confirm({ title: "Restore this backup?", description: `Your data will be replaced with this backup (${n} timesheets). Anything added since the backup is removed. A backup of the current data is taken first, and user accounts and passwords are kept.`, confirmLabel: "Restore" }))) return;
     setBusy("restore");
     try {
-      const r = await api<{ settings: number; timesheets: number }>("POST", "/api/backup/restore", data, { timeoutMs: 180_000 });
+      const r = await restoreConfirmingEmpty(confirm, (allowEmpty) => api<RestoreResult>("POST", `/api/backup/restore${allowEmpty ? "?allowEmpty=1" : ""}`, data, { timeoutMs: 180_000 }));
+      if (!r) return;
       await queryClient.invalidateQueries();
-      toast({ title: "Backup restored", description: `${r.timesheets} timesheets, ${r.settings} settings.` });
+      toast({ title: "Backup restored", description: restoredSummary(r) });
     } catch (e) { toast({ title: "Restore failed", description: errorMessage(e), variant: "destructive" }); }
     finally { setBusy(null); }
   };
@@ -107,9 +128,10 @@ function ServerBackups() {
     if (!ok) return;
     setBusy(b.name);
     try {
-      const r = await api<{ settings: number; timesheets: number }>("POST", `/api/backups/${encodeURIComponent(b.name)}/restore`, undefined, { timeoutMs: 180_000 });
+      const r = await restoreConfirmingEmpty(confirm, (allowEmpty) => api<RestoreResult>("POST", `/api/backups/${encodeURIComponent(b.name)}/restore${allowEmpty ? "?allowEmpty=1" : ""}`, undefined, { timeoutMs: 180_000 }));
+      if (!r) return;
       await queryClient.invalidateQueries();
-      toast({ title: "Backup restored", description: `${r.timesheets} timesheets, ${r.settings} settings.` });
+      toast({ title: "Backup restored", description: restoredSummary(r) });
     } catch (e) { toast({ title: "Restore failed", description: errorMessage(e), variant: "destructive" }); }
     finally { setBusy(null); }
   };

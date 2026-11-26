@@ -189,3 +189,49 @@ test("backup and restore keep a punch's face flags", async () => {
   assert.deepEqual((await store.getPunch("face0001"))?.meta, { face: "missing", photo: "none" });
   assert.deepEqual((await store.getPunch("face0002"))?.meta, { face: "unchecked", photo: "saved" });
 });
+
+test("an empty timesheet or punch list is refused until confirmed", async () => {
+  const snap = (await call("GET", "/api/backup")).body;
+  const n = (await call("GET", "/api/timesheets")).body.length;
+  assert.ok(n > 0 && snap.punches.length > 0);
+  const empty = await call("POST", "/api/backup/restore", { ...snap, timesheets: [] });
+  assert.equal(empty.status, 409);
+  assert.equal(empty.body.code, "empty_lists");
+  assert.equal(empty.body.wouldDelete.timesheets, n);
+  assert.match(empty.body.error, /no timesheets, so restoring it would delete (all \d+ timesheets|your 1 timesheet)\. Nothing was restored\./);
+  assert.equal((await call("GET", "/api/timesheets")).body.length, n, "nothing deleted");
+  const noPunches = await call("POST", "/api/backup/restore", { ...snap, punches: [] });
+  assert.equal(noPunches.status, 409);
+  assert.equal(noPunches.body.wouldDelete.punches, snap.punches.length);
+  // Confirmed: it goes ahead
+  const ok = await call("POST", "/api/backup/restore?allowEmpty=1", { ...snap, timesheets: [] });
+  assert.equal(ok.status, 200);
+  assert.equal((await call("GET", "/api/timesheets")).body.length, 0);
+  assert.equal((await call("POST", "/api/backup/restore", snap)).status, 200, "and back again");
+  assert.equal((await call("GET", "/api/timesheets")).body.length, n);
+});
+
+test("the restore reply counts the file's settings and says when punches were kept", async () => {
+  const snap = (await call("GET", "/api/backup")).body;
+  const r = await call("POST", "/api/backup/restore", snap);
+  assert.equal(r.body.settings, snap.settings.length);
+  assert.equal(r.body.punches, snap.punches.length);
+  const { punches: _p, ...noPunches } = snap;
+  const kept = await call("POST", "/api/backup/restore", noPunches);
+  assert.equal(kept.status, 200);
+  assert.equal(kept.body.punches, null);
+  assert.equal(kept.body.punchesKept, true);
+});
+
+test("damaged or foreign files get a plain message", async () => {
+  const headers = { "X-Requested-With": "payroll", "Content-Type": "application/json", Cookie: cookie };
+  const cut = await fetch(base + "/api/backup/restore", { method: "POST", headers, body: '{"app":"payroll-admin","settings":[{"key":"a","val' });
+  assert.equal(cut.status, 400);
+  assert.match((await cut.json()).error, /isn't a valid backup/);
+  const wrong = await call("POST", "/api/backup/restore", { app: "something-else", settings: [], timesheets: [] });
+  assert.equal(wrong.status, 400);
+  assert.match(wrong.body.error, /isn't a Payroll Admin backup/);
+  const edited = await call("POST", "/api/backup/restore", { app: "payroll-admin", settings: "nope", timesheets: [] });
+  assert.equal(edited.status, 400);
+  assert.match(edited.body.error, /damaged or was edited/);
+});
