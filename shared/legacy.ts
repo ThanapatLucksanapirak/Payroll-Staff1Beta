@@ -141,7 +141,7 @@ export function docToMeta(doc: TimesheetDoc) {
   return {
     version: 2, siteId: doc.siteId, source: doc.source, status: doc.status, notes: doc.notes, rules: doc.rules, shifts: doc.shifts,
     // The pay period set for the timesheet (the range pulled, or typed in Details). Empty: the first to last shift.
-    ...(doc.periodStart && doc.periodEnd ? { periodStart: doc.periodStart, periodEnd: doc.periodEnd } : {}),
+    ...(isDay(doc.periodStart) && isDay(doc.periodEnd) && doc.periodStart <= doc.periodEnd ? { periodStart: doc.periodStart, periodEnd: doc.periodEnd } : {}),
     ...(doc.payExtras ? { payExtras: doc.payExtras } : {}),
   };
 }

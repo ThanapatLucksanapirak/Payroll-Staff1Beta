@@ -360,4 +360,8 @@ test("pay period: the pulled day range wins over the first and last shift, and i
   const back = rowToDoc({ id: "t", site_id: "s", filename: "x", custom_label: null, period_start: "2026-11-10", period_end: "2026-11-22", meta_json: meta, csv_data: null, wages_json: [], manual_employees_json: [], result_json: null } as any, { defaultSiteId: "s", rules: DEFAULT_RULES });
   assert.equal(back.periodStart, "2026-11-09");
   assert.equal(back.periodEnd, "2026-11-22");
+  // From after To is never kept or used.
+  const bad = { ...doc, periodStart: "2026-11-22", periodEnd: "2026-11-09" };
+  assert.equal((docToMeta(bad) as any).periodStart, undefined);
+  assert.equal(computeTimesheet(bad, []).periodStart, "2026-11-10");
 });

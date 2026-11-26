@@ -123,15 +123,15 @@ export function ShareDialog({ id, open, onOpenChange, makePdf }: {
         ) : !info.data.emailReady ? (
           <p className="flex items-start gap-2 text-[13px] text-muted-foreground"><MailWarning className="mt-0.5 h-4 w-4 shrink-0" /><span>Email isn't set up yet. <Link href="/settings/email" className="text-primary hover:underline">Set up email</Link></span></p>
         ) : preview ? (
-          <div className="space-y-3 text-[13px]" data-testid="share-preview">
-            <dl className="grid grid-cols-[5.5rem_1fr] gap-x-3 gap-y-1 rounded-xl border border-border/80 px-3 py-2.5">
-              <dt className="text-muted-foreground">From</dt><dd className="truncate">{preview.data.from}</dd>
-              <dt className="text-muted-foreground">To</dt><dd className="break-words">{preview.data.to.map((t) => (t.name ? `${t.name} <${t.email}>` : t.email)).join(", ")}</dd>
-              {preview.data.cc.length > 0 && <><dt className="text-muted-foreground">Copy to</dt><dd className="truncate">{preview.data.cc.join(", ")}</dd></>}
-              {preview.data.replyTo && <><dt className="text-muted-foreground">Replies to</dt><dd className="truncate">{preview.data.replyTo}</dd></>}
-              <dt className="text-muted-foreground">Subject</dt><dd className="font-medium">{preview.data.subject}</dd>
+          <div className="min-w-0 space-y-3 text-[13px]" data-testid="share-preview">
+            <dl className="grid min-w-0 grid-cols-[4.75rem_minmax(0,1fr)] gap-x-3 gap-y-1 rounded-xl border border-border/80 px-3 py-2.5 sm:grid-cols-[5.5rem_minmax(0,1fr)]">
+              <dt className="text-muted-foreground">From</dt><dd className="[overflow-wrap:anywhere]">{preview.data.from}</dd>
+              <dt className="text-muted-foreground">To</dt><dd className="[overflow-wrap:anywhere]">{preview.data.to.map((t) => (t.name ? `${t.name} <${t.email}>` : t.email)).join(", ")}</dd>
+              {preview.data.cc.length > 0 && <><dt className="text-muted-foreground">Copy to</dt><dd className="[overflow-wrap:anywhere]">{preview.data.cc.join(", ")}</dd></>}
+              {preview.data.replyTo && <><dt className="text-muted-foreground">Replies to</dt><dd className="[overflow-wrap:anywhere]">{preview.data.replyTo}</dd></>}
+              <dt className="text-muted-foreground">Subject</dt><dd className="font-medium [overflow-wrap:anywhere]">{preview.data.subject}</dd>
               <dt className="text-muted-foreground">Attached</dt>
-              <dd className="space-y-0.5">{preview.data.attachments.map((a) => <span key={a.filename} className="flex items-center gap-1.5"><FileText className="h-3.5 w-3.5 shrink-0 text-muted-foreground" /><span className="truncate">{a.filename}</span><span className="shrink-0 text-muted-foreground">{kb(a.size)}</span></span>)}</dd>
+              <dd className="min-w-0 space-y-0.5">{preview.data.attachments.map((a) => <span key={a.filename} className="flex min-w-0 items-center gap-1.5"><FileText className="h-3.5 w-3.5 shrink-0 text-muted-foreground" /><span className="truncate">{a.filename}</span><span className="shrink-0 text-muted-foreground">{kb(a.size)}</span></span>)}</dd>
             </dl>
             {/* The email itself, in a sandbox with no scripts. Its links are switched off: following one would load
                 the app inside the frame, which the app refuses (no framing), and the preview went blank. */}
