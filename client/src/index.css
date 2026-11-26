@@ -180,6 +180,34 @@
 /* App-like on phones: no double-tap zoom, and form fields at least 16px on
    touch screens so iOS doesn't zoom in on focus (see lib/noZoom.ts). */
 html { touch-action: manipulation; -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+/* No rubber-band bounce or pull-to-refresh on the page itself (it reads as the
+   whole app sliding around); long pages still scroll normally. */
+html, body { overscroll-behavior: none; }
 @media (pointer: coarse) {
   input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]), textarea, select { font-size: max(16px, 1em) !important; }
+}
+
+/* Date and time fields look like every other field. iOS Safari draws them as
+   native controls: taller than the rest, text centred, and wider than their
+   column (they ignore width: 100% unless min-width is 0). */
+input[type="date"], input[type="time"], input[type="datetime-local"], input[type="month"], input[type="week"] {
+  min-width: 0;
+  max-width: 100%;
+  text-align: left;
+}
+input::-webkit-date-and-time-value { text-align: left; margin: 0; }
+@supports (-webkit-touch-callout: none) {
+  /* iOS and iPadOS only: drop the native styling so the field's own height and padding apply. */
+  input[type="date"], input[type="time"], input[type="datetime-local"], input[type="month"], input[type="week"] {
+    -webkit-appearance: none;
+    appearance: none;
+    display: flex;
+    align-items: center;
+  }
+}
+
+/* Printing from the browser: let the whole page flow instead of the fixed, scrolling shell. */
+@media print {
+  [data-testid="app-shell"] { position: static; overflow: visible; display: block; }
+  [data-testid="app-shell"] main { overflow: visible; }
 }

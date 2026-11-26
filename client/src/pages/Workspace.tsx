@@ -131,7 +131,7 @@ export function WorkspacePage({ id }: { id: string }) {
   return (
     <div className="mx-auto max-w-[94rem] px-4 pb-16 sm:px-8">
       {/* Sticky toolbar: keeps save state, undo/redo and export in reach */}
-      <div className="glass sticky top-14 z-30 -mx-4 border-b border-border/60 px-4 pb-3 pt-4 sm:-mx-8 sm:px-8 md:top-0 md:pt-6" data-testid="workspace-toolbar">
+      <div className="glass sticky top-0 z-30 -mx-4 border-b border-border/60 px-4 pb-3 pt-4 sm:-mx-8 sm:px-8 md:pt-6" data-testid="workspace-toolbar">
         <Link href="/timesheets" className="mb-1 inline-flex items-center gap-0.5 text-[13px] font-medium text-primary hover:underline" data-testid="link-back" aria-label="Back to timesheets">
           <ChevronLeft className="h-4 w-4" />Timesheets
         </Link>
