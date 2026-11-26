@@ -206,3 +206,17 @@ test("saved rates with an effective date drive later analyses", async () => {
   const fin = await call("PATCH", `/api/timesheets/${t.body.id}`, { status: "final" });
   assert.equal(fin.body.totalPay, 220);
 });
+
+test("a timesheet created already final gets the pay snapshot and repays advances", async () => {
+  const adv = await call("POST", `/api/sites/${siteId}/pay/advances`, { employee: "Cy Moss", amount: 50, date: "2026-06-01", mode: "periods", periods: 1 }, "mgr1");
+  assert.equal(adv.status, 200);
+  const d = doc("Created final", ["2026-06-08"], { status: "final" });
+  (d.shifts as any[]).forEach((s) => { s.employee = "Cy Moss"; });
+  (d.employees as any[])[0] = { ...(d.employees as any[])[0], name: "Cy Moss" };
+  const t = await call("POST", "/api/timesheets", { doc: d });
+  assert.equal(t.status, 200, JSON.stringify(t.body));
+  assert.equal(t.body.totalPay, 100 - 50, "advance deducted in the snapshot");
+  const list = (await call("GET", `/api/sites/${siteId}/pay/advances`)).body;
+  const a = list.find((x: any) => x.id === adv.body.id);
+  assert.deepEqual([a.repaid, a.remaining], [50, 0], "repayment recorded");
+});
