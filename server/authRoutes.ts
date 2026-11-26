@@ -29,6 +29,23 @@ function me(res: Response): UserRecord {
 const describe = (u: Pick<UserRecord, "username" | "role" | "siteIds" | "active">) =>
   `${ROLE_LABELS[u.role]}${u.siteIds.length ? `, ${u.siteIds.length} location(s)` : ""}${u.active ? "" : ", inactive"}`;
 
+/**
+ * Check the signed-in person's own password before a sensitive change (counts
+ * against the sign-in limit). Sends the error response and returns false when
+ * it doesn't match.
+ */
+async function confirmOwnPassword(req: Request, res: Response, userId: string, password: unknown): Promise<boolean> {
+  if (typeof password !== "string" || !password) { res.status(400).json({ error: "Enter your password to change a notification email.", needPassword: true }); return false; }
+  const ip = req.ip ?? "unknown";
+  const blocked = loginThrottle(ip, res);
+  if (blocked) { res.status(429).json({ error: blocked }); return false; }
+  const fresh = await getUser(userId, { fresh: true });
+  const ok = !!fresh && password.length <= 200 && (await verifyHash(password, fresh.passwordHash));
+  recordLogin(ip, ok);
+  if (!ok) { res.status(400).json({ error: "Your password is incorrect.", needPassword: true }); return false; }
+  return true;
+}
+
 export function registerAuthRoutes(app: Express) {
   app.get("/api/auth/status", h(async (_req, res) => {
     let appName = "Payroll Admin";
@@ -121,15 +138,7 @@ export function registerAuthRoutes(app: Express) {
     // so a borrowed or stolen session must not be able to redirect them.
     if (body.notificationEmail !== undefined) {
       const fresh = await getUser(u.id, { fresh: true });
-      if (fresh && body.notificationEmail !== (fresh.notificationEmail ?? "")) {
-        if (!password) return res.status(400).json({ error: "Enter your password to change your notification email." });
-        const ip = req.ip ?? "unknown";
-        const blocked = loginThrottle(ip, res);
-        if (blocked) return res.status(429).json({ error: blocked });
-        const ok = await verifyHash(password, fresh.passwordHash);
-        recordLogin(ip, ok);
-        if (!ok) return res.status(400).json({ error: "Current password is incorrect." });
-      }
+      if (fresh && body.notificationEmail !== (fresh.notificationEmail ?? "") && !(await confirmOwnPassword(req, res, u.id, password))) return;
     }
     const updated = await updateProfile(u.id, body);
     const what = [body.username && updated.username !== u.username ? `username ${u.username} → ${updated.username}` : "", body.displayName !== undefined ? "display name" : "", body.notificationEmail !== undefined ? "notification email" : ""].filter(Boolean).join("; ");
@@ -153,6 +162,11 @@ export function registerAuthRoutes(app: Express) {
   app.patch("/api/users/:id", h(async (req, res) => {
     const actor = me(res);
     const patch = updateUserSchema.parse(req.body);
+    // Sign-in codes can go to this email, so changing it needs the password of whoever is making the change.
+    if (patch.notificationEmail !== undefined) {
+      const target = await getUser(String(req.params.id), { fresh: true });
+      if (target && patch.notificationEmail !== (target.notificationEmail ?? "") && !(await confirmOwnPassword(req, res, actor.id, req.body?.actorPassword))) return;
+    }
     const { before, after } = await updateUser(actor, String(req.params.id), patch);
     const changes: string[] = [];
     if (before.username !== after.username) changes.push(`username ${before.username} → ${after.username}`);

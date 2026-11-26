@@ -196,7 +196,7 @@ setInterval(prune, 5 * 60_000).unref();
 
 // Checks still running count against the limit too, so parallel guesses can't
 // all slip past before the first failure is recorded. A reservation lasts until
-// the response closes (or PENDING_MS, as a backstop).
+// the response is sent (or PENDING_MS, as a backstop, e.g. when the client hangs up).
 const PENDING_MS = 30_000;
 const pending = new Map<string, Map<symbol, number>>();
 const inFlight = (ip: string, now: number) => {
@@ -211,7 +211,7 @@ const inFlight = (ip: string, now: number) => {
  * Returns an error when this address must wait. Pass the response so the check
  * counts as in flight until it finishes; record the outcome with recordLogin.
  */
-export function loginThrottle(ip: string, res?: { once(event: "close", fn: () => void): unknown }): string | null {
+export function loginThrottle(ip: string, res?: { once(event: "finish", fn: () => void): unknown }): string | null {
   const now = Date.now();
   const a = attempts.get(ip);
   const failed = a && a.until > now ? a.n : 0;
@@ -225,7 +225,7 @@ export function loginThrottle(ip: string, res?: { once(event: "close", fn: () =>
     const m = pending.get(ip) ?? new Map<symbol, number>();
     m.set(token, now + PENDING_MS);
     pending.set(ip, m);
-    res.once("close", () => { m.delete(token); if (!m.size && pending.get(ip) === m) pending.delete(ip); });
+    res.once("finish", () => { m.delete(token); if (!m.size && pending.get(ip) === m) pending.delete(ip); });
   }
   return null;
 }
