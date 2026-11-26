@@ -50,7 +50,7 @@ export function PunchPhoto({ punch, canView, label }: { punch: Punch; canView: b
             </DialogHeader>
             <img src={src} alt={`Kiosk photo: ${label}`} className="w-full rounded-lg bg-foreground/[0.04]" />
             {noFace && <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-950 ring-1 ring-amber-200 dark:bg-amber-950/30 dark:text-amber-100 dark:ring-amber-800">No face was found in this photo. The punch was saved on the tablet while it was offline, so it couldn't be refused. Check it's really them.</p>}
-            {unchecked && <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-950 ring-1 ring-amber-200 dark:bg-amber-950/30 dark:text-amber-100 dark:ring-amber-800">{punch.meta?.photo === "saved" ? "This photo wasn't checked: the punch was saved on the tablet while it was offline, and the face check wasn't working when it arrived. Check it's really them." : "Face match is on for this person, but this time clock doesn't take photos, so it couldn't check. Check it's really them."}</p>}
+            {unchecked && <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-950 ring-1 ring-amber-200 dark:bg-amber-950/30 dark:text-amber-100 dark:ring-amber-800">{punch.meta?.photo === "saved" ? "This photo wasn't checked: the punch was saved on the tablet while it was offline, and the face check wasn't working when it arrived. Check it's really them." : "This photo wasn't checked for a face. Check it's really them."}</p>}
             {mismatch && <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-950 ring-1 ring-amber-200 dark:bg-amber-950/30 dark:text-amber-100 dark:ring-amber-800" data-testid="text-face-mismatch">The face in this photo didn't match their reference photos. The punch was saved on the tablet while it was offline, so it couldn't be refused. Check it's really them.</p>}
           </DialogContent>
         </Dialog>
@@ -65,7 +65,7 @@ export function NoFaceBadge({ punch }: { punch: Punch }) {
     return <Badge variant="warning" className="shrink-0" title="Saved offline; the face didn't match their reference photos" data-testid={`badge-face-mismatch-${punch.id}`}>Face didn't match</Badge>;
   }
   if (punch.meta?.face === "unchecked") {
-    return <Badge variant="warning" className="shrink-0" title={punch.meta.photo ? "Saved offline; the face check wasn't working when it arrived" : "Face match is on for this person, but this time clock doesn't take photos"} data-testid={`badge-not-checked-${punch.id}`}>Not checked</Badge>;
+    return <Badge variant="warning" className="shrink-0" title="Saved offline; the face check wasn't working when it arrived" data-testid={`badge-not-checked-${punch.id}`}>Not checked</Badge>;
   }
   if (punch.meta?.face !== "missing") return null;
   if (punch.meta.photo !== "saved") {

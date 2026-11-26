@@ -90,8 +90,10 @@ face-api's face recognition model, on the server, no outside service).
    card, available once they have three reference photos (removing one below
    three turns it off).
 
-With face match on for someone, every punch they make on a time clock with
-photos on is checked against their reference photos: the closest must be at
+With face match on for someone, every punch they make is checked against
+their reference photos, on every time clock: one with photos turned off still
+takes a photo of them (the kiosk is told per person), and a punch without one
+is refused. A match needs their closest reference photo to be at
 most 0.5 away (face-api's default is 0.6; 0.5 is stricter, so a lookalike
 coworker is less likely to pass, while the same person usually scores 0.25 to
 0.45). The distance is saved on the punch (`meta.faceMatch`).
@@ -104,8 +106,8 @@ coworker is less likely to pass, while the same person usually scores 0.25 to
 - **Doesn't match, saved offline** (sent more than 2 minutes late): kept, so
   nothing saved on the tablet is lost, but tagged **Face didn't match** on Live.
 - **No face** or the check isn't working: as for everyone (above).
-- **Time clock with photos off**: it can't check, so the punch is kept and
-  tagged **Not checked**. Turn photos on for devices those people use.
+- **Saved offline without a photo** (for example, the tablet didn't know
+  face match was on yet): kept and tagged **No photo**.
 - Turning face match off, or deleting their face data, stops the check at once.
 
 Where face data lives: `DATA_DIR/face-data/<location>/<employee>/` (set

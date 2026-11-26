@@ -237,7 +237,7 @@ function FaceMatchCard({ siteId, employee, tz, canManage }: { siteId: string; em
     } catch (e) { toast({ title: "Couldn't record consent", description: errorMessage(e), variant: "destructive" }); } finally { setBusy(false); }
   };
   const setRequired = async (required: boolean) => {
-    if (required && !(await confirm({ title: `Turn on face match for ${first}?`, description: `At the time clock, ${first}'s face must match their reference photos to punch. If it doesn't, the punch is refused, ${first} is told to ask a manager, and it shows on Live. Punches saved while the tablet was offline are kept but flagged. Only time clocks with photos on can check.`, confirmLabel: "Turn on" }))) return;
+    if (required && !(await confirm({ title: `Turn on face match for ${first}?`, description: `At the time clock, ${first}'s face must match their reference photos to punch. If it doesn't, the punch is refused, ${first} is told to ask a manager, and it shows on Live. Punches saved while the tablet was offline are kept but flagged. Every time clock takes a photo of ${first}, even one with photos turned off.`, confirmLabel: "Turn on" }))) return;
     setBusy(true);
     try {
       await api("PUT", `/api/sites/${siteId}/employees/${employee.id}/face/required`, { required });
@@ -312,7 +312,7 @@ function FaceMatchCard({ siteId, employee, tz, canManage }: { siteId: string; em
                 {d.refs < FACE_MIN_REFS
                   ? `Available once ${first} has ${FACE_MIN_REFS} reference photos.`
                   : d.required
-                    ? `On. A punch is refused if the face isn't ${first}'s, and shows on Live. Only time clocks with photos on can check; elsewhere their punches are flagged Not checked.`
+                    ? `On. A punch is refused if the face isn't ${first}'s, and shows on Live. Every time clock takes a photo of ${first}, even one with photos turned off.`
                     : `Off. ${first} clocks in with their PIN; photos are only checked for a face.`}
               </p>
             </div>

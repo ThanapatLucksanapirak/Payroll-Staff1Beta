@@ -193,16 +193,34 @@ test("a live punch must be them: a match goes through, someone else is refused w
   assert.equal((await punch("out", "other-face.jpg", {}, "5678")).status, 200);
 });
 
-test("a time clock with photos off can't check, so it keeps the punch flagged Not checked", async () => {
+test("a time clock with photos off still takes a photo for them, and checks it", async () => {
   const dev = await A("POST", `/api/sites/${siteId}/kiosk-devices`, { name: "Back door" });
   const devId = dev.body.device.id;
+  const T = dev.body.token;
   assert.equal((await A("PUT", `/api/sites/${siteId}/kiosk-devices/${devId}/options`, { photo: false })).status, 200);
-  const r = await call("POST", "/api/kiosk/punch", { id: randomUUID(), type: "in", pin: "1234" }, { "X-Kiosk-Token": dev.body.token });
-  assert.equal(r.status, 200, JSON.stringify(r.body));
-  assert.equal((await getPunch(r.body.punch.id))?.meta?.face, "unchecked");
-  // Ben (face match off) gets no flag there
-  const b = await call("POST", "/api/kiosk/punch", { id: randomUUID(), type: "in", pin: "5678" }, { "X-Kiosk-Token": dev.body.token });
-  assert.equal((await getPunch(b.body.punch.id))?.meta?.face, undefined);
+  const KB = (body: Record<string, unknown>) => call("POST", "/api/kiosk/punch", { id: randomUUID(), ...body }, { "X-Kiosk-Token": T });
+  // The kiosk is told to take a photo for Ana (and only Ana)
+  const who = await call("POST", "/api/kiosk/identify", { pin: "1234" }, { "X-Kiosk-Token": T });
+  assert.equal(who.body.facePhoto, true);
+  assert.equal((await call("POST", "/api/kiosk/identify", { pin: "5678" }, { "X-Kiosk-Token": T })).body.facePhoto, undefined);
+  const state = await call("GET", "/api/kiosk/state", undefined, { "X-Kiosk-Token": T });
+  assert.deepEqual(state.body.employees.filter((x: any) => x.facePhoto).map((x: any) => x.id), [ana]);
+  // No photo: refused, not let through unchecked
+  const none = await KB({ type: "in", pin: "1234" });
+  assert.equal(none.status, 422);
+  assert.equal(none.body.code, "photo");
+  // Someone else's face: refused; her own: saved with the photo
+  assert.equal((await KB({ type: "in", pin: "1234", photo: fixture("other-face.jpg") })).body.reason, "mismatch");
+  const ok = await KB({ type: "in", pin: "1234", photo: fixture("face-3.jpg") });
+  assert.equal(ok.status, 200, JSON.stringify(ok.body));
+  const p = await getPunch(ok.body.punch.id);
+  assert.equal(p?.meta?.face, undefined);
+  assert.equal(p?.meta?.photo, "saved");
+  assert.ok((p?.meta?.faceMatch as number) <= 0.5);
+  // Ben (face match off) punches there without a photo, as before
+  const b = await KB({ type: "in", pin: "5678" });
+  assert.equal(b.status, 200);
+  assert.equal((await getPunch(b.body.punch.id))?.meta?.photo, undefined);
 });
 
 test("turning it off, or dropping below three reference photos, stops the check", async () => {
@@ -223,7 +241,7 @@ test("deleting face data with punch photos removes the alerts and their photos t
   await A("PUT", `${faceUrl()}/required`, { required: true });
   assert.equal((await punch("out", "other-face.jpg")).status, 422);
   const before = (await A("GET", `/api/sites/${siteId}/face-alerts`)).body;
-  assert.equal(before.length, 4);
+  assert.equal(before.length, 5);
   await A("DELETE", `${faceUrl()}?punchPhotos=1`);
   assert.deepEqual((await A("GET", `/api/sites/${siteId}/face-alerts`)).body, []);
   await new Promise((r) => setTimeout(r, 50));
