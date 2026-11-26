@@ -9,6 +9,7 @@ import { randomUUID } from "node:crypto";
 import type { AddressInfo } from "node:net";
 import type { Server } from "node:http";
 
+import { middayZone } from "./clock-helpers";
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), "payroll-polish-"));
 process.env.DATA_DIR = dir;
 process.env.BACKUPS = "off";
@@ -73,6 +74,8 @@ before(async () => {
   const setup = await call("POST", "/api/auth/setup", { username: "owner", password: "correct horse", setupCode: code }, { "X-Requested-With": "payroll" });
   admin = (setup.headers.get("set-cookie") ?? "").split(";")[0];
   siteId = (await A("GET", "/api/bootstrap")).body.sites[0].id;
+  const tzSet = await A("PUT", `/api/sites/${siteId}`, { rules: { timezone: middayZone() } }); // "today" covers the last few hours
+  assert.equal(tzSet.status, 200, JSON.stringify(tzSet.body));
   site2 = (await A("POST", "/api/sites", { name: "Uptown" })).body.id;
   await A("PUT", `/api/sites/${siteId}`, { timeSource: "kiosk", kioskLoginMode: "pin" });
   ana = (await A("POST", `/api/sites/${siteId}/employees`, { name: "Ana Ruiz", pin: "1234" })).body.id;
@@ -216,4 +219,35 @@ test("photos on: live punches need a photo, offline queued punches are still kep
   assert.equal(ok.status, 200);
   assert.equal(ok.body.punch.photo, "saved");
   await A("PUT", `/api/sites/${siteId}/kiosk-devices/${deviceId}/options`, { photo: false });
+});
+
+test("PIN_KEY must be 32 random bytes", async () => {
+  const { getPinKey } = await import("../server/config");
+  const keep = process.env.PIN_KEY;
+  try {
+    process.env.PIN_KEY = "my weak passphrase";
+    assert.throws(() => getPinKey(), /32 random bytes/);
+    process.env.PIN_KEY = Buffer.alloc(16, 1).toString("base64url");
+    assert.throws(() => getPinKey(), /32 random bytes/);
+    const good = Buffer.alloc(32, 7);
+    process.env.PIN_KEY = good.toString("base64url");
+    assert.ok(getPinKey().equals(good));
+    process.env.PIN_KEY = good.toString("base64");
+    assert.ok(getPinKey().equals(good), "standard base64 works too");
+  } finally {
+    if (keep === undefined) delete process.env.PIN_KEY; else process.env.PIN_KEY = keep;
+  }
+});
+
+test("photos on: a queued punch without a photo is marked 'no photo' for managers", async () => {
+  await A("PUT", `/api/sites/${siteId}/kiosk-devices/${deviceId}/options`, { photo: true });
+  try {
+    const q = await K("POST", "/api/kiosk/punch", { id: randomUUID(), type: "in", pin: "1234", at: new Date().toISOString() });
+    assert.equal(q.status, 200, JSON.stringify(q.body));
+    assert.equal(q.body.punch.photo, "none", "no photo field at all still shows as no photo");
+    const out = await K("POST", "/api/kiosk/punch", { id: randomUUID(), type: "out", pin: "1234", photo: JPEG });
+    assert.equal(out.body.punch.photo, "saved");
+  } finally {
+    await A("PUT", `/api/sites/${siteId}/kiosk-devices/${deviceId}/options`, { photo: false });
+  }
 });

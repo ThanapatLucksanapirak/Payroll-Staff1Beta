@@ -502,7 +502,8 @@ export function registerKioskRoutes(app: Express) {
       return res.status(422).json({ error: "The photo didn't come through. Look at the camera and try again.", code: "photo" });
     }
     let photoSaved = false;
-    if (options.photo && body.photo !== undefined) {
+    // Photos on: every punch records whether it has one ("none" for a queued punch without one).
+    if (options.photo) {
       photoSaved = !!photoBytes && savePhoto(site.id, body.id, photoBytes);
       meta.photo = photoSaved ? "saved" : "none";
     }
@@ -614,6 +615,9 @@ function kioskAssetSet(): Set<string> {
   return set;
 }
 
+/** The face-check model and runtime the kiosk loads (see client/src/kiosk/face.ts). */
+const FACE_FILES = new Set(["blaze_face_short_range.tflite", "vision_wasm_internal.js", "vision_wasm_internal.wasm", "vision_wasm_nosimd_internal.js", "vision_wasm_nosimd_internal.wasm"].map((f) => `/face/${f}`));
+
 const DEV_PREFIXES = ["/@vite/", "/@fs/", "/@id/", "/@react-refresh", "/node_modules/", "/src/", "/vite-hmr"];
 
 /**
@@ -634,7 +638,7 @@ export function kioskHostGuard() {
     // Installable kiosk (home-screen icon, manifest and the static-shell service worker)
     if (p === "/kiosk.webmanifest" || p === "/sw.js" || /^\/icons\/[\w.-]+$/.test(p)) return next();
     // Face check for photo on punch (model and WebAssembly runtime)
-    if (/^\/face\/[\w.-]+\.(js|wasm|tflite)$/.test(p)) return next();
+    if (FACE_FILES.has(p)) return next();
     if (kioskAssetSet().has(p)) return next();
     if (process.env.NODE_ENV !== "production" && DEV_PREFIXES.some((x) => p.startsWith(x))) return next();
     if (p.startsWith("/api/")) return res.status(404).json({ error: "Not found." });

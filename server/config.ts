@@ -3,7 +3,7 @@
 // Stored as JSON in DATA_DIR/config.json and written atomically.
 import fs from "node:fs";
 import path from "node:path";
-import { createHash, randomBytes } from "node:crypto";
+import { randomBytes } from "node:crypto";
 import { type DatabaseConfig, databaseConfigSchema } from "@shared/schema";
 
 export const DATA_DIR = path.resolve(process.env.DATA_DIR || path.join(process.cwd(), "data"));
@@ -88,8 +88,15 @@ export function effectiveDatabaseConfig(): DatabaseConfig {
 
 /** 32-byte key for encrypting employee PINs (created on first use). */
 export function getPinKey(): Buffer {
-  const env = process.env.PIN_KEY;
-  if (env) return Buffer.from(env, "base64url").length === 32 ? Buffer.from(env, "base64url") : createHash("sha256").update(env).digest();
+  const env = process.env.PIN_KEY?.trim();
+  if (env) {
+    const key = Buffer.from(env, "base64url");
+    // A passphrase would make a weak key: insist on 32 random bytes.
+    if (key.length !== 32 || key.toString("base64url") !== env.replace(/=+$/, "").replace(/\+/g, "-").replace(/\//g, "_")) {
+      throw new Error("PIN_KEY must be 32 random bytes in base64url (for example: openssl rand -base64 32 | tr '+/' '-_' | tr -d '='). Remove it to use the key kept in config.json.");
+    }
+    return key;
+  }
   const cfg = loadConfig();
   if (cfg.pinKey) return Buffer.from(cfg.pinKey, "base64url");
   const key = randomBytes(32);

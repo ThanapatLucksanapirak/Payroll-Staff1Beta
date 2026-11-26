@@ -38,7 +38,7 @@ on screen, when:
 The preview in the corner turns red and says "Face not detected" while no face
 is in view. The server also refuses a live punch without a photo. Punches saved
 on the tablet while it was offline are still accepted without one, so they are
-never lost. If a tablet's camera breaks, add the punches on Live or turn
+never lost; they show the "no photo" icon on Live. If a tablet's camera breaks, add the punches on Live or turn
 photos off for that device. On a very old tablet that can't run the face model,
 the covered/black check still applies.
 

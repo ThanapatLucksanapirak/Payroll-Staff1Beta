@@ -221,7 +221,8 @@ export function registerRoutes(app: Express) {
   app.put("/api/sites/:id", h(async (req, res) => {
     // Only the fields sent: renaming must not reset rules, time clock or archive state.
     const patch: any = parsePatch(siteInputSchema, req.body);
-    if (patch.rules) patch.rules = siteRulesSchema.parse({ ...((await settings.getSite(String(req.params.id)))?.rules ?? {}), ...patch.rules });
+    // Merge only the rule fields actually sent (the parsed patch has every rule filled with its default).
+    if (patch.rules) patch.rules = siteRulesSchema.parse({ ...((await settings.getSite(String(req.params.id)))?.rules ?? {}), ...(req.body.rules as object) });
     const site = await settings.updateSite(String(req.params.id), patch as any);
     if (!site) return res.status(404).json({ error: "Location not found." });
     res.json(site);
