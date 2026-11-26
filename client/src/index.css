@@ -183,6 +183,21 @@ html { touch-action: manipulation; -webkit-text-size-adjust: 100%; text-size-adj
 /* No rubber-band bounce or pull-to-refresh on the page itself (it reads as the
    whole app sliding around); long pages still scroll normally. */
 html, body { overscroll-behavior: none; }
+/* Feel like an app, not a web page (admin app and staff portal): long-pressing a
+   tab, link, button or icon doesn't open iOS's link preview (Open / Add to Reading
+   List / Copy Link) or the image menu, and app chrome and button labels don't get
+   selected. Text people type and page content stay selectable. (Base layer, so
+   utilities like select-all still win.) */
+@layer base {
+  a, button, [role="button"], [role="tab"], [role="menuitem"], [role="option"], img, svg, video, nav, header, aside {
+    -webkit-touch-callout: none;
+  }
+  a, button, [role="button"], [role="tab"], [role="menuitem"], [role="option"], nav, header, aside, label {
+    -webkit-user-select: none;
+    user-select: none;
+  }
+  input, textarea, select, [contenteditable="true"] { -webkit-user-select: text; user-select: text; -webkit-touch-callout: default; }
+}
 @media (pointer: coarse) {
   input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]), textarea, select { font-size: max(16px, 1em) !important; }
 }

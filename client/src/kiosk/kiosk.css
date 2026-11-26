@@ -62,7 +62,9 @@ body {
   touch-action: manipulation;
   overscroll-behavior: none;
 }
-input { -webkit-user-select: text; user-select: text; }
+/* A shared time clock, not a web page: no long-press link preview or image menu anywhere. */
+body, a, button, img, svg, video { -webkit-touch-callout: none; }
+input { -webkit-user-select: text; user-select: text; -webkit-touch-callout: default; }
 .tabular { font-variant-numeric: tabular-nums; }
 
 /* The kiosk's one accent: primary actions, current selection and focus.

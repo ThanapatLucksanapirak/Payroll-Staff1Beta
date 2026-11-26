@@ -24,6 +24,10 @@ interface ForecastData {
   scheduledHoursRemaining: number; hasSchedule: boolean; missingRates: string[]; basis: "punches" | "timesheets" | "square"; today: string;
 }
 
+/** Why there is no labor cost yet: hours without a pay rate, or no hours at all. */
+const unpricedText = (l: LaborData) => l.totals.hours > 0
+  ? `${l.totals.hours.toFixed(1)} h counted, but ${l.missingRates.length ? `no pay rate for ${l.missingRates.slice(0, 2).join(", ")}${l.missingRates.length > 2 ? "…" : ""}` : "no pay rate set"}.`
+  : "No hours counted yet this week.";
 const pctText = (p: number | null | undefined) => (p == null ? "—" : `${(p * 100).toFixed(1)}%`);
 
 function useForecast() {
@@ -65,7 +69,7 @@ export function HomeLaborTiles() {
   const showForecast = !!f && (f.projected > 0 || f.hasSchedule);
   if (!showLabor && !showForecast) return null;
   const todayRow = l?.days.find((d) => d.date === today);
-  // Sales but no hours yet (no timesheet, punches or timecards counted): a 0.0% would read as free labor.
+  // Sales but no labor cost yet: a 0.0% would read as free labor.
   const noHours = !!l && l.totals.sales > 0 && l.totals.labor === 0;
 
   return (
@@ -78,7 +82,7 @@ export function HomeLaborTiles() {
             label="Labor vs. sales this week"
             value={noHours ? "—" : l!.totals.sales > 0 ? pctText(l!.totals.pct) : app.money(l!.totals.labor)}
             sub={noHours
-              ? `${app.money(l!.totals.sales)} sales. No hours counted yet this week.`
+              ? `${app.money(l!.totals.sales)} sales. ${unpricedText(l!)}`
               : l!.totals.sales > 0
               ? `${app.money(l!.totals.labor)} labor on ${app.money(l!.totals.sales)} sales${todayRow?.pct != null ? ` · today ${pctText(todayRow.pct)}` : ""}`
               : "Labor so far. Add sales to see the percentage."}
@@ -178,32 +182,35 @@ export function LaborSection({ className }: { className?: string }) {
               </div>
             ))}
             <div className="grid grid-cols-3 divide-x divide-border/70 border-b border-border/70">
-              <Stat label="Labor %" value={pctText(l.totals.pct)} />
+              <Stat label="Labor %" value={l.totals.labor === 0 ? "—" : pctText(l.totals.pct)} />
               <Stat label="Labor" value={app.money(l.totals.labor)} />
               <Stat label="Sales" value={l.totals.sales ? app.money(l.totals.sales) : "—"} />
             </div>
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[34rem] text-[13px]" data-testid="table-labor">
+              <table className="w-full text-[13px] sm:min-w-[34rem]" data-testid="table-labor">
                 <thead>
                   <tr className="border-b border-border/70 text-left text-xs text-muted-foreground">
-                    <th className="px-4 py-2 font-medium">Day</th>
-                    <th className="px-4 py-2 font-medium">Sales</th>
-                    <th className="px-4 py-2 text-right font-medium">Labor</th>
-                    <th className="px-4 py-2 text-right font-medium">Hours</th>
-                    <th className="px-4 py-2 text-right font-medium">Labor %</th>
+                    <th className="py-2 pl-3 pr-2 font-medium sm:px-4">Day</th>
+                    <th className="px-2 py-2 font-medium sm:px-4">Sales</th>
+                    <th className="px-2 py-2 text-right font-medium sm:px-4">Labor</th>
+                    <th className="hidden px-4 py-2 text-right font-medium sm:table-cell">Hours</th>
+                    <th className="whitespace-nowrap py-2 pl-2 pr-3 text-right font-medium sm:px-4"><span className="sm:hidden" aria-hidden>%</span><span className="sr-only sm:not-sr-only">Labor %</span></th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border/60">
                   {l.days.map((d) => (
                     <tr key={d.date} className={cn(d.date > today && "text-muted-foreground")}>
-                      <td className="whitespace-nowrap px-4 py-2">{WEEKDAYS_SHORT[dayOfWeek(d.date)]} {app.date(d.date)}</td>
-                      <td className="px-4 py-1.5"><SalesCell siteId={site.id} date={d.date} value={d.sales} source={d.salesSource} editable={editable && d.date <= today} squareOk={l.square.ok} /></td>
-                      <td className="px-4 py-2 text-right tabular">
+                      <td className="whitespace-nowrap py-2 pl-3 pr-2 sm:px-4"><span className="block sm:inline">{WEEKDAYS_SHORT[dayOfWeek(d.date)]}</span> <span className="text-xs text-muted-foreground sm:text-[13px] sm:text-inherit">{app.date(d.date)}</span></td>
+                      <td className="px-2 py-1.5 sm:px-4"><SalesCell siteId={site.id} date={d.date} value={d.sales} source={d.salesSource} editable={editable && d.date <= today} squareOk={l.square.ok} /></td>
+                      <td className="whitespace-nowrap px-2 py-2 text-right tabular sm:px-4">
                         {d.labor ? app.money(d.labor) : "—"}
-                        {(d.laborSource === "punches" || d.laborSource === "square") && <span className="ml-1 text-[11px] text-muted-foreground" title={d.laborSource === "square" ? "Estimated from Square timecards at saved rates" : "Estimated from punches at saved rates"}>est.</span>}
+                        {d.labor > 0 && (d.laborSource === "punches" || d.laborSource === "square") && <span className="ml-1 text-[11px] text-muted-foreground" title={d.laborSource === "square" ? "Estimated from Square timecards at saved rates" : "Estimated from punches at saved rates"}>est.</span>}
+                        {/* Phones: hours under the cost instead of their own column. */}
+                        {d.hours > 0 && <span className="block text-[11px] text-muted-foreground sm:hidden">{d.hours.toFixed(1)} h{!d.labor && " · no rate"}</span>}
                       </td>
-                      <td className="px-4 py-2 text-right tabular">{d.hours ? d.hours.toFixed(1) : "—"}</td>
-                      <td className={cn("px-4 py-2 text-right font-medium tabular", d.pct != null && d.pct > 0.35 && "text-warning")}>{pctText(d.pct)}</td>
+                      <td className="hidden px-4 py-2 text-right tabular sm:table-cell">{d.hours ? d.hours.toFixed(1) : "—"}</td>
+                      {/* No labor cost counted: "—", not a 0.0% that reads as free labor. */}
+                      <td className={cn("py-2 pl-2 pr-3 text-right font-medium tabular sm:px-4", d.pct != null && d.pct > 0.35 && "text-warning")}>{d.labor ? pctText(d.pct) : "—"}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -212,7 +219,7 @@ export function LaborSection({ className }: { className?: string }) {
             <p className="border-t border-border/70 px-4 py-2.5 text-xs text-muted-foreground">
               Labor comes from saved timesheets where there is one, otherwise from {site.timeSource === "square" ? "Square timecards" : "time-clock punches"} at saved rates (marked est.).
               Sales come from {l.square.connected && l.square.ok ? "Square (net of tax and tips) unless you type a number in" : "the numbers you type in"}.
-              {l.missingRates.length > 0 && ` ${l.missingRates.length} ${l.missingRates.length === 1 ? "person has" : "people have"} no saved rate.`}
+              {l.missingRates.length > 0 && ` ${l.missingRates.length} ${l.missingRates.length === 1 ? "person has" : "people have"} no saved rate (${l.missingRates.slice(0, 3).join(", ")}${l.missingRates.length > 3 ? "…" : ""}), so their hours aren't costed here.`}
             </p>
           </div>
         )}
@@ -246,15 +253,15 @@ function SalesCell({ siteId, date, value, source, editable, squareOk }: { siteId
   };
   if (editing) {
     return (
-      <span className="flex items-center gap-1.5">
-        <NumberInput className="w-28" prefix={app.prefs.currencySymbol} value={draft} onChange={setDraft} autoFocus onKeyDown={(e) => { if (e.key === "Enter") void save(draft); if (e.key === "Escape") setEditing(false); }} aria-label={`Sales on ${date}`} data-testid={`input-sales-${date}`} />
+      <span className="flex flex-wrap items-center gap-1.5">
+        <NumberInput className="w-[5.5rem] sm:w-28" prefix={app.prefs.currencySymbol} value={draft} onChange={setDraft} autoFocus onKeyDown={(e) => { if (e.key === "Enter") void save(draft); if (e.key === "Escape") setEditing(false); }} aria-label={`Sales on ${date}`} data-testid={`input-sales-${date}`} />
         <button type="button" className="rounded-sm px-1 py-0.5 focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/35 disabled:opacity-45 text-xs font-medium text-primary hover:underline" disabled={busy} onClick={() => save(draft)}>{busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Save"}</button>
         {source === "manual" && <button type="button" className="rounded-sm px-1 py-0.5 focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/35 disabled:opacity-45 text-xs text-muted-foreground hover:text-foreground" disabled={busy} onClick={() => save(null)} title={squareOk ? "Use Square's number again" : "Clear"}>Clear</button>}
       </span>
     );
   }
   return (
-    <span className="flex items-center gap-1.5">
+    <span className="flex flex-wrap items-center gap-x-1.5">
       <span className="tabular">{value != null ? app.money(value) : "—"}</span>
       {source && <span className="text-[11px] text-muted-foreground">{source === "square" ? "Square" : "manual"}</span>}
       {editable && <button type="button" className="rounded-sm px-1 py-0.5 focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/35 disabled:opacity-45 ml-0.5 text-xs font-medium text-primary hover:underline" onClick={() => { setDraft(value ?? 0); setEditing(true); }} data-testid={`button-edit-sales-${date}`}>{value != null ? "Edit" : "Add"}</button>}
