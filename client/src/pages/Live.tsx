@@ -140,7 +140,7 @@ export function LivePage() {
                       <Initials name={e.name} status={e.status} />
                       <div className="min-w-0 flex-1">
                         <p className="truncate text-[15px] font-semibold tracking-tight">{e.name}</p>
-                        <p className="truncate text-xs text-muted-foreground">{e.inDirectory ? (e.role || " ") : "Not in the list anymore: clock them out"}</p>
+                        <p className="truncate text-xs text-muted-foreground">{e.inDirectory ? (e.role || " ") : "Clock them out"}</p>
                         {e.station && <StationTag station={e.station} className="mt-1" />}
                       </div>
                       <div className="flex shrink-0 flex-col items-end gap-1">
