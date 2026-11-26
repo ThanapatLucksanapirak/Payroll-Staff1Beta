@@ -6,6 +6,9 @@ Settings → About, next to the matching update.
 Add an entry with every pull request: a `## YYYY-MM-DD · Title (#PR)` heading and a
 few short bullets written for the people who use the app, not for developers.
 
+## 2026-11-26 · Download the Android time clock app from the kiosk (#26)
+- On Android tablets, a "Get the Android app" button at the top downloads the Time Clock app directly, without the Play Store.
+
 ## 2026-11-26 · Steadier screens on iPhone and iPad (#25)
 - The app no longer slides around as a whole when you scroll: the side menu stays put and only the page content scrolls, with no empty black band at the bottom.
 - The time clock fits the screen on phones and tablets, with a smaller keypad on short phones, so the PIN screen no longer scrolls.

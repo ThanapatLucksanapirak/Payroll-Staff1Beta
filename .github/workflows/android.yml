@@ -30,6 +30,8 @@ jobs:
         working-directory: android
     env:
       KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+    outputs:
+      signed: ${{ steps.key.outputs.signed }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
@@ -39,10 +41,12 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
 
       - name: Signing key (manual runs only)
+        id: key
         if: github.event_name == 'workflow_dispatch' && env.KEYSTORE_B64 != ''
         run: |
           echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/upload.jks"
           echo "ANDROID_KEYSTORE_FILE=$RUNNER_TEMP/upload.jks" >> "$GITHUB_ENV"
+          echo "signed=true" >> "$GITHUB_OUTPUT"
 
       - name: Build
         env:
@@ -62,7 +66,7 @@ jobs:
             args+=("-PversionName=$VERSION_NAME")
           fi
           chmod +x gradlew
-          ./gradlew --no-daemon "${args[@]}" assembleDebug bundleRelease
+          ./gradlew --no-daemon "${args[@]}" assembleDebug bundleRelease assembleRelease
 
       - name: Show the signing fingerprint (for ANDROID_CERT_SHA256 on the server)
         if: env.ANDROID_KEYSTORE_FILE != ''
@@ -71,7 +75,6 @@ jobs:
         run: |
           jarsigner -verify app/build/outputs/bundle/release/app-release.aab >/dev/null
           keytool -printcert -jarfile app/build/outputs/bundle/release/app-release.aab | grep -E "SHA256:" | head -1 | tee -a "$GITHUB_STEP_SUMMARY"
-          rm -f "$ANDROID_KEYSTORE_FILE"
 
       - uses: actions/upload-artifact@v4
         with:
@@ -79,5 +82,40 @@ jobs:
           path: |
             android/app/build/outputs/bundle/release/*.aab
             android/app/build/outputs/apk/debug/*.apk
+            android/app/build/outputs/apk/release/*.apk
           if-no-files-found: error
           retention-days: 14
+
+      - name: Remove the signing key
+        if: always()
+        run: rm -f "$RUNNER_TEMP/upload.jks"
+
+  # The kiosk's "Get the Android app" button downloads this file (see server/android.ts).
+  # Only this job, on signed manual runs, gets write access.
+  publish-apk:
+    needs: build
+    if: github.event_name == 'workflow_dispatch' && needs.build.outputs.signed == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: time-clock-release
+          path: out
+      - name: Publish the APK for direct download
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          VERSION_CODE: ${{ inputs.versionCode }}
+          VERSION_NAME: ${{ inputs.versionName }}
+        run: |
+          cp out/apk/release/app-release.apk time-clock.apk
+          notes="Shijiri Time Clock for Android, version $VERSION_NAME ($VERSION_CODE), built from $GITHUB_SHA. Install on a tablet from the kiosk page's \"Get the Android app\" button."
+          if ! gh release view time-clock-apk >/dev/null 2>&1; then
+            gh release create time-clock-apk --title "Time Clock Android app" --notes "$notes" --latest=false --target "$GITHUB_SHA"
+          else
+            gh release edit time-clock-apk --notes "$notes"
+          fi
+          gh release upload time-clock-apk time-clock.apk --clobber
+          echo "APK: https://github.com/$GH_REPO/releases/download/time-clock-apk/time-clock.apk" >> "$GITHUB_STEP_SUMMARY"
