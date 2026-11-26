@@ -99,6 +99,9 @@ export async function createDevice(siteId: string, name: string) {
     const d: KioskDevice = {
       id: `dev_${randomUUID().replace(/-/g, "").slice(0, 12)}`, siteId, name, tokenHash: sha(token), pairCodeHash: sha(normCode(pairCode)),
       pairCodeExpiresAt: new Date(Date.now() + PAIR_CODE_MS).toISOString(), createdAt: new Date().toISOString(), lastSeenAt: null,
+      // New devices take a photo with each punch, so the face check is on from the start.
+      // Older devices without saved options keep the old default (off).
+      options: { photo: true },
     };
     await saveDevices([...(await loadDevices()), d]);
     return { device: d, token, pairCode };

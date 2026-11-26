@@ -49,7 +49,7 @@ export function DeviceOptionsPanel({ siteId, deviceId, deviceName, options, hasS
 
   return (
     <div className="space-y-2 bg-foreground/[0.015] px-3 pb-3 pt-2" data-testid={`device-options-${deviceId}`}>
-      <ToggleRow label="Photo with each punch" hint="A small front-camera snapshot of the person punching. If the camera is blocked or no face is seen, the punch is stopped and the screen says why." checked={o.photo} onChange={(v) => set({ photo: v })} testid={`switch-device-photo-${deviceId}`} />
+      <ToggleRow label="Photo with each punch" hint="A small front-camera snapshot of the person punching, checked for a face. If the camera is blocked or no face is seen, the punch is stopped. Turning this off also turns off the face check: anyone with a PIN can punch without showing their face." checked={o.photo} onChange={(v) => set({ photo: v })} testid={`switch-device-photo-${deviceId}`} />
       <ToggleRow
         label="Ask for a station at clock-in"
         hint={hasStations ? "Employees pick from the location's station list below." : "Add stations below to use this."}

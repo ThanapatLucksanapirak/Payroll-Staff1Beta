@@ -4,8 +4,8 @@
 //
 // When photos are on, a punch needs a photo with a face in it: if the camera
 // is blocked, missing or covered, or no face is seen, the kiosk says so and
-// the punch isn't sent (see capture()). A manager can add the punch on Live,
-// or turn photos off for the device.
+// the punch isn't sent (see capture()). There is no way to punch without a
+// face: a manager can add the punch on Live, or turn photos off for the device.
 import { useCallback, useEffect, useRef, useState } from "react";
 import { FACE_MESSAGES, checkFace, loadFaceDetector } from "./face";
 
@@ -110,8 +110,8 @@ export function useCamera(active: boolean) {
 
   /**
    * Take the punch photo: a small JPEG of the current frame, only if the camera
-   * works and a face is in it. Otherwise a message saying why (the punch must
-   * not be sent).
+   * works and a face is in it (on two frames). Otherwise a message saying why
+   * (the punch must not be sent).
    */
   const capture = useCallback(async (): Promise<Capture> => {
     if (status === "blocked") return { ok: false, message: CAMERA_MESSAGES.blocked };
