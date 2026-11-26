@@ -4,7 +4,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "wouter";
 import { useQuery } from "@tanstack/react-query";
-import { ArrowLeft, FileText, Loader2, MailWarning, Send, X } from "lucide-react";
+import { ArrowLeft, Download, FileText, Loader2, MailWarning, Send, X } from "lucide-react";
 import { api, errorMessage } from "@/lib/api";
 import { useApp } from "@/context/AppData";
 import { useToast } from "@/hooks/use-toast";
@@ -46,12 +46,14 @@ export function inertLinks(html: string): string {
   return /<head[^>]*>/i.test(html) ? html.replace(/<head[^>]*>/i, (m) => `${m}${css}`) : `${css}${html}`;
 }
 
-export function ShareDialog({ id, open, onOpenChange, makePdf }: {
+export function ShareDialog({ id, open, onOpenChange, makePdf, onDownload }: {
   id: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   /** Builds one PDF in the browser (the same files as Export). */
   makePdf: (kind: ReportKind) => Promise<ArrayBuffer>;
+  /** Download one PDF, the same as Export (offered when email isn't set up). */
+  onDownload?: (kind: ReportKind) => void | Promise<void>;
 }) {
   const app = useApp();
   const { toast } = useToast();
@@ -109,19 +111,50 @@ export function ShareDialog({ id, open, onOpenChange, makePdf }: {
     } finally { setBusy(null); }
   };
 
+  const downloadAll = async () => {
+    if (!onDownload) return;
+    setBusy("preview");
+    try {
+      for (const r of REPORTS) if (kinds.includes(r.kind)) await onDownload(r.kind);
+      toast({ title: kinds.length === 1 ? "PDF downloaded" : `${kinds.length} PDFs downloaded`, description: "Check your Downloads folder, then attach them to an email." });
+      onOpenChange(false);
+    } finally { setBusy(null); }
+  };
+
   const ready = !!info.data?.emailReady;
   return (
     <Dialog open={open} onOpenChange={(o) => !busy && onOpenChange(o)}>
       <DialogContent className={preview ? "max-w-2xl" : "max-w-md"}>
         <DialogHeader>
           <DialogTitle>{preview ? "Check and send" : "Email payroll PDFs"}</DialogTitle>
-          <DialogDescription>{preview ? "This is exactly what will be sent. Nothing has been sent yet." : "Pick the reports to attach. You'll see a preview before anything is sent."}</DialogDescription>
+          <DialogDescription>{preview ? "This is exactly what will be sent. Nothing has been sent yet." : info.data && !info.data.emailReady ? "Send the payroll PDFs to your accountant or anyone else." : "Pick the reports to attach. You'll see a preview before anything is sent."}</DialogDescription>
         </DialogHeader>
 
         {!info.data ? (
           <div className="flex justify-center py-8"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>
         ) : !info.data.emailReady ? (
-          <p className="flex items-start gap-2 text-[13px] text-muted-foreground"><MailWarning className="mt-0.5 h-4 w-4 shrink-0" /><span>Email isn't set up yet. <Link href="/settings/email" className="text-primary hover:underline">Set up email</Link></span></p>
+          // Not a dead end: say what's missing and who it would go to, and offer the files to download instead.
+          <div className="space-y-3 text-[13px]" data-testid="share-no-email">
+            <p className="flex items-start gap-2 rounded-xl bg-warning-soft px-3 py-2.5 text-foreground"><MailWarning className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
+              <span><span className="font-medium">Email isn't set up yet, so nothing can be sent.</span> Setting it up needs your Google account, or your email provider's SMTP details (server, user name and password).</span>
+            </p>
+            <p className="text-muted-foreground" data-testid="share-no-email-recipients">
+              {info.data.accountants.length
+                ? <>Once it's set up, you can send to {info.data.accountants.map((a) => a.name).join(", ")}{withEmail.length < info.data.accountants.length ? " (accountants need an email address on their user)" : ""}, or to any address you type.</>
+                : <>Once it's set up, you can send to any address you type. No accountant has access yet: add one in <Link href="/settings/users" className="text-primary hover:underline">Settings → Users</Link>.</>}
+            </p>
+            {onDownload && (
+              <fieldset className="space-y-2">
+                <legend className="mb-1.5 font-medium">Or download the PDFs and send them yourself</legend>
+                {REPORTS.map((r) => (
+                  <label key={r.kind} className="flex items-start gap-2.5">
+                    <Checkbox className="mt-0.5" checked={kinds.includes(r.kind)} onCheckedChange={(v) => setKinds(toggle(kinds, r.kind, v === true))} data-testid={`checkbox-download-${r.kind}`} />
+                    <span>{r.label} <span className="block text-xs text-muted-foreground">{r.hint}</span></span>
+                  </label>
+                ))}
+              </fieldset>
+            )}
+          </div>
         ) : preview ? (
           <div className="min-w-0 space-y-3 text-[13px]" data-testid="share-preview">
             <dl className="grid min-w-0 grid-cols-[4.75rem_minmax(0,1fr)] gap-x-3 gap-y-1 rounded-xl border border-border/80 px-3 py-2.5 sm:grid-cols-[5.5rem_minmax(0,1fr)]">
@@ -196,6 +229,13 @@ export function ShareDialog({ id, open, onOpenChange, makePdf }: {
             <>
               <Button type="button" variant="outline" onClick={() => setPreview(null)} disabled={!!busy}><ArrowLeft />Back</Button>
               <Button onClick={() => void send()} disabled={!!busy} data-testid="button-share-send">{busy === "send" ? <Loader2 className="animate-spin" /> : <Send />}Send email</Button>
+            </>
+          ) : info.data && !ready ? (
+            <>
+              <Button type="button" variant="outline" asChild><Link href="/settings/email" data-testid="button-share-setup-email">Set up email</Link></Button>
+              {onDownload && (
+                <Button onClick={() => void downloadAll()} disabled={!!busy || !kinds.length} data-testid="button-share-download">{busy ? <Loader2 className="animate-spin" /> : <Download />}Download instead</Button>
+              )}
             </>
           ) : (
             <>

@@ -178,6 +178,9 @@ export function registerPublishRoutes(app: Express) {
     if (row.meta_json?.deletedAt) return res.status(410).json({ error: "This timesheet is in the Trash." });
     if (!isFinalRow(row)) return res.status(409).json({ error: "Finalize the timesheet before publishing it." });
     const siteId = row.site_id ?? (await settings.defaultSiteId());
+    // Publishing only makes the payroll visible to accountants: with none for this location it would
+    // do nothing but report "Published to your accountant".
+    if (!(await recipientsFor(siteId)).length) return res.status(409).json({ error: "No accountant has access to this location yet. Add one in Settings → Users, then publish.", code: "no-accountant" });
     const byName = user.displayName || user.username;
     const already = !!(await getPublishedMap())[id];
     const rec: PublishRecord = { at: new Date().toISOString(), byId: user.id, byName, email: null };

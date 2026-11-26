@@ -360,6 +360,9 @@ export function registerPortalRoutes(app: Express) {
       shifts: publishedShiftsFor(withFlag, me),
       timeOff: approvedTimeOffFor(timeOff, me, today, to),
       unpublishedWeeks: weeks.filter((w) => !w.publishedAt).map((w) => w.weekStart),
+      // So a day in a week that isn't out yet reads "Not out yet", not "Off".
+      publishedWeeks: weeks.filter((w) => !!w.publishedAt).map((w) => w.weekStart),
+      weekStartsOn: site.rules.weekStartsOn,
     });
   }));
 

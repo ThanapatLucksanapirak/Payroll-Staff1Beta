@@ -1,7 +1,7 @@
 // Employee directory for the time clock, one per location. Stored in the
 // app_settings key/value table so it works on SQLite and Supabase alike.
 import { parsePatch } from "@shared/patch";
-import { createCipheriv, createDecipheriv, randomBytes, randomUUID, scrypt as nodeScrypt, timingSafeEqual } from "node:crypto";
+import { createCipheriv, createDecipheriv, randomBytes, randomInt, randomUUID, scrypt as nodeScrypt, timingSafeEqual } from "node:crypto";
 import { promisify } from "node:util";
 import type { Express, NextFunction, Request, Response } from "express";
 import { z } from "zod";
@@ -286,6 +286,24 @@ export function registerEmployeeRoutes(app: Express) {
     res.setHeader("Cache-Control", "no-store");
     res.json({ pins });
   }));
+  // A 4-digit PIN for every active employee without one, shown once in the reply (the same as
+  // typing one in each person's edit form). Skips easy guesses like 1234 or 1111.
+  app.post("/api/sites/:siteId/employee-pins/generate", h(async (req, res) => {
+    const site = await siteOr404(req, res); if (!site) return;
+    const todo = (await listEmployees(site.id)).filter((e) => e.active && !e.pinHash);
+    const out: { id: string; name: string; pin: string }[] = [];
+    for (const e of todo) {
+      for (let tries = 0; tries < 40; tries++) {
+        const pin = String(randomInt(0, 10_000)).padStart(4, "0");
+        if (weakPin(pin)) continue;
+        try { await updateEmployee(site.id, e.id, { pin }); out.push({ id: e.id, name: e.name, pin }); break; }
+        catch (err: any) { if (err?.status !== 409) throw err; }
+      }
+    }
+    if (out.length) audit({ ...actorOf(req, res), action: "employee.pins-generated", target: `site:${site.id}`, detail: `${out.length} PIN(s) at ${site.name}` });
+    res.setHeader("Cache-Control", "no-store");
+    res.json({ pins: out, skipped: todo.length - out.length });
+  }));
   app.get("/api/sites/:siteId/employee-suggestions", h(async (req, res) => {
     const site = await siteOr404(req, res); if (!site) return;
     res.json(await nameSuggestions(site.id));
@@ -300,4 +318,12 @@ export function registerEmployeeRoutes(app: Express) {
     }
     res.json({ created, skipped });
   }));
+}
+
+/** PINs anyone would try first: all one digit, or a straight run up or down. */
+export function weakPin(pin: string): boolean {
+  if (/^(\d)\1+$/.test(pin)) return true;
+  const d = [...pin].map(Number);
+  const step = d[1] - d[0];
+  return Math.abs(step) === 1 && d.every((x, i) => i === 0 || x - d[i - 1] === step);
 }

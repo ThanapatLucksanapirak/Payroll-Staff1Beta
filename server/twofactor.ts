@@ -413,7 +413,7 @@ async function sessionDays() {
 }
 
 async function issuer() {
-  try { return (await settings.getPrefs()).appName || "Payroll Admin"; } catch { return "Payroll Admin"; }
+  try { return (await settings.getPrefs()).appName || "Shijiri Payroll"; } catch { return "Shijiri Payroll"; }
 }
 
 /** Check the account password before a sensitive change (rate limited like sign-in). */

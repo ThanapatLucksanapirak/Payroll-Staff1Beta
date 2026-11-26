@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { AlertTriangle, CheckCircle2, ChevronRight, Coffee, Download, Loader2, Timer } from "lucide-react";
 import { addDays, todayISO } from "@shared/dates";
+import { weekStartOf } from "@shared/schedule";
 import type { PortalDay } from "@shared/portal";
 import { prefsSchema, siteSchema } from "@shared/schema";
 import { downloadBlob, safeFilename } from "@/lib/doc";
@@ -165,17 +166,21 @@ export function PayTab({ me }: { me: Me }) {
   const q = useLoad<StatementItem[]>("/api/portal/statements");
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [done, setDone] = useState<string | null>(null);
 
   const download = async (s: StatementItem) => {
     setBusy(s.id);
     setError(null);
+    setDone(null);
     try {
       const data = await call<StatementData>("GET", `/api/portal/statements/${encodeURIComponent(s.id)}`);
       const { buildPayStatementsPdf } = await import("@/lib/pdf/statements");
       const prefs = prefsSchema.parse({ ...data.prefs, pdfOrientation: "portrait" });
       const site = siteSchema.parse({ id: data.site.id, name: data.site.name, address: data.site.address ?? "" });
-      const pdf = buildPayStatementsPdf({ result: data.result, prefs, site, title: data.title || "Pay statement", ytd: data.ytd, ytdYear: data.ytdYear ?? undefined });
+      const pdf = buildPayStatementsPdf({ result: data.result, prefs, site, title: data.title && !/\.(csv|tsv|txt|xlsx?|pdf)$/i.test(data.title) ? data.title : `Pay statement ${range(s.periodStart, s.periodEnd)}`, ytd: data.ytd, ytdYear: data.ytdYear ?? undefined });
       downloadBlob(pdf.output("arraybuffer"), `${safeFilename(`${me.employee.name} pay statement ${s.periodStart}`)}.pdf`, "application/pdf");
+      // A phone gives little sign a file arrived, so say where it went.
+      setDone(`Downloaded your pay statement for ${range(s.periodStart, s.periodEnd)}. Check your Files or Downloads.`);
     } catch (e) {
       setError(e instanceof PortalError ? e.message : "Couldn't make the PDF. Try again.");
     } finally {
@@ -187,6 +192,7 @@ export function PayTab({ me }: { me: Me }) {
     <section data-testid="portal-pay">
       <Title sub="Closed pay periods">My pay</Title>
       {error && <p role="alert" className="mb-4 rounded-xl bg-danger-soft px-5 py-3.5 text-[15px] text-danger">{error}</p>}
+      {done && <p role="status" className="mb-4 flex items-start gap-2 rounded-xl bg-success-soft px-5 py-3.5 text-[15px] text-success" data-testid="portal-statement-done"><CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />{done}</p>}
       {q.error && !q.data ? <ErrorBox text={q.error} retry={q.reload} /> : !q.data ? <Loading /> : !q.data.length ? (
         <Empty text="No pay statements yet. They show up here once a pay period is closed." />
       ) : (
@@ -196,7 +202,7 @@ export function PayTab({ me }: { me: Me }) {
               <button type="button" onClick={() => download(s)} disabled={!!busy} className="portal-tap flex w-full items-center gap-4 px-5 py-4 text-left transition-colors hover:bg-accent/60 active:bg-accent disabled:opacity-60 disabled:hover:bg-transparent" data-testid={`portal-statement-${s.id}`}>
                 <span className="min-w-0 flex-1">
                   <span className="block text-[18px] font-semibold">{range(s.periodStart, s.periodEnd)}</span>
-                  {s.label && s.label !== range(s.periodStart, s.periodEnd) && <span className="block truncate text-[14px] text-muted-foreground">{s.label}</span>}
+                  {s.label && s.label !== range(s.periodStart, s.periodEnd) && !/\.(csv|tsv|txt|xlsx?|pdf)$/i.test(s.label) && <span className="block truncate text-[14px] text-muted-foreground">{s.label}</span>}
                 </span>
                 <span className="shrink-0 text-right">
                   <span className="tabular block text-[18px] font-semibold">{money(s.totalPay, me)}</span>
@@ -219,10 +225,16 @@ export function ScheduleTab({ me }: { me: Me }) {
   const d = q.data;
   const days = d ? Array.from({ length: 14 }, (_, i) => addDays(d.from, i)) : [];
   const today = todayISO(me.site.timezone);
+  // Older servers don't send which weeks are out: then every empty day reads "Off" as before.
+  const out = d?.publishedWeeks ? new Set(d.publishedWeeks) : null;
+  const isOut = (date: string) => !out || out.has(weekStartOf(date, d?.weekStartsOn ?? 1));
+  const nothingOut = !!d && !!out && out.size === 0 && !d.shifts.length && !d.timeOff.length;
   return (
     <section data-testid="portal-schedule">
       <Title sub="Next 2 weeks">My schedule</Title>
-      {q.error && !d ? <ErrorBox text={q.error} retry={q.reload} /> : !d ? <Loading rows={7} /> : (
+      {q.error && !d ? <ErrorBox text={q.error} retry={q.reload} /> : !d ? <Loading rows={7} /> : nothingOut ? (
+        <Empty text="No schedule published yet. Your shifts show up here once your manager publishes the schedule." />
+      ) : (
         <>
           {d.unpublishedWeeks.length > 0 && (
             <p className={`mb-4 ${NOTE}`}>
@@ -245,7 +257,7 @@ export function ScheduleTab({ me }: { me: Me }) {
                         {(s.station || s.note) && <span className="block text-[14px] text-muted-foreground">{[s.station, s.note].filter(Boolean).join(" · ")}</span>}
                       </span>
                     ))}
-                    {!off && !shifts.length && <span className="block pt-0.5 text-[16px] text-muted-foreground">Off</span>}
+                    {!off && !shifts.length && <span className="block pt-0.5 text-[16px] text-muted-foreground">{isOut(date) ? "Off" : "Not out yet"}</span>}
                   </span>
                 </li>
               );

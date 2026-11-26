@@ -1,6 +1,7 @@
 // Sign-in, first-run setup, own account, user management and the activity log.
 import type { Express, NextFunction, Request, Response } from "express";
 import { z } from "zod";
+import { siteRulesSchema } from "@shared/schema";
 import { dbStatus } from "./db";
 import * as settings from "./settings";
 import { clearSessionCookie, clearSetupCode, currentUser, loginThrottle, recordLogin, requestToken, revokeToken, setSessionCookie, setupCodeMatches } from "./auth";
@@ -48,7 +49,7 @@ async function confirmOwnPassword(req: Request, res: Response, userId: string, p
 
 export function registerAuthRoutes(app: Express) {
   app.get("/api/auth/status", h(async (_req, res) => {
-    let appName = "Payroll Admin";
+    let appName = "Shijiri Payroll";
     try { appName = (await settings.getPrefs()).appName; } catch { /* db down */ }
     const user = currentUser(res);
     res.json({ setupRequired: await setupRequired().catch(() => false), authenticated: !!user, appName, db: dbStatus(), user: user ? toPublic(user) : null });
@@ -87,6 +88,8 @@ export function registerAuthRoutes(app: Express) {
       displayName: displayNameSchema.optional(),
       password: passwordSchema,
       setupCode: z.string().max(100).default(""),
+      // The browser's time zone, so the first location doesn't start on New York time.
+      timezone: z.string().max(64).optional(),
     }).parse(req.body);
     if (!setupCodeMatches(body.setupCode)) {
       recordLogin(ip, false);
@@ -95,6 +98,12 @@ export function registerAuthRoutes(app: Express) {
     if (!(await setupRequired())) return res.status(409).json({ error: "This app is already set up. Sign in instead." });
     const user = await createUser(null, { username: body.username, displayName: body.displayName, password: body.password, role: "owner" }, { onlyIfNoUsers: true });
     clearSetupCode();
+    if (body.timezone && validTimeZone(body.timezone)) {
+      const fallback = siteRulesSchema.parse({}).timezone;
+      for (const site of await settings.getSites()) {
+        if (site.rules.timezone === fallback && site.rules.timezone !== body.timezone) await settings.updateSite(site.id, { rules: { ...site.rules, timezone: body.timezone } });
+      }
+    }
     const { expiresAt } = setSessionCookie(req, res, user, { days: 30, remember: true });
     audit({ ...actorOf(req, res, user), action: "user.create", target: `user:${user.id}`, detail: "first owner (setup)" });
     res.json({ user: toPublic(user), expiresAt });
@@ -222,4 +231,8 @@ export function registerAuthRoutes(app: Express) {
     }).parse(req.query);
     res.json(await queryAudit(q));
   }));
+}
+
+function validTimeZone(tz: string): boolean {
+  try { new Intl.DateTimeFormat("en-US", { timeZone: tz }); return true; } catch { return false; }
 }

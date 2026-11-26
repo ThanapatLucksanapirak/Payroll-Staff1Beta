@@ -26,7 +26,7 @@ type Screen =
   | { k: "pin"; employee?: RosterEmployee; error?: string; shake?: number }
   | ({ k: "actions"; error?: string } & Session)
   | ({ k: "station"; type: PunchType; photo: string | null | undefined } & Session)
-  | ({ k: "guard"; message: string; question: string | null; suggest: PunchType | null; error?: string } & Session)
+  | ({ k: "guard"; message: string; question: string | null; suggest: PunchType | null; also?: PunchType; error?: string } & Session)
   | ({ k: "fix"; error?: string } & Session)
   | { k: "notes"; notes: KioskNote[]; i: number; auth: { ticket?: string; pin: string; employeeId: string }; confirm: Confirm }
   | { k: "done"; c: Confirm }
@@ -199,11 +199,15 @@ export function KioskApp() {
   };
 
   /** An action button was tapped (on the action screen or the guard's suggestion). */
-  const choose = (type: PunchType, sess: Session) => {
+  const choose = (type: PunchType, sess: Session, sure = false) => {
     if (busy) return;
     const check = checkAction(sess.who.status, type);
     if (!check.ok) {
       return setScreen({ ...only(sess), k: "guard", message: check.message!, question: check.question ?? null, suggest: check.suggest ?? null });
+    }
+    // Clocking out from a break ends the shift too: easy to tap by mistake when you meant End break.
+    if (type === "out" && sess.who.status === "break" && !sure) {
+      return setScreen({ ...only(sess), k: "guard", message: "You're on a break.", question: "End your break, or clock out for the day?", suggest: "break_end", also: "out" });
     }
     if (!options.photo) {
       if (type === "in" && options.stations.length) return setScreen({ ...only(sess), k: "station", type, photo: undefined });
@@ -284,7 +288,7 @@ export function KioskApp() {
           <Centered>
             <BigClock tz={tz} />
             <p className="mt-10 text-2xl font-medium text-stone-800">The time clock is turned off for this location.</p>
-            <p className="mt-2 max-w-xl text-lg text-stone-700">A manager can turn it on in Settings → Locations → Time clock.</p>
+            <p className="mt-2 max-w-xl text-lg text-stone-700">A manager can turn it on in Settings → Locations &amp; rules → Time clock.</p>
           </Centered>
         ) : screen.k === "home" ? (
           loginMode === "pin" ? (
@@ -302,7 +306,7 @@ export function KioskApp() {
         ) : screen.k === "station" ? (
           <StationScreen name={screen.who.employee.name} stations={options.stations} idleMs={idleMs} onPick={(s) => { if (!busy) void send(screen.type, screen, screen.photo, s); }} onCancel={home} />
         ) : screen.k === "guard" ? (
-          <GuardScreen name={screen.who.employee.name} message={screen.message} question={screen.question} suggest={screen.suggest} busy={busy} error={screen.error} idleMs={idleMs} onSuggest={(t) => choose(t, screen)} onCancel={home} />
+          <GuardScreen name={screen.who.employee.name} message={screen.message} question={screen.question} suggest={screen.suggest} also={screen.also} busy={busy} error={screen.error} idleMs={idleMs} onSuggest={(t) => choose(t, screen, true)} onCancel={home} />
         ) : screen.k === "fix" ? (
           <FixRequestScreen tz={tz} name={screen.who.employee.name} online={online} busy={busy} error={screen.error} idleMs={idleMs} onSubmit={(v) => void sendFix(screen, v)} onCancel={home} />
         ) : screen.k === "notes" ? (
@@ -331,7 +335,7 @@ export function KioskApp() {
           onForget={() => {
             queue.save([]);
             closeInfo();
-            unpair("This tablet forgot its pairing, but the device may still be listed in the admin app. Remove it in Settings → Locations → Time clock.");
+            unpair("This tablet forgot its pairing, but the device may still be listed in the admin app. Remove it in Settings → Locations & rules → Time clock.");
           }}
         />
       )}
@@ -350,6 +354,14 @@ function useNow(intervalMs = 1000) {
   return now;
 }
 
+/** The location's zone, named only when this tablet is set to a different one (so the times don't look wrong). */
+function otherZone(tz: string): string | null {
+  try {
+    if (Intl.DateTimeFormat().resolvedOptions().timeZone === tz) return null;
+    return tz.split("/").pop()!.replace(/_/g, " ");
+  } catch { return null; }
+}
+
 function BigClock({ tz, compact }: { tz: string; compact?: boolean }) {
   const now = useNow();
   const parts = fmt(tz, { hour: "numeric", minute: "2-digit" }).formatToParts(new Date(now));
@@ -361,7 +373,7 @@ function BigClock({ tz, compact }: { tz: string; compact?: boolean }) {
       <div className={`tabular font-light tracking-tight text-stone-950 ${compact ? "text-6xl sm:text-7xl" : "kiosk-clock-big text-7xl sm:text-8xl lg:text-9xl"}`} data-testid="kiosk-clock">
         {main}{period && <span className={`ml-2 font-normal text-stone-700 ${compact ? "text-2xl" : "text-3xl sm:text-4xl"}`}>{period}</span>}
       </div>
-      <div className={`kiosk-date mt-2 font-medium text-stone-800 ${compact ? "text-lg" : "text-xl sm:text-2xl"}`}>{date}</div>
+      <div className={`kiosk-date mt-2 font-medium text-stone-800 ${compact ? "text-lg" : "text-xl sm:text-2xl"}`}>{date}{otherZone(tz) && <span className="whitespace-nowrap text-base font-normal text-stone-600" data-testid="kiosk-timezone"> · {otherZone(tz)} time</span>}</div>
     </div>
   );
 }
@@ -459,7 +471,7 @@ function PinScreen({ tz, employee, heading, error, shake, maxLength = 6, idleMs,
         ) : (
           <>
             <BigClock tz={tz} />
-            <p className="kiosk-prompt mt-4 text-xl font-medium text-stone-700 [text-wrap:balance] sm:mt-6 sm:text-2xl lg:mt-10">Enter your PIN, then tap <Check className="inline h-6 w-6 align-[-0.15em]" strokeWidth={2.75} aria-label="the check mark" /> to clock in or out</p>
+            <p className="kiosk-prompt mt-4 text-xl font-medium text-stone-700 [text-wrap:balance] sm:mt-6 sm:text-2xl lg:mt-10">Enter your PIN, then tap <Check className="inline h-6 w-6 align-[-0.15em]" strokeWidth={2.75} aria-label="the check mark" /><span className="hidden sm:inline"> to clock in or out</span></p>
           </>
         )}
       </div>
@@ -559,7 +571,7 @@ function ActionsScreen({ tz, who, offline, error, busy, idleMs, onPunch, onCance
   const statusLine = who.status === "out" ? "You're not clocked in" : `${STATUS_TEXT[who.status]} since ${who.since ? timeOf(who.since, tz) : "—"}`;
   const breakDue = !offline && who.status === "in" && !!who.breakDue;
   return (
-    <div className="flex flex-1 flex-col items-center justify-center px-6 pb-10 text-center kiosk-fade-up">
+    <div className="kiosk-actions flex flex-1 flex-col items-center justify-center px-6 pb-10 text-center kiosk-fade-up">
       <Avatar name={who.employee.name} big status={who.status} />
       <h1 className="mt-5 max-w-full text-4xl font-display font-normal tracking-[-0.01em] text-stone-950 [overflow-wrap:anywhere] sm:text-5xl" data-testid="kiosk-employee-name">{who.employee.name}</h1>
       <p className="mt-2 text-2xl text-stone-700">
@@ -605,7 +617,7 @@ function PairScreen({ notice, onPaired }: { notice: string | null; onPaired: () 
       {apk && <div className="fixed right-4 top-3 z-10"><AndroidAppButton url={apk} /></div>}
       <div className="w-full max-w-md kiosk-fade-up">
         <h1 className="text-4xl font-display font-normal tracking-[-0.01em] text-stone-950">Set up this time clock</h1>
-        <p className="mt-3 text-lg text-stone-700">In the admin app, open <b className="font-semibold text-stone-900">Settings → Locations → Time clock</b>, add a device, then open its pairing link here or type its code.</p>
+        <p className="mt-3 text-lg text-stone-700">In the admin app, open <b className="font-semibold text-stone-900">Settings → Locations &amp; rules → Time clock</b>, add a device, then open its pairing link here or type its code.</p>
         {notice && <p className="mt-4 rounded-2xl bg-amber-50 px-4 py-3 text-amber-950 ring-2 ring-amber-200">{notice}</p>}
         <form className="mt-8 space-y-4" onSubmit={(e) => { e.preventDefault(); if (code.trim().length >= 8) void submit(); }}>
           <input
@@ -676,12 +688,12 @@ function InfoSheet({ state, options, pending, online, canUnpair, guarded, idleMs
           <div className="flex justify-between"><dt className="text-stone-600">Back to start after</dt><dd>{options.idleSeconds} seconds</dd></div>
           {options.stations.length > 0 && <div className="flex justify-between gap-4"><dt className="text-stone-600">Stations</dt><dd className="truncate">{options.stations.join(", ")}</dd></div>}
         </dl>
-        <p className="mt-3 text-base text-stone-600">These options are changed in the admin app: Settings → Locations → Time clock.</p>
+        <p className="mt-3 text-base text-stone-600">These options are changed in the admin app: Settings → Locations &amp; rules → Time clock.</p>
         <div className="mt-6 grid gap-3">
           {pending > 0 && <button onClick={onSync} className="kiosk-tap kiosk-primary rounded-2xl text-lg font-semibold transition active:scale-[0.99]">Send now</button>}
           {!guarded && (
             <p className="rounded-2xl bg-amber-50 px-4 py-3 text-base font-medium text-amber-950 ring-2 ring-amber-300" role="status" data-testid="kiosk-no-manager-pin">
-              No manager PIN is set, so anyone can open this screen and leave full screen. Unpairing is only possible from the admin app until a PIN is set: Settings → Locations → Time clock.
+              No manager PIN is set, so anyone can open this screen and leave full screen. Unpairing is only possible from the admin app until a PIN is set: Settings → Locations &amp; rules → Time clock.
             </p>
           )}
           {guarded && !canUnpair && (
@@ -693,7 +705,7 @@ function InfoSheet({ state, options, pending, online, canUnpair, guarded, idleMs
           {unpairError && (
             <div className="space-y-2 rounded-2xl bg-red-50 px-4 py-3 text-base text-red-900 ring-2 ring-red-200" role="alert">
               <p className="font-medium">{unpairError}</p>
-              <p>This tablet is still paired. You can try again, or forget the pairing on this tablet only; then remove the device in the admin app (Settings → Locations → Time clock) so its old pairing stops working.</p>
+              <p>This tablet is still paired. You can try again, or forget the pairing on this tablet only; then remove the device in the admin app (Settings → Locations &amp; rules → Time clock) so its old pairing stops working.</p>
               <button onClick={() => { if (window.confirm("Forget the pairing on this tablet only? Punches not yet sent will be lost.")) onForget(); }} className="kiosk-tap h-12 w-full rounded-xl bg-white font-semibold text-red-700 ring-2 ring-red-200" data-testid="kiosk-forget-anyway">
                 Forget on this device anyway
               </button>
