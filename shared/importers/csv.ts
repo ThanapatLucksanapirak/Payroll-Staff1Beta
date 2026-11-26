@@ -18,8 +18,8 @@ const CANDIDATES: Record<CsvField, string[]> = {
   start: ["clockin time", "clock in time", "clock-in time", "clock in", "time in", "in time", "start time", "punch in", "start", "in"],
   endDate: ["clockout date", "clock out date", "clock-out date", "out date", "end date", "punch out date"],
   end: ["clockout time", "clock out time", "clock-out time", "clock out", "time out", "out time", "end time", "punch out", "end", "out"],
-  breakMinutes: ["break minutes", "unpaid break minutes", "break (min)", "break mins", "breaks"],
-  breakHours: ["unpaid break time", "unpaid break hours", "break hours", "break duration"],
+  breakMinutes: ["break minutes", "unpaid break minutes", "break (minutes)", "break (mins)", "break (min)", "break mins", "break min", "unpaid break (minutes)", "breaks"],
+  breakHours: ["unpaid break time", "unpaid break hours", "break hours", "break (hours)", "break (hrs)", "break hrs", "break duration"],
   role: ["job title", "job", "role", "position", "wage title", "department"],
 };
 

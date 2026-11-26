@@ -12,6 +12,15 @@ few short bullets written for the people who use the app, not for developers.
 - No face, no punch: the kiosk asks the person to look at the camera and try again. If it still can't see a face, a manager can add the punch on Live.
 - The camera view on the time clock is much bigger and sits at the top of the screen, with a green or red frame showing whether your face is in view.
 
+## 2026-11-26 · Clearer first steps, part 2 (#29)
+- Home: a new install shows the five steps of a first payroll, in order. The app is called Shijiri Payroll everywhere.
+- Timesheets: after an upload, the Payroll tab says who still needs a pay rate, with a button to the Rates tab. The pay card says plainly whether amounts are take-home (no tax taken) or before tax. A CSV upload is named after its dates, and "Break (minutes)" columns are read.
+- On phones, pay rates are one card per person with only the rate that applies.
+- Email PDFs without email set up says what's missing and offers Download instead. Publish waits until an accountant exists, and the banner names who it was published to.
+- Employees: "Give everyone a PIN" makes PINs for everyone without one and shows them once. New timesheets offer to add people who aren't on the list yet. The staff portal switch and link are on the Employees page too.
+- Staff portal: the schedule says "No schedule published yet" or "Not out yet" instead of "Off". My pay rows are named by dates and a download says where the file went. Pay statements say "Pay statement for (name)" instead of "for internal use only".
+- Time clock: tapping Clock out while on a break asks whether you meant End break. The setup screen uses your device's time zone, and the clock names the location's time zone if the tablet is set differently. Setting paths now read Settings → Locations & rules → Time clock.
+
 ## 2026-11-26 · Clearer first steps (#28)
 - Staff portal: My hours now shows hours from your finalized pay statement when they came from Square or a spreadsheet, instead of "No hours" next to your pay. Each row under My pay shows the hours too.
 - Pay rates: new people start on Hourly (or Day rate if most of your saved staff use it), so the total isn't $0.00 with blank boxes. A "Set everyone to…" menu switches everyone at once, and Net and the saved-rates buttons are explained.

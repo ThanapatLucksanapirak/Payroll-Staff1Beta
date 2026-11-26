@@ -120,6 +120,8 @@ test("pay statements: one page per included employee, totals and details", () =>
     assert.ok(text.includes(s), `missing "${s}"`);
   }
   assert.ok(!text.includes("Excluded Person"));
+  assert.ok(text.includes("Pay statement for Maria Santos"), "statements say whose they are in the footer");
+  assert.ok(!text.includes("for internal use only"), "not the internal-use footer staff found confusing");
 });
 
 test("earnings lines reconcile to total pay", () => {

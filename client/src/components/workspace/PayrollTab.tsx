@@ -20,7 +20,7 @@ import { EmployeeExtras } from "@/components/pay/ExtrasTab";
 import { Field, NumberInput, TimeInput } from "./fields";
 import type { WsProps } from "./types";
 
-export function PayrollTab(p: WsProps) {
+export function PayrollTab({ onRates, ...p }: WsProps & { onRates?: () => void }) {
   const app = useApp();
   const { result } = p;
   const [q, setQ] = useState("");
@@ -43,11 +43,16 @@ export function PayrollTab(p: WsProps) {
     ? `${dayRate.reduce((n, e) => n + e.fullDays, 0)} full · ${dayRate.reduce((n, e) => n + e.halfDays, 0)} half days${dayRate.length < paid.length ? ` · ${paid.length - dayRate.length} hourly` : ""}${flagged}`
     : `${daysWorked} day${daysWorked === 1 ? "" : "s"} worked${flagged}`;
   // Net-pay staff are quoted take-home; gross-pay staff before tax. Name the card after what is actually in the run.
-  const payKpi = !t.netPay
-    ? { label: "Gross pay", value: app.money(t.grossPay), sub: "Everyone is paid gross" }
+  // Net: no tax or deductions are taken, the amount shown is what you pay. Gross: before tax.
+  const payKpi = !t.netPay && !t.grossPay
+    ? { label: "Pay", value: app.money(0), sub: "Set pay rates to see totals" }
+    : !t.netPay
+    ? { label: "Before tax (gross)", value: app.money(t.grossPay), sub: "Tax and deductions still to come off" }
     : !t.grossPay
-      ? { label: "Net pay", value: app.money(t.netPay), sub: "Everyone is paid net" }
-      : { label: "Gross / net", value: app.money(t.grossPay), sub: `Net ${app.money(t.netPay)}` };
+      ? { label: "Take-home (net)", value: app.money(t.netPay), sub: "No tax taken: this is what you pay" }
+      : { label: "Gross / net", value: app.money(t.grossPay), sub: `Before tax · plus ${app.money(t.netPay)} take-home` };
+  // The next step after an upload: people with shifts but no rate yet.
+  const noRate = paid.filter((e) => e.totalPay === 0 && e.days.some((d) => d.punches > 0 && !d.cancelled) && (e.payBasis === "hourly" ? e.hourlyRate <= 0 : e.fullDayRate <= 0 && e.halfDayRate <= 0));
 
   return (
     <div className="space-y-4">
@@ -57,6 +62,14 @@ export function PayrollTab(p: WsProps) {
         <Kpi label={payKpi.label} value={payKpi.value} sub={payKpi.sub} />
         <Kpi label="Hours" value={`${t.hours} h`} sub={[t.overtimeHours ? `${t.overtimeHours} h overtime` : "", t.bonuses ? `Bonuses ${app.money(t.bonuses)}` : ""].filter(Boolean).join(" · ") || "No overtime or bonuses"} />
       </div>
+
+      {noRate.length > 0 && !p.locked && (
+        <div className="flex flex-wrap items-center gap-3 rounded-xl bg-info-soft px-4 py-3 text-[13px]" data-testid="banner-set-rates">
+          <Info className="h-4 w-4 shrink-0 text-info" />
+          <span className="min-w-0 flex-1"><span className="font-medium">Next: set pay rates for {noRate.length === 1 ? noRate[0].name : `${noRate.length} people`}.</span> Until then they're paid {app.money(0)}.</span>
+          {onRates && <Button size="sm" onClick={onRates} data-testid="button-go-rates">Set pay rates</Button>}
+        </div>
+      )}
 
       <PayoutStrip cash={t.cash} bank={t.bank} check={t.check} people={result.employees.filter((e) => !e.excluded)} />
 

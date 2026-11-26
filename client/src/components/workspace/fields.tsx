@@ -73,7 +73,7 @@ export function Section({ title, description, actions, children, className, body
           <h2 className="text-[15px] font-semibold tracking-tight">{title}</h2>
           {description && <p className="mt-0.5 max-w-2xl text-[13px] leading-snug text-muted-foreground">{description}</p>}
         </div>
-        {actions && <div className="flex shrink-0 flex-wrap gap-2">{actions}</div>}
+        {actions && <div className="flex min-w-0 max-w-full shrink-0 flex-wrap gap-2">{actions}</div>}
       </header>
       <div className={cn("px-5 pb-5 pt-3", bodyClassName)}>{children}</div>
     </section>

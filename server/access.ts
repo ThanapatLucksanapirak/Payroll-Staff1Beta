@@ -109,6 +109,7 @@ const POLICY: Rule[] = [
   { method: "DELETE", path: /^\/sites\/[^/]+\/employees\/[^/]+$/, need: "admin", perm: "employees.manage", sites: fromParam },
   { method: "GET", path: /^\/sites\/[^/]+\/employee-suggestions$/, need: "admin", perm: "employees.manage", sites: fromParam },
   { method: "POST", path: /^\/sites\/[^/]+\/employee-pins\/reveal$/, need: "admin", sites: fromParam }, // owner only (checked in the route)
+  { method: "POST", path: /^\/sites\/[^/]+\/employee-pins\/generate$/, need: "admin", perm: "employees.manage", sites: fromParam },
   // Two-factor sign-in for your own account
   { method: "GET", path: /^\/auth\/2fa$/, need: "user" },
   { method: "POST", path: /^\/auth\/2fa\/(setup|enable|disable|recovery-codes|forget-devices|email\/setup|email\/enable)$/, need: "user" },

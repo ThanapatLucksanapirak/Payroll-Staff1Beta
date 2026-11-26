@@ -220,7 +220,7 @@ export function WorkspacePage({ id }: { id: string }) {
           </div>
         )}
         {doc.status === "final" && !ts.dirty && <PublishPanel id={id} title={title} />}
-        {canShare && <ShareDialog id={id} open={sharing} onOpenChange={setSharing} makePdf={makePdf} />}
+        {canShare && <ShareDialog id={id} open={sharing} onOpenChange={setSharing} makePdf={makePdf} onDownload={exportPdf} />}
         {ts.saveState === "error" && ts.saveError && /finalized|locked/i.test(ts.saveError) && (
           <div className="flex flex-wrap items-center gap-3 rounded-xl bg-warning-soft px-4 py-3 text-[13px]" role="alert">
             <Lock className="h-4 w-4 shrink-0 text-warning" />
@@ -241,7 +241,7 @@ export function WorkspacePage({ id }: { id: string }) {
             <TabsTrigger value="details" className={tabCls} data-testid="tab-details">Details</TabsTrigger>
           </TabsList>
         </div>
-        <TabsContent value="payroll" className="mt-5"><PayrollTab {...props} /></TabsContent>
+        <TabsContent value="payroll" className="mt-5"><PayrollTab {...props} onRates={() => setTab("rates")} /></TabsContent>
         <TabsContent value="rates" className="mt-5"><RatesTab {...props} /></TabsContent>
         <TabsContent value="shifts" className="mt-5"><ShiftsTab {...props} /></TabsContent>
         <TabsContent value="extras" className="mt-5"><ExtrasTab {...props} pay={pay.settings} editable={!readOnly} resync={paySync.resync} /></TabsContent>

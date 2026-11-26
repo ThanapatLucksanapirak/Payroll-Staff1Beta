@@ -68,10 +68,11 @@ before(async () => {
   base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
 
   const code = (await import("../server/auth")).getSetupCode();
-  const setup = await call("POST", "/api/auth/setup", { username: "owner", password: "correct horse", setupCode: code }, CSRF);
+  const setup = await call("POST", "/api/auth/setup", { username: "owner", password: "correct horse", setupCode: code, timezone: "Asia/Bangkok" }, CSRF);
   admin = cookieOf(setup);
   const boot = await A("GET", "/api/bootstrap");
   siteId = boot.body.sites[0].id;
+  assert.equal(boot.body.sites[0].rules.timezone, "Asia/Bangkok", "setup takes the browser's time zone for the first location");
   assert.equal((await A("PUT", `/api/sites/${siteId}`, { timeSource: "kiosk", rules: { ...boot.body.sites[0].rules, timezone: TZ } })).status, 200);
   site2 = (await A("POST", "/api/sites", { name: "Uptown" })).body.id;
   for (const [name, pin, s] of [["Ana Ruiz", "1234", siteId], ["Ben Lee", "5678", siteId], ["Cara Diaz", "2468", siteId], ["Zoe Uptown", "1234", site2]] as const) {
@@ -292,6 +293,11 @@ test("pay statements: finalized only, my own data only", async () => {
   const draft = await make("Draft", ["Ana Ruiz"], ["2026-03-05"], false);
   const other = await make("Other site", ["Ana Ruiz"], ["2026-03-06"], true, site2);
 
+  // No accountant here: publishing would show nothing to anyone, so the server refuses it.
+  const pub = await A("POST", `/api/timesheets/${both}/publish`, {});
+  assert.equal(pub.status, 409);
+  assert.equal(pub.body.code, "no-accountant");
+
   const ana = await signIn("Ana Ruiz", "1234");
   const list = await P(ana, "GET", "/api/portal/statements");
   assert.equal(list.status, 200);
@@ -361,6 +367,8 @@ test("schedule: published weeks only, my shifts only, approved time off", async 
   assert.equal(before.status, 200);
   assert.deepEqual(before.body.shifts, [], "draft weeks are hidden");
   assert.ok(before.body.unpublishedWeeks.includes(ws));
+  assert.ok(!before.body.publishedWeeks.includes(ws), "so the portal can say 'Not out yet' instead of 'Off'");
+  assert.equal(typeof before.body.weekStartsOn, "number");
   assert.equal((await A("POST", `/api/sites/${siteId}/schedule/week/${ws}/publish`, { publish: true })).status, 200);
   const after = await P(ana, "GET", "/api/portal/schedule");
   assert.equal(after.body.shifts.length, 1);
@@ -368,6 +376,31 @@ test("schedule: published weeks only, my shifts only, approved time off", async 
   assert.equal(after.body.from, today);
   assert.equal(after.body.to, addDays(today, 13));
   assert.ok(!JSON.stringify(after.body).includes("Ben"));
+  assert.ok(after.body.publishedWeeks.includes(ws));
+});
+
+test("Give everyone a PIN: active people without one get a unique, non-obvious PIN once", async () => {
+  const names = ["Pin One", "Pin Two", "Pin Three"];
+  for (const name of names) assert.equal((await A("POST", `/api/sites/${site2}/employees`, { name })).status, 200);
+  const off = await A("POST", `/api/sites/${site2}/employees`, { name: "Pin Inactive", active: false });
+  assert.equal(off.status, 200);
+  const r = await A("POST", `/api/sites/${site2}/employee-pins/generate`, {});
+  assert.equal(r.status, 200, JSON.stringify(r.body));
+  assert.deepEqual(r.body.pins.map((p: any) => p.name).sort(), [...names].sort(), "only active people without a PIN");
+  const pins = r.body.pins.map((p: any) => p.pin);
+  assert.equal(new Set([...pins, "1234"]).size, pins.length + 1, "unique, and not Zoe's 1234");
+  for (const p of pins) {
+    assert.match(p, /^\d{4}$/);
+    assert.ok(!["0000", "1111", "1234", "4321", "0123", "9876"].includes(p));
+  }
+  const list = (await A("GET", `/api/sites/${site2}/employees`)).body;
+  assert.ok(list.filter((e: any) => names.includes(e.name)).every((e: any) => e.hasPin));
+  assert.ok(!list.find((e: any) => e.name === "Pin Inactive").hasPin);
+  assert.deepEqual((await A("POST", `/api/sites/${site2}/employee-pins/generate`, {})).body.pins, [], "nothing left to do");
+  // The PIN works on the portal for its own location.
+  assert.equal((await A("PUT", `/api/sites/${site2}/portal`, { enabled: true })).status, 200);
+  const login = await call("POST", "/api/portal/login", { siteId: site2, name: r.body.pins[0].name, pin: r.body.pins[0].pin }, CSRF);
+  assert.equal(login.status, 200, JSON.stringify(login.body));
 });
 
 test("time off: request, owner approves or declines, cancel only pending", async () => {

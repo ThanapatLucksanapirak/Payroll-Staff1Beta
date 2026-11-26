@@ -71,7 +71,7 @@ export function PublishPanel({ id, title }: { id: string; title: string }) {
       setOpen(false);
       const e = r.published.email;
       toast({
-        title: pub ? "Published again" : "Published to your accountant",
+        title: pub ? "Emailed again" : data && data.accountants.length === 1 ? `Published to ${data.accountants[0].name}` : "Published to your accountants",
         description: e ? e.message : "No email was sent.",
         variant: e && !e.ok && !/not set up|No accountant/i.test(e.message) ? "destructive" : undefined,
       });
@@ -102,24 +102,29 @@ export function PublishPanel({ id, title }: { id: string; title: string }) {
         <span className="min-w-0 flex-1">
           {pub ? (
             <>
-              Published to your accountant {timeAgo(pub.at)} by {pub.byName}.
-              {pub.email && (
+              {noAccountant
+                ? <>Published {timeAgo(pub.at)} by {pub.byName}, but no accountant has access yet. Add one in <Link href="/settings/users" className="text-primary hover:underline">Settings → Users</Link>.</>
+                : <>Published to {data.accountants.length === 1 ? data.accountants[0].name : "your accountants"} {timeAgo(pub.at)} by {pub.byName}.</>}
+              {pub.email && !noAccountant && (
                 <span className={pub.email.ok ? "text-muted-foreground" : "text-warning"}> {pub.email.message}</span>
               )}
             </>
           ) : noAccountant ? (
-            <>Ready to publish. Add a user with the Accountant role in <Link href="/settings/users" className="text-primary hover:underline">Settings → Users</Link> so they can see it.</>
+            <>Publishing shares this payroll with your accountant. Nobody has the Accountant role yet: add one in <Link href="/settings/users" className="text-primary hover:underline">Settings → Users</Link>, then publish.</>
           ) : (
             <>Not published yet. Publish it so your accountant can see it{data.emailReady && withEmail.length ? " and gets an email" : ""}.</>
           )}
         </span>
         {pub ? (
           <span className="flex gap-1.5">
-            <Button size="sm" variant="outline" onClick={() => setOpen(true)} data-testid="button-republish"><Mail />Email again</Button>
+            {data.emailReady && withEmail.length > 0
+              ? <Button size="sm" variant="outline" onClick={() => setOpen(true)} data-testid="button-republish"><Mail />Email again</Button>
+              : !data.emailReady && !noAccountant && <Button size="sm" variant="outline" asChild><Link href="/settings/email" data-testid="button-publish-setup-email"><Mail />Set up email</Link></Button>}
             <Button size="sm" variant="ghost" onClick={unpublish} data-testid="button-unpublish"><Undo2 />Unpublish</Button>
           </span>
         ) : (
-          <Button size="sm" onClick={() => setOpen(true)} data-testid="button-publish"><Send />Publish…</Button>
+          // Publishing with nobody to see it did nothing but say "Published to your accountant".
+          <Button size="sm" onClick={() => setOpen(true)} disabled={noAccountant} title={noAccountant ? "Add an accountant first" : undefined} data-testid="button-publish"><Send />Publish…</Button>
         )}
       </div>
 

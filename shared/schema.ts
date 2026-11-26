@@ -121,7 +121,7 @@ export const PDF_LOGO_MAX_BYTES = 300 * 1024;
 export const PDF_LOGO_MAX_CHARS = Math.ceil(PDF_LOGO_MAX_BYTES / 3) * 4 + 32;
 export const DATE_FORMATS =["M/D/YY", "MM/DD/YYYY", "D/M/YY", "YYYY-MM-DD", "MMM D, YYYY"] as const;
 export const prefsSchema = z.object({
-  appName: z.string().min(1).max(60).default("Payroll Admin"),
+  appName: z.string().min(1).max(60).default("Shijiri Payroll"),
   businessName: z.string().max(80).default(""),
   dateFormat: z.enum(DATE_FORMATS).default("M/D/YY"),
   timeFormat: z.enum(["12h", "24h"]).default("12h"),

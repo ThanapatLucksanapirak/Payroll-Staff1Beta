@@ -61,6 +61,8 @@ export function buildPayStatementsPdf(o: PdfOptions): jsPDF {
     statement(ctx, e);
     const last = ctx.pdf.getNumberOfPages();
     // Number pages per statement so each one stands alone when handed out.
+    // Staff download these from the portal: say whose statement it is, not "for internal use only".
+    for (let p = first; p <= last; p++) ctx.footerLabels.set(p, `Pay statement for ${e.name}`);
     for (let p = first; p <= last; p++) ctx.pageLabels.set(p, `${list.length > 1 ? `${fitText(ctx, pdfText(e.name), 45)} · ` : ""}Page ${p - first + 1} of ${last - first + 1}`);
   });
   finishPages(ctx);

@@ -336,7 +336,13 @@ function ReviewStep({ result, onBack, onConfirm, mode }: { result: ImportResult;
   const app = useApp();
   const names = useMemo(() => shiftEmployeeNames(result.shifts), [result.shifts]);
   const [excluded, setExcluded] = useState<Set<string>>(new Set());
-  const [label, setLabel] = useState(result.label);
+  // A file upload is named after its dates ("Nov 10 – Nov 23"), not the file name: the name shows on
+  // Home and to staff under My pay. Square and time-clock pulls are already named by their range.
+  const [label, setLabel] = useState(() => {
+    if (result.label || !["csv", "toast"].includes(result.source) || !result.shifts.length) return result.label;
+    const dates = result.shifts.map((s) => s.date).sort();
+    return `${app.date(dates[0])} – ${app.date(dates[dates.length - 1])}`;
+  });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const byEmp = useMemo(() => {
