@@ -15,6 +15,8 @@ import { type Confirm, type FixInput, BreakNudge, ConfirmScreen, FixRequestScree
 const STATUS_TEXT: Record<ClockStatus, string> = { in: "Working", break: "On break", out: "Not clocked in" };
 const STATUS_DOT: Record<ClockStatus, string> = { in: "bg-emerald-600", break: "bg-amber-400", out: "bg-stone-400" };
 const DEFAULT_OPTIONS: KioskOptions = { photo: false, idleSeconds: 10, stations: [], breakReminderHours: null };
+/** Failed face checks in a row before the kiosk offers to punch anyway (flagged "no face" for the manager). */
+const FACE_TRIES = 2;
 
 /** Who is at the kiosk right now, and how they signed in. */
 interface Session { who: Identified; pin: string; offline: boolean }
@@ -24,8 +26,8 @@ const only = (s: Session): Session => ({ who: s.who, pin: s.pin, offline: s.offl
 type Screen =
   | { k: "home" }
   | { k: "pin"; employee?: RosterEmployee; error?: string; shake?: number }
-  | ({ k: "actions"; error?: string } & Session)
-  | ({ k: "station"; type: PunchType; photo: string | null | undefined } & Session)
+  | ({ k: "actions"; error?: string; /** No face after a few tries: offer this punch anyway (flagged). */ noFace?: PunchType } & Session)
+  | ({ k: "station"; type: PunchType; photo: string | null | undefined; face?: "missing" } & Session)
   | ({ k: "guard"; message: string; question: string | null; suggest: PunchType | null; error?: string } & Session)
   | ({ k: "fix"; error?: string } & Session)
   | { k: "notes"; notes: KioskNote[]; i: number; auth: { ticket?: string; pin: string; employeeId: string }; confirm: Confirm }
@@ -116,7 +118,9 @@ export function KioskApp() {
   const cameraOn = !!state?.site.enabled && options.photo && (screen.k === "actions" || screen.k === "guard");
   const camera = useCamera(cameraOn);
 
-  const home = useCallback(() => { setBusy(false); setScreen({ k: "home" }); }, []);
+  /** Face checks that failed in a row for the person at the kiosk (reset when they leave). */
+  const faceFails = useRef(0);
+  const home = useCallback(() => { setBusy(false); faceFails.current = 0; setScreen({ k: "home" }); }, []);
 
   if (!paired) return <PairScreen notice={notice} onPaired={() => { setNotice(null); setPaired(true); }} />;
   if (!state) return <Splash online={online} onRetry={refresh} />;
@@ -156,9 +160,9 @@ export function KioskApp() {
     });
   };
 
-  const queueIt = (type: PunchType, sess: Session, photo: string | null | undefined, station: string | null) => {
+  const queueIt = (type: PunchType, sess: Session, photo: string | null | undefined, station: string | null, face?: "missing") => {
     const at = new Date(serverNow()).toISOString();
-    queue.add({ id: uuid(), type, employeeId: sess.who.employee.id, name: sess.who.employee.name, pin: sess.pin, at, tries: 0, station, ...(photo !== undefined ? { photo } : {}) });
+    queue.add({ id: uuid(), type, employeeId: sess.who.employee.id, name: sess.who.employee.name, pin: sess.pin, at, tries: 0, station, ...(photo !== undefined ? { photo } : {}), ...(face ? { face } : {}) });
     setPending(queue.all().length);
     setRoster(sess.who.employee.id, statusAfter(type), at);
     setBusy(false);
@@ -166,13 +170,13 @@ export function KioskApp() {
   };
 
   /** Send a punch (or queue it offline) and show what happened. */
-  const send = async (type: PunchType, sess: Session, photo: string | null | undefined, station: string | null) => {
-    if (sess.offline) return queueIt(type, sess, photo, station);
+  const send = async (type: PunchType, sess: Session, photo: string | null | undefined, station: string | null, face?: "missing") => {
+    if (sess.offline) return queueIt(type, sess, photo, station, face);
     setBusy(true);
     try {
       const r = await request<PunchResult>("POST", "/api/kiosk/punch", {
         id: uuid(), type, ticket: sess.who.ticket, pin: sess.pin, employeeId: sess.who.employee.id,
-        ...(station ? { station } : {}), ...(photo !== undefined ? { photo } : {}),
+        ...(station ? { station } : {}), ...(photo !== undefined ? { photo } : {}), ...(face ? { face } : {}),
       }, photo ? 15_000 : 8000);
       setOnline(true);
       setBusy(false);
@@ -185,7 +189,7 @@ export function KioskApp() {
       setBusy(false);
       const e = err as KioskError;
       if (e.code === "device") return unpair("This time clock was removed from the admin app.");
-      if (e.offline) { setOnline(false); return queueIt(type, sess, photo, station); }
+      if (e.offline) { setOnline(false); return queueIt(type, sess, photo, station, face); }
       if (e.code === "state" && e.body) {
         // Wrong action for the current state: explain and offer the one that makes sense.
         const status: ClockStatus = e.body.status ?? sess.who.status;
@@ -209,14 +213,27 @@ export function KioskApp() {
       if (type === "in" && options.stations.length) return setScreen({ ...only(sess), k: "station", type, photo: undefined });
       return void send(type, sess, undefined, null);
     }
-    // Photo at the moment of the tap. It must show a face: a blocked or covered
-    // camera, or nobody in view, stops the punch with a message saying why.
+    punchWithPhoto(type, sess, false);
+  };
+
+  /**
+   * Photo at the moment of the tap. It must show a face: a blocked or covered
+   * camera, or nobody in view, stops the punch with a message saying why. After
+   * FACE_TRIES failed tries the screen also offers "<action> anyway": that punch
+   * is sent with the photo and flagged "no face" for the manager.
+   */
+  const punchWithPhoto = (type: PunchType, sess: Session, anyway: boolean) => {
     setBusy(true);
-    void camera.capture().then((shot) => {
+    void camera.capture({ allowNoFace: anyway }).then((shot) => {
       setBusy(false);
-      if (!shot.ok) return setScreen({ ...only(sess), k: "actions", error: shot.message });
-      if (type === "in" && options.stations.length) return setScreen({ ...only(sess), k: "station", type, photo: shot.photo });
-      void send(type, sess, shot.photo, null);
+      if (!shot.ok) {
+        if (shot.noFace) faceFails.current++;
+        return setScreen({ ...only(sess), k: "actions", error: shot.message, noFace: shot.noFace && faceFails.current >= FACE_TRIES ? type : undefined });
+      }
+      if (shot.face === "seen") faceFails.current = 0;
+      const face = shot.face === "missing" ? "missing" as const : undefined;
+      if (type === "in" && options.stations.length) return setScreen({ ...only(sess), k: "station", type, photo: shot.photo, face });
+      void send(type, sess, shot.photo, null, face);
     });
   };
 
@@ -297,10 +314,12 @@ export function KioskApp() {
         ) : screen.k === "actions" ? (
           <ActionsScreen
             tz={tz} who={screen.who} offline={screen.offline} error={screen.error} busy={busy} idleMs={idleMs}
+            camera={cameraOn ? { attach: camera.attach, status: camera.status, faceSeen: camera.faceSeen } : undefined}
+            noFace={cameraOn ? screen.noFace : undefined} onAnyway={(t) => { if (!busy) punchWithPhoto(t, screen, true); }}
             onPunch={(t) => choose(t, screen)} onCancel={home} onFix={screen.offline ? undefined : () => setScreen({ k: "fix", who: screen.who, pin: screen.pin, offline: screen.offline })}
           />
         ) : screen.k === "station" ? (
-          <StationScreen name={screen.who.employee.name} stations={options.stations} idleMs={idleMs} onPick={(s) => { if (!busy) void send(screen.type, screen, screen.photo, s); }} onCancel={home} />
+          <StationScreen name={screen.who.employee.name} stations={options.stations} idleMs={idleMs} onPick={(s) => { if (!busy) void send(screen.type, screen, screen.photo, s, screen.face); }} onCancel={home} />
         ) : screen.k === "guard" ? (
           <GuardScreen name={screen.who.employee.name} message={screen.message} question={screen.question} suggest={screen.suggest} busy={busy} error={screen.error} idleMs={idleMs} onSuggest={(t) => choose(t, screen)} onCancel={home} />
         ) : screen.k === "fix" ? (
@@ -313,7 +332,7 @@ export function KioskApp() {
           <ConfirmScreen c={screen.c} tz={tz} onDone={home} />
         )}
       </main>
-      {cameraOn && <CameraPreview attach={camera.attach} status={camera.status} faceSeen={camera.faceSeen} />}
+      {cameraOn && screen.k !== "actions" && <CameraPreview attach={camera.attach} status={camera.status} faceSeen={camera.faceSeen} />}
       {showInfo && (
         <InfoSheet
           state={state} options={options} pending={pending} online={online} canUnpair={guarded && !!managerPin} guarded={guarded}
@@ -396,23 +415,50 @@ function TopBar({ state, online, pending, onInfo, onExitFullscreen }: { state: K
   );
 }
 
-/** Small live preview so people know a photo is taken with each punch, and whether their face is in view. */
-function CameraPreview({ attach, status, faceSeen }: { attach: (el: HTMLVideoElement | null) => void; status: CameraStatus; faceSeen: boolean | null }) {
+type CameraProps = { attach: (el: HTMLVideoElement | null) => void; status: CameraStatus; faceSeen: boolean | null };
+
+/** Live preview in the corner (on the "are you sure?" screen), so people know a photo is taken and whether their face is in view. */
+function CameraPreview({ attach, status, faceSeen }: CameraProps) {
   const broken = status === "blocked" || status === "unavailable";
   const warn = broken || faceSeen === false;
   return (
     <div className={`pointer-events-none fixed bottom-4 left-4 z-40 flex items-center gap-3 rounded-2xl p-2 pr-4 shadow-lg ring-1 ${warn ? "bg-red-50 ring-red-300" : "bg-white/95 ring-stone-200"}`} data-testid="kiosk-camera" data-status={status} data-face={faceSeen === null ? "" : faceSeen ? "yes" : "no"}>
       {broken ? (
-        <span className="flex h-16 w-16 items-center justify-center rounded-xl bg-red-100 text-red-700"><CameraOff className="h-7 w-7" /></span>
+        <span className="flex h-24 w-24 items-center justify-center rounded-xl bg-red-100 text-red-700 sm:h-32 sm:w-32"><CameraOff className="h-9 w-9" /></span>
       ) : (
-        <video ref={attach} className={`h-16 w-16 -scale-x-100 rounded-xl bg-stone-200 object-cover ${faceSeen === false ? "ring-2 ring-red-400" : faceSeen ? "ring-2 ring-emerald-400" : ""}`} muted playsInline autoPlay />
+        <video ref={attach} className={`h-24 w-24 -scale-x-100 rounded-xl bg-stone-200 object-cover sm:h-32 sm:w-32 ${faceSeen === false ? "ring-4 ring-red-400" : faceSeen ? "ring-4 ring-emerald-500" : ""}`} muted playsInline autoPlay />
       )}
-      <span className={`text-sm font-medium ${warn ? "text-red-900" : "text-stone-700"}`}>
-        {status === "blocked" ? <>Camera blocked<br /><span className="font-normal">Punching needs the camera</span></>
-          : status === "unavailable" ? <>Camera not available<br /><span className="font-normal">Punching needs the camera</span></>
-          : faceSeen === false ? <>Face not detected<br /><span className="font-normal">Look at the camera</span></>
-          : <><Camera className="mr-1 inline h-4 w-4" />Photo taken<br />with your punch</>}
-      </span>
+      <CameraCaption status={status} faceSeen={faceSeen} />
+    </div>
+  );
+}
+
+function CameraCaption({ status, faceSeen, center }: { status: CameraStatus; faceSeen: boolean | null; center?: boolean }) {
+  const broken = status === "blocked" || status === "unavailable";
+  const warn = broken || faceSeen === false;
+  return (
+    <span className={`text-base font-medium leading-snug ${center ? "text-center" : ""} ${warn ? "text-red-800" : faceSeen ? "text-emerald-800" : "text-stone-700"}`} data-testid="kiosk-camera-caption">
+      {status === "blocked" ? <>Camera blocked<br /><span className="font-normal">Punching needs the camera</span></>
+        : status === "unavailable" ? <>Camera not available<br /><span className="font-normal">Punching needs the camera</span></>
+        : faceSeen === false ? <>Face not detected<br /><span className="font-normal">Please show your face</span></>
+        : faceSeen ? <><Check className="mr-1 inline h-5 w-5" />Face found<br /><span className="font-normal text-stone-700">Photo taken with your punch</span></>
+        : <><Camera className="mr-1 inline h-5 w-5" />Please show your face<br /><span className="font-normal">Photo taken with your punch</span></>}
+    </span>
+  );
+}
+
+/** The big camera view at the top of the action screen (in place of the initials), so people can see their face is in frame. */
+function CameraMirror({ attach, status, faceSeen }: CameraProps) {
+  const broken = status === "blocked" || status === "unavailable";
+  const ring = broken || faceSeen === false ? "ring-red-500" : faceSeen ? "ring-emerald-500" : "ring-stone-300";
+  return (
+    <div className="flex flex-col items-center gap-3" data-testid="kiosk-camera" data-status={status} data-face={faceSeen === null ? "" : faceSeen ? "yes" : "no"}>
+      {broken ? (
+        <span className={`kiosk-mirror flex items-center justify-center rounded-[2rem] bg-red-50 text-red-700 ring-[6px] ${ring}`}><CameraOff className="h-14 w-14" /></span>
+      ) : (
+        <video ref={attach} className={`kiosk-mirror -scale-x-100 rounded-[2rem] bg-stone-200 object-cover ring-[6px] transition-[box-shadow] ${ring}`} muted playsInline autoPlay data-testid="kiosk-camera-video" />
+      )}
+      <CameraCaption status={status} faceSeen={faceSeen} center />
     </div>
   );
 }
@@ -553,13 +599,13 @@ function NamesScreen({ tz, employees, onPick }: { tz: string; employees: RosterE
   );
 }
 
-function ActionsScreen({ tz, who, offline, error, busy, idleMs, onPunch, onCancel, onFix }: { tz: string; who: Identified; offline: boolean; error?: string; busy?: boolean; idleMs: number; onPunch: (t: PunchType) => void; onCancel: () => void; onFix?: () => void }) {
+function ActionsScreen({ tz, who, offline, error, busy, idleMs, camera, noFace, onPunch, onAnyway, onCancel, onFix }: { tz: string; who: Identified; offline: boolean; error?: string; busy?: boolean; idleMs: number; camera?: CameraProps; noFace?: PunchType; onPunch: (t: PunchType) => void; onAnyway: (t: PunchType) => void; onCancel: () => void; onFix?: () => void }) {
   useIdle(idleMs, onCancel);
   const statusLine = who.status === "out" ? "You're not clocked in" : `${STATUS_TEXT[who.status]} since ${who.since ? timeOf(who.since, tz) : "—"}`;
   const breakDue = !offline && who.status === "in" && !!who.breakDue;
   return (
-    <div className="flex flex-1 flex-col items-center justify-center px-6 pb-10 text-center kiosk-fade-up">
-      <Avatar name={who.employee.name} big status={who.status} />
+    <div className="kiosk-safe-center flex flex-1 flex-col items-center px-6 pb-10 pt-2 text-center kiosk-fade-up">
+      {camera ? <CameraMirror {...camera} /> : <Avatar name={who.employee.name} big status={who.status} />}
       <h1 className="mt-5 max-w-full text-4xl font-display font-normal tracking-[-0.01em] text-stone-950 [overflow-wrap:anywhere] sm:text-5xl" data-testid="kiosk-employee-name">{who.employee.name}</h1>
       <p className="mt-2 text-2xl text-stone-700">
         {statusLine}{!offline && who.todayMinutes > 0 ? ` · ${duration(who.todayMinutes)} today` : ""}{!offline && who.station && who.status !== "out" ? ` · ${who.station}` : ""}
@@ -577,6 +623,14 @@ function ActionsScreen({ tz, who, offline, error, busy, idleMs, onPunch, onCance
         })}
       </div>
       <p className={`mt-5 min-h-7 text-xl font-medium ${error ? "text-red-700" : "text-transparent"}`} role="alert">{error || "·"}</p>
+      {noFace && (
+        <div ref={(el) => el?.scrollIntoView({ block: "nearest", behavior: "smooth" })} className="mt-3 flex max-w-xl flex-col items-center gap-2 rounded-2xl bg-amber-50 px-5 py-4 ring-2 ring-amber-300" data-testid="kiosk-no-face">
+          <p className="text-lg text-amber-950">Still no face? You can {PUNCH_LABELS[noFace].toLowerCase()} anyway. Your photo is kept and your manager will see that no face was found.</p>
+          <button disabled={busy} onClick={() => onAnyway(noFace)} className="kiosk-tap h-14 rounded-2xl bg-white px-6 text-xl font-semibold text-amber-950 ring-2 ring-amber-400 transition active:scale-[0.98] disabled:opacity-60" data-testid="kiosk-punch-anyway">
+            {busy ? <Spinner /> : `${PUNCH_LABELS[noFace]} anyway`}
+          </button>
+        </div>
+      )}
       <div className="mt-2 flex flex-wrap justify-center gap-3">
         {onFix && <BigSecondary onClick={onFix} testid="kiosk-fix-open"><Wrench className="mr-2 inline h-5 w-5" />Fix a missed punch</BigSecondary>}
         <BigSecondary onClick={onCancel}>Cancel</BigSecondary>

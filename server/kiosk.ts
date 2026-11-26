@@ -446,6 +446,8 @@ export function registerKioskRoutes(app: Express) {
       station: z.string().max(80).nullish(),
       /** JPEG data URL from the front camera, or null when the camera was unavailable. */
       photo: z.string().max(300_000).nullish(),
+      /** "missing": the kiosk found no face and the employee chose to punch anyway. */
+      face: z.enum(["missing"]).optional(),
     }).parse(req.body);
 
     // Punches for one employee are handled strictly in the order they arrive, from
@@ -506,6 +508,8 @@ export function registerKioskRoutes(app: Express) {
     if (options.photo) {
       photoSaved = !!photoBytes && savePhoto(site.id, body.id, photoBytes);
       meta.photo = photoSaved ? "saved" : "none";
+      // No face was found: the punch goes through, flagged for the manager.
+      if (body.face === "missing") meta.face = "missing";
     }
 
     let result: Awaited<ReturnType<typeof recordPunch>>;

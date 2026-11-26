@@ -72,6 +72,8 @@ export interface PunchMeta {
   station?: string;
   /** Kiosk photo: "saved" when a snapshot was stored, "none" when the camera was unavailable. */
   photo?: "saved" | "none";
+  /** "missing": the kiosk found no face in the photo and the employee punched anyway (flagged for a manager). */
+  face?: "missing";
   /** The kiosk fix request this punch was created from. */
   fixRequestId?: string;
   [key: string]: unknown;

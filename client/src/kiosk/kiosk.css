@@ -11,6 +11,16 @@
 html, body { height: 100%; overflow: hidden; overscroll-behavior: none; }
 #root { height: 100%; height: 100dvh; overflow: hidden; }
 .kiosk-scroll { overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
+/* The live camera view on the action screen ("Please show your face"): big
+   enough to check your face is in frame, smaller on short screens. */
+.kiosk-mirror { width: 11rem; height: 11rem; flex-shrink: 0; }
+@media (min-width: 640px) and (min-height: 900px) { .kiosk-mirror { width: 15rem; height: 15rem; } }
+@media (min-width: 1000px) and (min-height: 1100px) { .kiosk-mirror { width: 17rem; height: 17rem; } }
+@media (max-height: 760px) { .kiosk-mirror { width: 9rem; height: 9rem; } }
+@media (max-height: 640px) { .kiosk-mirror { width: 7.5rem; height: 7.5rem; } }
+@media (max-height: 440px) { .kiosk-mirror { width: 6rem; height: 6rem; } }
+/* Centre a screen's content, but never push its top out of reach when it is taller than the screen. */
+.kiosk-safe-center { justify-content: center; justify-content: safe center; }
 /* Short phone screens (portrait): a smaller keypad and clock so the PIN screen fits without scrolling. */
 @media (max-height: 760px) and (max-width: 639px) {
   .kiosk-key { width: 4.25rem; height: 4.25rem; font-size: 2rem; }
