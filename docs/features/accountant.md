@@ -16,3 +16,13 @@
 - Optional. Pick a service (Gmail, Microsoft 365, Resend, Postmark or other), enter the server, port, username, password or API key, and the from address. **Send test email** uses what's on screen, even before saving.
 - The password is stored on your server only: it is never shown again, never logged, and left out of downloaded backups (without secrets) and offsite copies.
 - If email is off or fails, publishing still works; the failure shows on the timesheet and in Settings → Email, and is written to Activity.
+
+## Branded emails
+- Emails come from **contact@shijiri.com** as **Shijiri Payroll Service** by default (change both in Settings → Email). Your email service must allow sending from that address (verify the domain or add it as a send-as address).
+- Every email uses the same branded layout: the test email, "Payroll ready", and sign-in codes.
+
+## Email sign-in codes (two-step verification)
+- Settings → Security → Two-step verification → **Email me codes** (needs email set up and a notification email on your account). Or **Use an app** for authenticator codes as before.
+- At sign-in, after the password, a 6-digit code is emailed. It expires in 10 minutes, allows 5 tries, and **Send a new code** waits 30 seconds between sends. Recovery codes still work.
+- Changing your own notification email asks for your password. Only an owner can change the notification email of someone else who uses email codes, and it can't be cleared while they're on.
+- Marking a timesheet **Final** does not email anyone. Only **Publish** does.

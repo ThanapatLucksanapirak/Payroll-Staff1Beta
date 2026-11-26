@@ -7,6 +7,7 @@ Target: Debian 12+ / Ubuntu 22.04+ (amd64, arm64), systemd, run as root.
 | /opt/payroll/node/ | Node.js 22 runtime (official tarball, symlink to /opt/payroll/runtime/node-vX) |
 | /opt/payroll/repo/ | git clone of the app repo (fetch source for updates) |
 | /opt/payroll/releases/<YYYYmmddHHMMSS>-<sha7>/ | built copy of the app (git worktree export + node_modules + dist) |
+| releases/<…>/.release-sha, .release-history | installed commit, and `git log --first-parent` of it (shown in Settings → About) |
 | /opt/payroll/current -> releases/... | active release (symlink, swapped atomically) |
 | /opt/payroll/previous -> releases/... | last good release (for rollback) |
 | /opt/payroll/deploy/ | copy of deploy/ from the active release (CLI + libs live here) |

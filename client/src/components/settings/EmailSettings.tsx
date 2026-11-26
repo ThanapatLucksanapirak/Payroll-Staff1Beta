@@ -104,7 +104,7 @@ export function EmailSettings() {
     <div className="space-y-5">
       <Section
         title="Email"
-        description="Optional. When it's on, the app emails your accountant when you publish payroll. Everything else works the same without it."
+        description="Optional. When it's on, the app emails your accountant when you publish payroll, and people can get sign-in codes by email. Everything else works the same without it."
       >
         <div className="space-y-4">
           <ToggleRow label="Send email notifications" hint="Uses your own email account or sending service." checked={cfg.enabled} onChange={(v) => set({ enabled: v })} testid="switch-email-enabled" />
@@ -135,7 +135,7 @@ export function EmailSettings() {
                 <Field label="Password or API key" error={needPassword ? "Enter it again: the server details changed." : undefined} hint={saved.hasPassword ? "Saved. Leave blank to keep it." : "Stored on your server only. Never shown again."}>
                   <Input type="password" autoComplete="new-password" value={password} placeholder={saved.hasPassword ? "••••••••" : ""} onChange={(e) => setPassword(e.target.value)} data-testid="input-email-password" />
                 </Field>
-                <Field label="From address" hint="The address emails come from."><Input type="email" value={cfg.fromAddress} spellCheck={false} autoCapitalize="none" placeholder="payroll@yourcompany.com" onChange={(e) => set({ fromAddress: e.target.value })} data-testid="input-email-from" /></Field>
+                <Field label="From address" hint="Your email service must allow sending from this address (e.g. verify the domain, or add it as a send-as address)."><Input type="email" value={cfg.fromAddress} spellCheck={false} autoCapitalize="none" placeholder="payroll@yourcompany.com" onChange={(e) => set({ fromAddress: e.target.value })} data-testid="input-email-from" /></Field>
                 <Field label="From name"><Input value={cfg.fromName} maxLength={100} placeholder={app.prefs.appName} onChange={(e) => set({ fromName: e.target.value })} /></Field>
                 <Field label="App address" hint="Used for the link in emails." className="sm:col-span-2"><Input value={cfg.appUrl} spellCheck={false} autoCapitalize="none" placeholder="https://payroll.yourcompany.com" onChange={(e) => set({ appUrl: e.target.value })} data-testid="input-email-appurl" /></Field>
               </div>

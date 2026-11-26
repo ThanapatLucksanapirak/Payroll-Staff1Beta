@@ -269,12 +269,15 @@ export interface EarlyResult { shifts: Shift[]; adjusted: number; warnings: stri
  *   mode "start": hours count from the scheduled start.
  *   mode "cap":   hours count from `minutes` before the scheduled start.
  */
-export function applyEarlyClockIn(shifts: Shift[], scheduled: Pick<ScheduledShift, "employeeName" | "date" | "start">[], rule: EarlyRule | undefined, timeFormat: "12h" | "24h" = "12h"): EarlyResult {
+export function applyEarlyClockIn(shifts: Shift[], scheduled: (Pick<ScheduledShift, "employeeName" | "date" | "start"> & { end?: number })[], rule: EarlyRule | undefined, timeFormat: "12h" | "24h" = "12h"): EarlyResult {
   if (!rule?.enabled || !scheduled.length) return { shifts, adjusted: 0, warnings: [] };
   const starts = new Map<string, number[]>();
+  const spans = new Map<string, { start: number; end: number }[]>();
   for (const s of scheduled) {
     const k = `${employeeKey(s.employeeName)}|${s.date}`;
     starts.set(k, [...(starts.get(k) ?? []), s.start].sort((a, b) => a - b));
+    // Without an end time, assume a scheduled shift lasts at least 4 hours.
+    spans.set(k, [...(spans.get(k) ?? []), { start: s.start, end: s.end ?? s.start + 240 }]);
   }
   let adjusted = 0;
   const warnings: string[] = [];
@@ -282,6 +285,9 @@ export function applyEarlyClockIn(shifts: Shift[], scheduled: Pick<ScheduledShif
     if (sh.source !== "kiosk") return sh;
     const list = starts.get(`${employeeKey(sh.employee)}|${sh.date}`);
     if (!list) return sh;
+    // Clocked in during (or late for) an earlier scheduled shift that day: not early,
+    // even if another shift starts later (a double shift worked straight through).
+    if ((spans.get(`${employeeKey(sh.employee)}|${sh.date}`) ?? []).some((sp) => sp.start <= sh.start && sh.start < sp.end)) return sh;
     // The scheduled shift they came in early for: the first start at or after the clock-in.
     const target = list.find((st) => st >= sh.start);
     if (target == null || target - sh.start <= rule.minutes) return sh;

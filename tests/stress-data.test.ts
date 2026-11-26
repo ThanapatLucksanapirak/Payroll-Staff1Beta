@@ -294,9 +294,12 @@ test("csv: same clock-in and clock-out is skipped, not a 24-hour shift", async (
 
 test("csv: D/M/YY preference reads ambiguous dates day-first", async () => {
   const { parseCsvText } = await import("../shared/importers/csv");
-  const csv = "Team Member,Clockin date,Clockin time,Clockout time\nBob,03/11/2026,9:00 AM,5:00 PM\n";
+  const csv = "Employee,Date,Clock In,Clock Out\nBob,03/11/2026,9:00 AM,5:00 PM\n";
   assert.equal(parseCsvText(csv).shifts[0].date, "2026-03-11");
   assert.equal(parseCsvText(csv, { dayFirst: true }).shifts[0].date, "2026-11-03");
+  // Square files (and the app's own Shifts CSV) are always month-first
+  const square = "Team Member,Clockin date,Clockin time,Clockout time\nBob,03/11/2026,9:00 AM,5:00 PM\n";
+  assert.equal(parseCsvText(square, { dayFirst: true }).shifts[0].date, "2026-03-11");
 });
 
 test("csv exports neutralise spreadsheet formulas and read back unchanged", async () => {

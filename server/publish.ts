@@ -18,7 +18,7 @@ import * as settings from "./settings";
 import { actorOf, audit } from "./audit";
 import { currentUser } from "./auth";
 import { type UserRecord, canAccessSite, isAccountant, listUsers } from "./users";
-import { type SendResult, emailReady, getEmailConfig, sendEmail, simpleHtml } from "./email";
+import { type SendResult, brandName, brandedHtml, emailReady, getEmailConfig, sendEmail } from "./email";
 
 export const PUBLISHED_KEY = "payroll:published";
 
@@ -112,26 +112,34 @@ async function notify(row: TimesheetRow, siteId: string, by: string): Promise<Se
   try {
     const recipients = (await recipientsFor(siteId)).filter((u) => !!u.notificationEmail);
     if (!recipients.length) return { ok: false, skipped: true, reason: "No accountant has a notification email.", recipients: 0 };
-    const [cfg, site, prefs] = await Promise.all([getEmailConfig(), settings.getSite(siteId), settings.getPrefs().catch(() => null)]);
+    const [cfg, site] = await Promise.all([getEmailConfig(), settings.getSite(siteId)]);
     if (!emailReady(cfg)) return { ok: false, skipped: true, reason: "Email is not set up.", recipients: recipients.length };
-    const appName = prefs?.appName || "Payroll";
+    const brand = await brandName(cfg);
     const label = row.custom_label || row.filename || "Payroll";
     const period = periodText(row.period_start, row.period_end);
     const where = site?.name ? ` for ${site.name}` : "";
-    const subject = `Payroll published${where}${period ? `: ${period}` : ""}`;
+    const subject = `Payroll ready${where}${period ? `: ${period}` : ""}`;
     const base = cfg.appUrl.replace(/\/+$/, "");
     const link = base ? `${base}/#/timesheet/${encodeURIComponent(row.id)}` : "";
-    const lines = [
-      `${by} published the payroll "${label}"${where}${period ? ` (${period})` : ""}.`,
-      `${row.employee_count} employee${row.employee_count === 1 ? "" : "s"}.`,
-      "Sign in to see the details and download the PDF reports and pay statements.",
+    const details: [string, string][] = [
+      ["Payroll", label],
+      ...(site?.name ? [["Location", site.name] as [string, string]] : []),
+      ...(period ? [["Pay period", period] as [string, string]] : []),
+      ["Employees", String(row.employee_count)],
+      ["Published by", by],
     ];
-    const text = [...lines, ...(link ? ["", `Open it: ${link}`] : [])].join("\n");
+    const intro = `${by} has published a payroll for you to review.`;
+    const after = "Sign in to see each person's pay and download the full report, pay statements and CSV files.";
+    const text = [intro, "", ...details.map(([k, v]) => `${k}: ${v}`), "", after, ...(link ? ["", `Open it: ${link}`] : [])].join("\n");
     const result = await sendEmail({
       to: recipients.map((u) => u.notificationEmail!),
       subject,
       text,
-      html: simpleHtml({ appName, heading: subject, lines, button: link ? { label: "Open payroll", url: link } : undefined }),
+      html: brandedHtml({
+        brand, preheader: `${label}${period ? ` · ${period}` : ""} is ready to review.`, heading: "A payroll is ready for you",
+        paragraphs: [intro, after], details, button: link ? { label: "Open payroll", url: link } : undefined,
+        footer: `You get these emails because you're set up as an accountant in ${brand}.`,
+      }),
     });
     return { ...result, recipients: recipients.length };
   } catch (err: any) {

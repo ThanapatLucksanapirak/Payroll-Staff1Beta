@@ -39,7 +39,7 @@ export function registerAuthRoutes(app: Express) {
 
   app.post("/api/auth/login", h(async (req, res) => {
     const ip = req.ip ?? "unknown";
-    const blocked = loginThrottle(ip);
+    const blocked = loginThrottle(ip, res);
     if (blocked) return res.status(429).json({ error: blocked });
     const { username, password, remember } = z.object({
       username: z.string().max(100).default(""),
@@ -62,7 +62,7 @@ export function registerAuthRoutes(app: Express) {
 
   app.post("/api/auth/setup", h(async (req, res) => {
     const ip = req.ip ?? "unknown";
-    const blocked = loginThrottle(ip);
+    const blocked = loginThrottle(ip, res);
     if (blocked) return res.status(429).json({ error: blocked });
     if (!(await setupRequired())) return res.status(409).json({ error: "This app is already set up. Sign in instead." });
     const body = z.object({
@@ -116,10 +116,24 @@ export function registerAuthRoutes(app: Express) {
 
   app.put("/api/auth/profile", h(async (req, res) => {
     const u = me(res);
-    const body = z.object({ displayName: displayNameSchema.optional(), username: usernameSchema.optional(), notificationEmail: notificationEmailSchema.optional() }).parse(req.body ?? {});
+    const { password, ...body } = z.object({ displayName: displayNameSchema.optional(), username: usernameSchema.optional(), notificationEmail: notificationEmailSchema.optional(), password: z.string().max(200).optional() }).parse(req.body ?? {});
+    // Changing the email needs the password: sign-in codes and payroll notices go there,
+    // so a borrowed or stolen session must not be able to redirect them.
     // Only owners and administrators may change a sign-in username (their own included).
     if (body.username !== undefined && body.username.trim().toLowerCase() !== u.username.toLowerCase() && !isAdmin(u)) {
       return res.status(403).json({ error: "Only an owner or administrator can change a sign-in username." });
+    }
+    if (body.notificationEmail !== undefined) {
+      const fresh = await getUser(u.id, { fresh: true });
+      if (fresh && body.notificationEmail !== (fresh.notificationEmail ?? "")) {
+        if (!password) return res.status(400).json({ error: "Enter your password to change your notification email." });
+        const ip = req.ip ?? "unknown";
+        const blocked = loginThrottle(ip, res);
+        if (blocked) return res.status(429).json({ error: blocked });
+        const ok = await verifyHash(password, fresh.passwordHash);
+        recordLogin(ip, ok);
+        if (!ok) return res.status(400).json({ error: "Current password is incorrect." });
+      }
     }
     const updated = await updateProfile(u.id, body);
     const what = [body.username && updated.username !== u.username ? `username ${u.username} → ${updated.username}` : "", body.displayName !== undefined ? "display name" : "", body.notificationEmail !== undefined ? "notification email" : ""].filter(Boolean).join("; ");

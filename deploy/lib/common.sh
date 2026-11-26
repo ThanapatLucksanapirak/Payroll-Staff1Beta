@@ -172,6 +172,8 @@ build_release() {
   mkdir -p "$dir" "$PAYROLL_LOGS"
   git_repo archive "$sha" | tar -x -C "$dir"
   echo "$sha" >"$dir/.release-sha"
+  # Version history for Settings → About (fields: sha, date, subject, body; see server/about.ts).
+  git_repo log --first-parent -n 200 --format='%H%x1f%cI%x1f%s%x1f%b%x1e' "$sha" >"$dir/.release-history" 2>/dev/null || rm -f "$dir/.release-history"
   chown -R "$PAYROLL_USER:$PAYROLL_USER" "$dir"
   info "Installing dependencies (this can take a few minutes)…" >&2
   if ! (cd "$dir" && as_payroll npm ci --no-audit --no-fund --loglevel=error) >>"$log" 2>&1; then

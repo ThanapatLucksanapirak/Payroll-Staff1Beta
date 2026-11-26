@@ -110,8 +110,15 @@ export function rowToDoc(row: StoredRow, ctx: { defaultSiteId: string; rules: Si
 
   const rules = siteRulesSchema.safeParse(meta?.rules ?? ctx.rules);
   const payExtras = meta?.payExtras ? docPayExtrasSchema.safeParse(meta.payExtras) : null;
+  // A finalized timesheet keeps the totals it was paid with, even if a later
+  // version of the app would work them out differently.
+  const saved = row.result_json;
+  const paidResult = meta?.status === "final" && meta?.version >= 2 && Array.isArray(saved?.employees) && saved?.totals && typeof saved.totals === "object"
+    ? { periodStart: saved.periodStart ?? "", periodEnd: saved.periodEnd ?? "", employees: saved.employees, totals: saved.totals }
+    : undefined;
   return {
     ...(payExtras?.success ? { payExtras: payExtras.data } : {}),
+    ...(paidResult ? { paidResult } : {}),
     siteId,
     label: row.custom_label ?? "",
     filename: row.filename ?? "",

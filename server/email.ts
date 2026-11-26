@@ -22,6 +22,9 @@ export const EMAIL_CONFIG_KEY = "email:config";
 export const EMAIL_STATUS_KEY = "email:status";
 
 export const SECURITY = ["starttls", "ssl", "none"] as const;
+/** Who emails come from unless changed in Settings → Email. */
+export const DEFAULT_FROM_ADDRESS = "contact@shijiri.com";
+export const DEFAULT_FROM_NAME = "Shijiri Payroll Service";
 export const emailConfigSchema = z.object({
   enabled: z.boolean().default(false),
   host: z.string().trim().max(200).default(""),
@@ -30,8 +33,8 @@ export const emailConfigSchema = z.object({
   security: z.enum(SECURITY).default("starttls"),
   username: z.string().trim().max(200).default(""),
   password: z.string().max(500).default(""),
-  fromAddress: z.string().trim().max(200).default(""),
-  fromName: z.string().trim().max(100).default(""),
+  fromAddress: z.string().trim().max(200).default(DEFAULT_FROM_ADDRESS),
+  fromName: z.string().trim().max(100).default(DEFAULT_FROM_NAME),
   /** The address people open the app at, used for links in emails (e.g. https://payroll.example.com). */
   appUrl: z.string().trim().max(300).default(""),
 });
@@ -157,7 +160,8 @@ export async function sendEmail(msg: OutgoingEmail): Promise<SendResult> {
     return { ok: true, sent: to.length };
   } catch (err) {
     const error = cleanError(err, cfg);
-    console.error(`[email] could not send "${msg.subject}": ${error}`);
+    // Never log the subject: sign-in code emails carry the code in it.
+    console.error(`[email] could not send an email to ${to.length} recipient${to.length === 1 ? "" : "s"}: ${error}`);
     await recordStatus(false, error).catch(() => undefined);
     return { ok: false, error };
   }
@@ -165,18 +169,64 @@ export async function sendEmail(msg: OutgoingEmail): Promise<SendResult> {
 
 export const escapeHtml = (s: string) => s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
 
-/** A simple, readable HTML email: a heading, lines of text and an optional button. */
-export function simpleHtml(opts: { appName: string; heading: string; lines: string[]; button?: { label: string; url: string } }) {
-  const p = (t: string) => `<p style="margin:0 0 12px;font-size:15px;line-height:22px;color:#1d1d1f">${escapeHtml(t)}</p>`;
-  const button = opts.button
-    ? `<p style="margin:20px 0"><a href="${escapeHtml(opts.button.url)}" style="display:inline-block;background:#0a84ff;color:#ffffff;text-decoration:none;padding:10px 18px;border-radius:10px;font-weight:600;font-size:15px">${escapeHtml(opts.button.label)}</a></p>`
+/** The sender name shown in emails (Settings → Email "From name", else the app name). */
+export async function brandName(cfg?: EmailConfig): Promise<string> {
+  const c = cfg ?? (await getEmailConfig().catch(() => null));
+  if (c?.fromName) return c.fromName;
+  try { return (await settings.getPrefs()).appName || DEFAULT_FROM_NAME; } catch { return DEFAULT_FROM_NAME; }
+}
+
+export interface BrandedEmail {
+  brand: string;
+  /** Hidden preview line shown by mail apps next to the subject. */
+  preheader?: string;
+  heading: string;
+  paragraphs: string[];
+  /** A big one-time code (sign-in emails). */
+  code?: string;
+  /** Label / value rows in a light panel. */
+  details?: [string, string][];
+  button?: { label: string; url: string };
+  /** Small print at the bottom. */
+  footer?: string;
+}
+
+/**
+ * A clean, branded HTML email (white card on a light grey page, brand mark,
+ * big heading). Table-based with inline styles so it looks the same in Gmail,
+ * Outlook and Apple Mail. Everything passed in is escaped.
+ */
+export function brandedHtml(e: BrandedEmail): string {
+  const x = escapeHtml;
+  const font = "-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif";
+  const initial = x((e.brand.trim()[0] || "P").toUpperCase());
+  const para = (t: string) => `<p style="margin:0 0 14px;font-size:15px;line-height:23px;color:#3a3a3c">${x(t)}</p>`;
+  const code = e.code
+    ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:6px 0 20px"><tr><td align="center" style="background:#f2f6ff;border:1px solid #dbe6ff;border-radius:14px;padding:18px 12px">
+<div style="font-family:'SF Mono',Menlo,Consolas,monospace;font-size:34px;line-height:40px;letter-spacing:10px;font-weight:700;color:#0a2a66">${x(e.code)}</div></td></tr></table>`
     : "";
-  return `<!doctype html><html><body style="margin:0;padding:24px;background:#f5f5f7;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif">
-<div style="max-width:520px;margin:0 auto;background:#ffffff;border-radius:16px;padding:28px">
-<p style="margin:0 0 6px;font-size:13px;color:#86868b">${escapeHtml(opts.appName)}</p>
-<h1 style="margin:0 0 16px;font-size:20px;line-height:26px;color:#1d1d1f">${escapeHtml(opts.heading)}</h1>
-${opts.lines.map(p).join("\n")}${button}
-</div></body></html>`;
+  const details = e.details?.length
+    ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:4px 0 20px;background:#f7f7f9;border-radius:12px">${e.details.map(([k, v], i) =>
+      `<tr><td style="padding:11px 16px;font-size:13px;color:#86868b;${i ? "border-top:1px solid #ececf0;" : ""}">${x(k)}</td><td align="right" style="padding:11px 16px;font-size:14px;font-weight:600;color:#1d1d1f;${i ? "border-top:1px solid #ececf0;" : ""}">${x(v)}</td></tr>`).join("")}</table>`
+    : "";
+  const button = e.button
+    ? `<table role="presentation" cellpadding="0" cellspacing="0" style="margin:8px 0 8px"><tr><td style="border-radius:12px;background:#0a84ff"><a href="${x(e.button.url)}" style="display:inline-block;padding:13px 22px;font-size:15px;font-weight:600;color:#ffffff;text-decoration:none;border-radius:12px">${x(e.button.label)}</a></td></tr></table>`
+    : "";
+  return `<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light"><title>${x(e.heading)}</title></head>
+<body style="margin:0;padding:0;background:#f2f2f7;font-family:${font}">
+${e.preheader ? `<div style="display:none;max-height:0;overflow:hidden;opacity:0">${x(e.preheader)}</div>` : ""}
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f2f2f7"><tr><td align="center" style="padding:32px 16px">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:520px">
+<tr><td style="padding:0 4px 18px"><table role="presentation" cellpadding="0" cellspacing="0"><tr>
+<td style="width:36px;height:36px;border-radius:10px;background:linear-gradient(135deg,#3a8dff,#0a5bd8);background-color:#0a84ff;color:#ffffff;font-size:18px;font-weight:700;text-align:center;vertical-align:middle">${initial}</td>
+<td style="padding-left:10px;font-size:15px;font-weight:600;color:#1d1d1f">${x(e.brand)}</td></tr></table></td></tr>
+<tr><td style="background:#ffffff;border-radius:18px;padding:32px 28px;border:1px solid #e5e5ea">
+<h1 style="margin:0 0 14px;font-size:22px;line-height:28px;font-weight:700;color:#1d1d1f">${x(e.heading)}</h1>
+${e.paragraphs.map(para).join("\n")}${code}${details}${button}
+</td></tr>
+<tr><td style="padding:18px 8px 0;font-size:12px;line-height:18px;color:#8e8e93;text-align:center">${x(e.footer ?? `Sent by ${e.brand}.`)}</td></tr>
+</table></td></tr></table></body></html>`;
 }
 
 // ── Routes (owner / admin: no POLICY rule, so the default applies) ───────────
@@ -248,13 +298,18 @@ export function registerEmailRoutes(app: Express) {
     const to = notificationEmailSchema.parse(typeof body.to === "string" && body.to.trim() ? body.to : user.notificationEmail ?? "");
     if (!to) return res.status(400).json({ error: "Enter the address to send the test to." });
     try { check(cfg); } catch (err: any) { return res.json({ ok: false, message: err.message }); }
-    const appName = (await settings.getPrefs().catch(() => null))?.appName || "Payroll";
+    const brand = await brandName(cfg);
     try {
       await deliver(cfg, {
         to: [to],
-        subject: "Test email from your payroll app",
-        text: `This is a test from your payroll app. If you can read this, email notifications are working.\n\nSent by ${user.displayName || user.username}.`,
-        html: simpleHtml({ appName, heading: "Email is working", lines: ["This is a test from your payroll app. If you can read this, email notifications are working.", `Sent by ${user.displayName || user.username}.`] }),
+        subject: `Test email from ${brand}`,
+        text: `Email is working.\n\nThis is a test from ${brand}. If you can read this, payroll notifications and sign-in codes will arrive here.\n\nSent by ${user.displayName || user.username}.`,
+        html: brandedHtml({
+          brand, preheader: "If you can read this, email is set up.", heading: "Email is working",
+          paragraphs: [`This is a test from ${brand}. If you can read this, payroll notifications and sign-in codes will arrive here.`],
+          details: [["Sent by", user.displayName || user.username], ["Server", `${cfg.host}:${cfg.port}`]],
+          footer: `You got this because someone pressed "Send test email" in ${brand}.`,
+        }),
       });
       await recordStatus(true).catch(() => undefined);
       audit({ ...actorOf(req, res), action: "email.test", target: "email", detail: `sent to ${to}` });
