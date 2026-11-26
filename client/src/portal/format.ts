@@ -34,3 +34,18 @@ export function money(n: number, me: Me): string {
   const abs = Math.abs(n).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   return `${n < 0 ? "−" : ""}${me.prefs.currencySymbol || "$"}${abs}`;
 }
+
+/**
+ * What My hours shows for a period: time-clock days, hours from finalized pay
+ * statements (when the time clock saw nothing), or nothing. The "doesn't use the
+ * time clock" note only goes with nothing, so it can't sit above hours it contradicts.
+ */
+export function hoursView(d: { days: unknown[]; timesheets?: { minutes: number }[] }, timeClock: boolean) {
+  const sheets = d.timesheets ?? [];
+  const fromSheets = !d.days.length && sheets.length > 0;
+  return {
+    fromSheets,
+    sheetMinutes: sheets.reduce((a, t) => a + t.minutes, 0),
+    noClockNote: !timeClock && !d.days.length && !fromSheets,
+  };
+}

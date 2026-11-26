@@ -6,6 +6,12 @@ Settings → About, next to the matching update.
 Add an entry with every pull request: a `## YYYY-MM-DD · Title (#PR)` heading and a
 few short bullets written for the people who use the app, not for developers.
 
+## 2026-11-26 · Clearer first steps (#28)
+- Staff portal: My hours now shows hours from your finalized pay statement when they came from Square or a spreadsheet, instead of "No hours" next to your pay. Each row under My pay shows the hours too.
+- Pay rates: new people start on Hourly (or Day rate if most of your saved staff use it), so the total isn't $0.00 with blank boxes. A "Set everyone to…" menu switches everyone at once, and Net and the saved-rates buttons are explained.
+- Time clock: the PIN screen says to tap the check mark, and once 4 digits are in it says "Tap the check mark to continue".
+- Flagged days: the rules and the pre-export checklist now say that only day-rate staff are affected. Hourly staff are paid for the hours they worked.
+
 ## 2026-11-26 · Download the Android time clock app from the kiosk (#26)
 - On Android tablets, a "Get the Android app" button at the top downloads the Time Clock app directly, without the Play Store.
 

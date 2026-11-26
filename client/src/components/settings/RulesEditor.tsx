@@ -41,7 +41,7 @@ export function RulesEditor({ rules, onChange, disabled, siteLevel }: Props) {
             <Field label="Half day at (hours)"><NumberInput step="0.25" value={rules.halfDayMinHours} onChange={(n) => set("halfDayMinHours", Math.min(24, n))} disabled={disabled} /></Field>
           </>
         )}
-        <Field label="Pay for flagged days">
+        <Field label="Pay for flagged days" hint="For day-rate staff. Hourly staff are always paid for the hours they worked.">
           <Select value={rules.flaggedDayPay} onValueChange={(v) => set("flaggedDayPay", v as any)} disabled={disabled}>
             <SelectTrigger><SelectValue /></SelectTrigger>
             <SelectContent><SelectItem value="none">Nothing (review manually)</SelectItem><SelectItem value="half">Half-day rate</SelectItem><SelectItem value="full">Full-day rate</SelectItem></SelectContent>
