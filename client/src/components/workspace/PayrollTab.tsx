@@ -1,5 +1,5 @@
 import { PAYMENT_LABELS } from "@shared/schema";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { AlertTriangle, ChevronDown, ChevronRight, FileText, Info, Plus, Search, Trash2, Users } from "lucide-react";
 import { DAY_LABELS, type BonusEntry, type DayResult, type DeductionEntry, type EmployeeSummary } from "@shared/schema";
 import { employeeKey } from "@shared/engine";
@@ -20,7 +20,7 @@ import { EmployeeExtras } from "@/components/pay/ExtrasTab";
 import { Field, NumberInput, TimeInput } from "./fields";
 import type { WsProps } from "./types";
 
-export function PayrollTab({ onRates, ...p }: WsProps & { onRates?: () => void }) {
+export function PayrollTab({ onRates, focusFlagged, ...p }: WsProps & { onRates?: () => void; focusFlagged?: number }) {
   const app = useApp();
   const { result } = p;
   const [q, setQ] = useState("");
@@ -30,6 +30,16 @@ export function PayrollTab({ onRates, ...p }: WsProps & { onRates?: () => void }
     const s = q.trim().toLowerCase();
     return s ? result.employees.filter((e) => e.name.toLowerCase().includes(s)) : result.employees;
   }, [result.employees, q]);
+  // From "Check before export": open everyone with flagged days and go to the first of them.
+  useEffect(() => {
+    if (!focusFlagged) return;
+    const people = result.employees.filter((e) => !e.excluded && e.flaggedDays > 0);
+    if (!people.length) return;
+    setQ("");
+    setOpen(Object.fromEntries(people.map((e) => [e.sourceId, true])));
+    const t = setTimeout(() => document.getElementById(`pay-card-${employeeKey(people[0].name)}`)?.scrollIntoView({ behavior: "smooth", block: "start" }), 80);
+    return () => clearTimeout(t);
+  }, [focusFlagged]); // eslint-disable-line react-hooks/exhaustive-deps
   const t = result.totals;
   const warns = result.warnings.filter((w) => w.level === "warn");
   const allOpen = list.length > 0 && list.every((e) => open[e.sourceId]);
@@ -186,7 +196,7 @@ function EmployeeCard(p: WsProps & { emp: EmployeeSummary; open: boolean; onTogg
   };
 
   return (
-    <div className={cn("overflow-hidden rounded-xl border border-card-border bg-card shadow-card transition-shadow", p.open && "shadow-float", emp.excluded && "opacity-60")} data-testid={`card-employee-${employeeKey(emp.name)}`}>
+    <div className={cn("overflow-hidden rounded-xl border border-card-border bg-card shadow-card transition-shadow", p.open && "shadow-float", emp.excluded && "opacity-60")} id={`pay-card-${employeeKey(emp.name)}`} data-testid={`card-employee-${employeeKey(emp.name)}`}>
       <div className="flex items-center gap-3 px-4 py-3">
         <button className="flex min-w-0 flex-1 items-center gap-3 rounded-md text-left focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/35" onClick={p.onToggle} aria-expanded={p.open} data-testid={`button-toggle-${employeeKey(emp.name)}`}>
           <ChevronRight className={cn("h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-200", p.open && "rotate-90")} />

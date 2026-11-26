@@ -39,7 +39,7 @@ function PageFallback() {
   );
 }
 
-interface AuthStatus { setupRequired: boolean; authenticated: boolean; appName: string; db: { connected: boolean; error: string | null }; user: SessionUser | null }
+interface AuthStatus { setupRequired: boolean; legacyAdmin?: boolean; authenticated: boolean; appName: string; db: { connected: boolean; error: string | null }; user: SessionUser | null }
 
 function FullScreen({ children }: { children: React.ReactNode }) {
   return <div className="min-h-dvh flex items-center justify-center p-6 text-center">{children}</div>;
@@ -71,7 +71,7 @@ function Gate() {
   }
   if (!status) return <FullScreen><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></FullScreen>;
   if (!status.authenticated) {
-    return <LoginPage appName={status.appName} setupRequired={status.setupRequired} dbError={status.db.connected ? null : status.db.error} onDone={() => { queryClient.clear(); load(); }} />;
+    return <LoginPage appName={status.appName} setupRequired={status.setupRequired} legacyAdmin={!!status.legacyAdmin} dbError={status.db.connected ? null : status.db.error} onDone={() => { queryClient.clear(); load(); }} />;
   }
 
   return (

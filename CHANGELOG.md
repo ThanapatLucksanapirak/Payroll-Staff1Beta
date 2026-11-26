@@ -6,6 +6,13 @@ Settings → About, next to the matching update.
 Add an entry with every pull request: a `## YYYY-MM-DD · Title (#PR)` heading and a
 few short bullets written for the people who use the app, not for developers.
 
+## 2026-11-26 · Clearer first steps, part 3 (#31)
+- Export menu: each download says what it's for, and a toast confirms the file downloaded (with a reminder when the timesheet is still a draft). The manager summary file is named "_manager_summary".
+- Check before export: "Review flagged days" opens the Payroll tab at the first flagged day.
+- Sign-in: hints for the username, the setup code and a forgotten password. People who used the old shared password are told their username is admin.
+- Time clock: a wrong PIN says how many tries are left before the clock locks. After clocking in, the screen says to enter the PIN again for a break or to clock out. Add device is off while hours come from Square, with a note why.
+- Settings → Users marks your own sign-in as "Now (you)". Home shows "Flags (reviewed)" on a final timesheet. The staff portal header shows your full name.
+
 ## 2026-11-26 · Clearer first steps, part 2 (#29)
 - Home: a new install shows the five steps of a first payroll, in order. The app is called Shijiri Payroll everywhere.
 - Timesheets: after an upload, the Payroll tab says who still needs a pay rate, with a button to the Rates tab. The pay card says plainly whether amounts are take-home (no tax taken) or before tax. A CSV upload is named after its dates, and "Break (minutes)" columns are read.

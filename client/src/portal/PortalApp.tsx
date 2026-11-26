@@ -185,7 +185,7 @@ function Home({ me, onSignOut }: { me: Me; onSignOut: () => void }) {
             <Mark aria-hidden aria-label={undefined} role="presentation" className="h-6 w-auto shrink-0 text-primary" />
             <div className="min-w-0">
               <p className="truncate font-display text-[22px] font-normal leading-tight" data-testid="portal-greeting">Hi, {firstName(me.employee.name)}</p>
-              <p className="truncate text-[13px] text-muted-foreground"><span className="mr-1.5 inline-block h-2 w-2 rounded-full align-middle" style={{ background: me.site.color }} aria-hidden />{me.site.name}</p>
+              <p className="truncate text-[13px] text-muted-foreground"><span className="mr-1.5 inline-block h-2 w-2 rounded-full align-middle" style={{ background: me.site.color }} aria-hidden />{me.employee.name} · {me.site.name}</p>
             </div>
           </div>
           <Button type="button" variant="ghost" onClick={signOut} disabled={leaving} className="portal-tap h-10 shrink-0 rounded-full px-3 text-[15px]" data-testid="portal-signout">

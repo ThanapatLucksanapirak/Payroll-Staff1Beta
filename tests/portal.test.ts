@@ -477,3 +477,11 @@ test("sessions end on sign-out, PIN change, deactivation and portal off", async 
   assert.equal((await A("PUT", `/api/sites/${siteId}/portal`, { enabled: false })).status, 200);
   assert.equal((await P(b, "GET", "/api/portal/me")).status, 401);
 });
+
+test("sign-in page: the old 'admin' username hint only on installs that have that account", async () => {
+  const anon = await call("GET", "/api/auth/status", undefined, CSRF);
+  assert.equal(anon.status, 200);
+  assert.equal(anon.body.legacyAdmin, false, "a fresh install's owner is 'owner'");
+  assert.equal((await A("POST", "/api/users", { username: "admin", displayName: "Old admin", password: "old-shared-pass-1", role: "admin" })).status, 200);
+  assert.equal((await call("GET", "/api/auth/status", undefined, CSRF)).body.legacyAdmin, true);
+});
