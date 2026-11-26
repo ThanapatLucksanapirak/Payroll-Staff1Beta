@@ -51,29 +51,29 @@ export function ConfirmScreen({ c, tz, onDone }: { c: Confirm; tz: string; onDon
         {c.tone === "queued" ? <WifiOff className="h-12 w-12" /> : <Check className="h-14 w-14" strokeWidth={3} />}
       </span>
       <p className="mt-6 text-2xl font-medium opacity-90">{greeting(c.type, c.name, tz)}</p>
-      <h1 className="mt-2 text-5xl font-bold tracking-tight sm:text-7xl" data-testid="kiosk-confirmation">
-        {DONE_LABEL[c.type]} <span className="tabular">{timeOf(c.at, tz)}</span>
+      <h1 className="mt-2 text-5xl font-bold tracking-tight [text-wrap:balance] sm:text-7xl" data-testid="kiosk-confirmation">
+        {DONE_LABEL[c.type]} <span className="tabular whitespace-nowrap">{timeOf(c.at, tz)}</span>
       </h1>
       <p className="mt-3 max-w-full text-3xl font-semibold [overflow-wrap:anywhere]" data-testid="kiosk-confirmation-name">{c.name}</p>
       {c.day && (
         <dl className="mt-8 grid w-full max-w-2xl grid-cols-2 gap-3 text-left">
           <div className={`rounded-3xl px-5 py-4 ${light ? "bg-neutral-950/10" : "bg-white/15"}`}>
-            <dt className="text-lg opacity-85">Worked today</dt>
+            <dt className="text-lg font-medium opacity-90">Worked today</dt>
             <dd className="tabular text-4xl font-bold" data-testid="kiosk-hours-today">{duration(c.day.todayMinutes)}</dd>
           </div>
           <div className={`rounded-3xl px-5 py-4 ${light ? "bg-neutral-950/10" : "bg-white/15"}`}>
-            <dt className="text-lg opacity-85">Break</dt>
-            <dd className="text-2xl font-bold leading-tight" data-testid="kiosk-break-status">{breakLine(c.day, tz)}</dd>
+            <dt className="text-lg font-medium opacity-90">Break</dt>
+            <dd className="text-2xl font-bold leading-tight [text-wrap:balance]" data-testid="kiosk-break-status">{breakLine(c.day, tz)}</dd>
           </div>
         </dl>
       )}
       {c.station && <p className="mt-5 rounded-full bg-white/90 px-5 py-2 text-xl font-semibold text-neutral-900">Station: {c.station}</p>}
       {nudge && c.day && <div className="mt-5"><BreakNudge minutes={c.day.minutesWithoutBreak ?? 0} onDark={!light} /></div>}
-      {c.note && <p className="mt-5 max-w-xl rounded-2xl bg-white/90 px-5 py-3 text-xl font-medium text-amber-900">{c.note}</p>}
+      {c.note && <p className="mt-5 max-w-xl rounded-2xl bg-white/90 px-5 py-3 text-xl font-medium text-neutral-950">{c.note}</p>}
       <span className={`mt-10 h-1.5 w-56 overflow-hidden rounded-full ${light ? "bg-neutral-950/15" : "bg-white/25"}`}>
         <span className={`kiosk-countdown block h-full ${light ? "bg-neutral-950/60" : "bg-white"}`} style={{ animationDuration: `${ms}ms` }} />
       </span>
-      <span className="mt-3 text-base opacity-80">Tap anywhere to finish</span>
+      <span className="mt-3 text-lg font-medium opacity-90">Tap anywhere to finish</span>
     </button>
   );
 }
@@ -142,13 +142,13 @@ export function NoteScreen({ note, index, total, tz, idleMs, onOk, onIdle }: { n
   const when = fmt(tz, { weekday: "short", hour: "numeric", minute: "2-digit" }).format(new Date(note.createdAt));
   return (
     <div className="flex flex-1 flex-col items-center justify-center px-6 pb-10 text-center kiosk-fade-up" data-testid="kiosk-note">
-      <span className="flex h-20 w-20 items-center justify-center rounded-full bg-sky-100 text-sky-800"><MessageSquareText className="h-10 w-10" /></span>
+      <span className="flex h-20 w-20 items-center justify-center rounded-full bg-[var(--kiosk-accent-soft)] text-[var(--kiosk-accent-ink)]"><MessageSquareText className="h-10 w-10" /></span>
       <p className="mt-5 text-xl font-medium text-neutral-700">Message from your manager{total > 1 ? ` (${index + 1} of ${total})` : ""}</p>
       <div className="mt-5 w-full max-w-2xl rounded-3xl bg-neutral-50 px-8 py-7 text-left ring-2 ring-neutral-200">
         <p className="whitespace-pre-wrap text-3xl font-semibold leading-snug text-neutral-950" data-testid="kiosk-note-text">{note.text}</p>
         <p className="mt-4 text-lg text-neutral-600">{note.createdBy ? `${note.createdBy} · ` : ""}{when}</p>
       </div>
-      <button type="button" onClick={onOk} className="kiosk-tap mt-8 flex h-24 w-full max-w-md items-center justify-center gap-3 rounded-3xl bg-neutral-900 text-3xl font-bold text-white shadow-md transition active:scale-[0.98]" data-testid="kiosk-note-ok">
+      <button type="button" onClick={onOk} className="kiosk-tap kiosk-primary mt-8 flex h-24 w-full max-w-md items-center justify-center gap-3 rounded-3xl text-3xl font-bold shadow-md transition active:scale-[0.98]" data-testid="kiosk-note-ok">
         <Check className="h-9 w-9" /> OK
       </button>
     </div>
@@ -178,16 +178,16 @@ export function FixRequestScreen({ tz, name, online, busy, error, idleMs, onSubm
   const step = (d: number) => setMinutes((m) => Math.min(1439, Math.max(0, m + d)));
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col items-center overflow-y-auto px-5 pb-8 pt-2 kiosk-fade-up" data-testid="kiosk-fix">
+    <div className="flex min-h-0 flex-1 flex-col items-center overflow-y-auto px-5 pb-6 pt-2 kiosk-fade-up" data-testid="kiosk-fix">
       <h1 className="text-center text-4xl font-bold tracking-tight text-neutral-950">Fix a missed punch</h1>
       <p className="mt-1 text-center text-xl text-neutral-700">{name} · a manager will check it</p>
 
-      <div className="mt-6 w-full max-w-3xl space-y-6">
+      <div className="mt-5 w-full max-w-4xl space-y-5">
         <section>
           <p className="mb-2 text-lg font-semibold text-neutral-800">What did you forget?</p>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
             {PUNCH_TYPES.map((t) => (
-              <button key={t} type="button" aria-pressed={type === t} onClick={() => setType(t)} className={`kiosk-tap min-h-20 rounded-2xl px-4 text-xl font-semibold ring-2 transition active:scale-[0.98] ${type === t ? "bg-neutral-900 text-white ring-neutral-900" : "bg-white text-neutral-900 ring-neutral-300"}`} data-testid={`kiosk-fix-type-${t}`}>
+              <button key={t} type="button" aria-pressed={type === t} onClick={() => setType(t)} className={`kiosk-tap rounded-2xl px-4 text-lg font-semibold leading-tight ring-2 transition active:scale-[0.98] sm:text-xl lg:text-lg ${type === t ? "kiosk-selected" : "bg-white text-neutral-900 ring-neutral-300 active:bg-neutral-100"}`} data-testid={`kiosk-fix-type-${t}`}>
                 {FIX_TYPE_LABELS[t]}
               </button>
             ))}
@@ -196,9 +196,9 @@ export function FixRequestScreen({ tz, name, online, busy, error, idleMs, onSubm
 
         <section>
           <p className="mb-2 text-lg font-semibold text-neutral-800">Which day?</p>
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap gap-2 lg:grid lg:grid-cols-7">
             {days.map((d, i) => (
-              <button key={d} type="button" aria-pressed={date === d} onClick={() => setDate(d)} className={`kiosk-tap min-h-16 rounded-2xl px-5 text-lg font-semibold ring-2 transition ${date === d ? "bg-neutral-900 text-white ring-neutral-900" : "bg-white text-neutral-900 ring-neutral-300"}`}>
+              <button key={d} type="button" aria-pressed={date === d} onClick={() => setDate(d)} className={`kiosk-tap rounded-2xl px-5 text-lg font-semibold ring-2 transition active:scale-[0.98] lg:px-2 lg:text-base ${date === d ? "kiosk-selected" : "bg-white text-neutral-900 ring-neutral-300 active:bg-neutral-100"}`}>
                 {dayLabel(d, i)}
               </button>
             ))}
@@ -207,30 +207,32 @@ export function FixRequestScreen({ tz, name, online, busy, error, idleMs, onSubm
 
         <section>
           <p className="mb-2 text-lg font-semibold text-neutral-800">What time?</p>
-          <div className="flex items-center justify-between gap-2 rounded-3xl bg-neutral-50 p-2 ring-2 ring-neutral-200">
+          <div className="flex flex-wrap items-center justify-center gap-2 rounded-3xl bg-neutral-50 p-2 ring-2 ring-neutral-200 sm:flex-nowrap sm:justify-between">
             <StepButton label="1 hour earlier" onClick={() => step(-60)}><Minus className="h-6 w-6" />1h</StepButton>
             <StepButton label="15 minutes earlier" onClick={() => step(-15)}><Minus className="h-6 w-6" />15</StepButton>
-            <span className="tabular flex-1 text-center text-5xl font-bold text-neutral-950" data-testid="kiosk-fix-time">{formatTime(minutes)}</span>
+            <StepButton label="5 minutes earlier" onClick={() => step(-5)} wide><Minus className="h-6 w-6" />5</StepButton>
+            <span className="tabular order-first basis-full whitespace-nowrap py-1 text-center text-4xl font-bold text-neutral-950 sm:order-none sm:min-w-0 sm:flex-1 sm:basis-auto sm:py-0 sm:text-5xl" data-testid="kiosk-fix-time">{formatTime(minutes)}</span>
+            <StepButton label="5 minutes later" onClick={() => step(5)} wide><Plus className="h-6 w-6" />5</StepButton>
             <StepButton label="15 minutes later" onClick={() => step(15)}><Plus className="h-6 w-6" />15</StepButton>
             <StepButton label="1 hour later" onClick={() => step(60)}><Plus className="h-6 w-6" />1h</StepButton>
           </div>
-          <div className="mt-2 flex justify-center gap-2">
-            {[-5, 5].map((d) => <button key={d} type="button" onClick={() => step(d)} className="kiosk-tap min-h-12 rounded-xl px-4 text-lg font-medium text-neutral-700 ring-1 ring-neutral-300">{d > 0 ? "+" : "−"}5 min</button>)}
+          <div className="mt-2 flex justify-center gap-2 lg:hidden">
+            {[-5, 5].map((d) => <button key={d} type="button" onClick={() => step(d)} className="kiosk-tap rounded-2xl px-5 text-lg font-semibold text-neutral-900 ring-2 ring-neutral-300 transition active:scale-95 active:bg-neutral-100">{d > 0 ? "+" : "−"}5 min</button>)}
           </div>
         </section>
 
         <section>
           <label className="mb-2 block text-lg font-semibold text-neutral-800" htmlFor="kiosk-fix-note">Note for your manager (optional)</label>
-          <input id="kiosk-fix-note" value={note} maxLength={300} onChange={(e) => setNote(e.target.value)} placeholder={`e.g. I forgot to ${type === "out" ? "clock out" : "clock in"} at ${formatTime(minutes)}`} className="h-16 w-full rounded-2xl bg-white px-5 text-xl text-neutral-950 outline-none ring-2 ring-neutral-300 placeholder:text-neutral-500 focus:ring-neutral-900" data-testid="kiosk-fix-note" />
+          <input id="kiosk-fix-note" value={note} maxLength={300} onChange={(e) => setNote(e.target.value)} placeholder={`e.g. I forgot to ${type === "out" ? "clock out" : "clock in"} at ${formatTime(minutes)}`} className="kiosk-field h-16 w-full rounded-2xl bg-white px-5 text-xl text-neutral-950 outline-none ring-2 ring-neutral-300 placeholder:text-neutral-600" data-testid="kiosk-fix-note" />
         </section>
       </div>
 
-      <p className={`mt-4 min-h-7 text-center text-xl font-medium ${error || future || !online ? "text-red-700" : "text-transparent"}`} role="alert">
+      <p className={`mt-3 min-h-7 text-center text-xl font-medium ${error || future || !online ? "text-red-700" : "text-transparent"}`} role="alert">
         {!online ? "No connection. Try again when the tablet is back online." : future ? "That time is in the future." : error || "·"}
       </p>
-      <div className="mt-2 grid w-full max-w-3xl grid-cols-2 gap-4">
+      <div className="mt-2 grid w-full max-w-4xl gap-3 sm:grid-cols-2 sm:gap-4">
         <BigSecondary onClick={onCancel}>Cancel</BigSecondary>
-        <button type="button" disabled={busy || future || !online} onClick={() => onSubmit({ type, date, minutes, note: note.trim() })} className="kiosk-tap flex min-h-16 items-center justify-center gap-3 rounded-2xl bg-neutral-900 text-xl font-bold text-white transition active:scale-[0.98] disabled:bg-neutral-300 disabled:text-neutral-600" data-testid="kiosk-fix-send">
+        <button type="button" disabled={busy || future || !online} onClick={() => onSubmit({ type, date, minutes, note: note.trim() })} className="kiosk-tap kiosk-primary order-first flex items-center justify-center gap-3 rounded-2xl px-4 text-xl font-bold transition sm:order-none active:scale-[0.98]" data-testid="kiosk-fix-send">
           <Send className="h-6 w-6" />{busy ? "Sending…" : "Send to manager"}
         </button>
       </div>
@@ -238,9 +240,10 @@ export function FixRequestScreen({ tz, name, online, busy, error, idleMs, onSubm
   );
 }
 
-function StepButton({ children, label, onClick }: { children: React.ReactNode; label: string; onClick: () => void }) {
+function StepButton({ children, label, onClick, wide }: { children: React.ReactNode; label: string; onClick: () => void; wide?: boolean }) {
+  // "wide" steps (5 min) sit in the row only where there is room; phones get them in a row below.
   return (
-    <button type="button" aria-label={label} onClick={onClick} className="kiosk-tap flex h-16 min-w-16 items-center justify-center gap-0.5 rounded-2xl bg-white px-3 text-lg font-semibold text-neutral-900 ring-2 ring-neutral-300 transition active:scale-95 active:bg-neutral-100">
+    <button type="button" aria-label={label} onClick={onClick} className={`kiosk-tap ${wide ? "hidden lg:flex" : "flex"} h-16 min-w-16 shrink-0 items-center justify-center gap-0.5 rounded-2xl bg-white px-3 text-lg font-semibold text-neutral-900 ring-2 ring-neutral-300 transition active:scale-95 active:bg-neutral-100`}>
       {children}
     </button>
   );

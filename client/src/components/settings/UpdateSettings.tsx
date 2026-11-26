@@ -7,6 +7,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useConfirm } from "@/components/ConfirmDialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Section } from "@/components/workspace/fields";
 
 interface UpdateInfo {
@@ -59,14 +60,14 @@ export function UpdateSettings() {
 
   return (
     <div className="space-y-5">
-      <Section title="Software update" description="New versions come from the app's GitHub repository. Your data is backed up before every update.">
-        {q.isLoading ? <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" /> : !d ? (
+      <Section title="Updates" description="New versions come from the app's GitHub repository. Your data is backed up before every update.">
+        {q.isLoading ? <Skeleton className="h-5 w-64 max-w-full rounded-md" /> : !d ? (
           <p className="text-[13px] text-muted-foreground">Update information isn't available right now.</p>
         ) : !d.managed ? (
           <p className="text-[13px] text-muted-foreground">This server wasn't set up with the Linux installer, so updates are done on the server itself (git pull, then rebuild). With the installer, an Update now button appears here.</p>
         ) : (
           <div className="space-y-4">
-            <dl className="grid grid-cols-[8rem_minmax(0,1fr)] gap-y-2 text-[13px]">
+            <dl className="grid grid-cols-[8.5rem_minmax(0,1fr)] gap-x-3 gap-y-2.5 text-[13px]">
               <dt className="text-muted-foreground">Version</dt><dd className="font-mono" data-testid="text-version">{short(d.version)}</dd>
               <dt className="text-muted-foreground">Automatic updates</dt>
               <dd>{d.autoUpdate ? <Badge variant="success">On</Badge> : <Badge variant="secondary">Off</Badge>} <span className="text-xs text-muted-foreground">{d.autoUpdate ? "Checked every 10 minutes." : "Turn on with: sudo payroll auto-update on"}</span></dd>

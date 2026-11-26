@@ -167,7 +167,7 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
           </div>
           <div ref={listRef} id="command-list" role="listbox" aria-label="Results" className="flex-1 overflow-y-auto p-2">
             {filtered.length === 0 ? (
-              <p className="px-3 py-10 text-center text-[13px] text-muted-foreground">No results for “{q}”</p>
+              <div className="px-3 py-10 text-center"><p className="text-[14px] font-medium">No results for “{q}”</p><p className="mt-1 text-[13px] text-muted-foreground">Try a page, a setting or a pay period.</p></div>
             ) : filtered.map((i, idx) => {
               const header = i.group !== lastGroup ? i.group : null;
               lastGroup = i.group;
@@ -181,7 +181,7 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
                     data-index={idx}
                     onMouseMove={() => idx !== active && setActive(idx)}
                     onClick={() => run(i)}
-                    className={cn("flex cursor-pointer items-center gap-3 rounded-lg px-3 py-2 text-[14px]", idx === active ? "bg-primary text-primary-foreground" : "text-foreground")}
+                    className={cn("flex min-h-10 cursor-pointer items-center gap-3 rounded-lg px-3 py-2 text-[14px] sm:min-h-0", idx === active ? "bg-primary text-primary-foreground" : "text-foreground")}
                     data-testid={`command-${i.id}`}
                   >
                     <i.icon className={cn("h-4 w-4 shrink-0", idx === active ? "text-primary-foreground" : "text-muted-foreground")} />
@@ -193,7 +193,7 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
               );
             })}
           </div>
-          <div className="flex items-center gap-4 border-t border-border/70 px-4 py-2 text-[11px] text-muted-foreground">
+          <div className="hidden items-center gap-4 border-t border-border/70 px-4 py-2 text-[11px] text-muted-foreground sm:flex">
             <span><kbd className="font-sans">↑↓</kbd> to move</span>
             <span><kbd className="font-sans">↵</kbd> to open</span>
             <span className="ml-auto">{isMac ? "⌘" : "Ctrl"} K anywhere</span>

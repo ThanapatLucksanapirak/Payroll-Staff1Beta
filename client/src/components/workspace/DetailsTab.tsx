@@ -18,7 +18,7 @@ export function DetailsTab(p: WsProps) {
   const differs = JSON.stringify(doc.rules) !== JSON.stringify(site.rules);
 
   return (
-    <div className="grid gap-4 lg:grid-cols-[1fr_1.4fr]">
+    <div className="grid items-start gap-4 lg:grid-cols-[1fr_1.4fr]">
       <Section title="Timesheet">
         <div className="space-y-4">
           <Field label="Name"><Input value={doc.label} placeholder={doc.filename || "Untitled"} maxLength={120} disabled={locked} onChange={(e) => edit((d) => ({ ...d, label: e.target.value }), "label")} data-testid="input-details-label" /></Field>
@@ -35,9 +35,9 @@ export function DetailsTab(p: WsProps) {
             </Select>
           </Field>
           <Field label="Notes"><Textarea rows={4} value={doc.notes} disabled={locked} onChange={(e) => edit((d) => ({ ...d, notes: e.target.value }), "notes")} placeholder="Anything to remember about this pay period" data-testid="input-details-notes" /></Field>
-          <div className="text-xs text-muted-foreground space-y-0.5">
+          <div className="space-y-0.5 border-t border-border/70 pt-3 text-xs text-muted-foreground">
             <p>Source: {({ csv: "CSV file", square: "Square", pdf: "Schedule PDF", manual: "Manual", toast: "Toast", sling: "Sling" } as Record<string, string>)[doc.source] ?? doc.source}{doc.filename ? ` · ${doc.filename}` : ""}</p>
-            <p>{doc.shifts.length} shifts · {doc.employees.length} employees · {doc.manualEmployees.length} manual</p>
+            <p className="tabular">{doc.shifts.length} shift{doc.shifts.length === 1 ? "" : "s"} · {doc.employees.length} employee{doc.employees.length === 1 ? "" : "s"}{doc.manualEmployees.length ? ` · ${doc.manualEmployees.length} manual` : ""}</p>
           </div>
         </div>
       </Section>
@@ -52,14 +52,14 @@ export function DetailsTab(p: WsProps) {
                 if (await confirm({ title: `Use the current rules for ${site.name}?`, description: "Day types and pay will be recalculated. Manual overrides are kept.", confirmLabel: "Apply rules" })) edit((d) => ({ ...d, rules: site.rules }));
               }}><RotateCcw /> Use location rules</Button>
             )}
-            <Button variant="ghost" size="sm" onClick={() => setShowRules(!showRules)} data-testid="button-toggle-rules">{showRules ? "Hide" : "Adjust"}</Button>
+            <Button variant="outline" size="sm" onClick={() => setShowRules(!showRules)} aria-expanded={showRules} data-testid="button-toggle-rules">{showRules ? "Done" : "Adjust rules"}</Button>
           </>
         }
       >
         {showRules ? (
           <RulesEditor rules={doc.rules} disabled={locked} onChange={(r) => edit((d) => ({ ...d, rules: r }), "rules")} />
         ) : (
-          <ul className="text-sm space-y-1 text-muted-foreground">
+          <ul className="list-disc space-y-1.5 pl-4 text-[13px] text-muted-foreground marker:text-muted-foreground/50">
             {doc.rules.classificationMethod === "cutoffs"
               ? <li>Full day: in before {app.time(doc.rules.clockInCutoff)} and out at or after {app.time(doc.rules.clockOutCutoff)}{doc.rules.graceMinutes ? ` (±${doc.rules.graceMinutes} min grace)` : ""}</li>
               : <li>Full day at {doc.rules.fullDayMinHours} h, half day at {doc.rules.halfDayMinHours} h</li>}

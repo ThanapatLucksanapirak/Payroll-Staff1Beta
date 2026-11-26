@@ -57,7 +57,7 @@ export function TimeInput({ value, onChange, className, ...rest }: { value: numb
 export function Field({ label, hint, children, className, error }: { label: string; hint?: ReactNode; children: ReactNode; className?: string; error?: ReactNode }) {
   return (
     <div className={cn("space-y-1.5", className)}>
-      <Label className="text-xs font-medium text-muted-foreground">{label}</Label>
+      <Label className="block text-xs font-medium text-muted-foreground">{label}</Label>
       {children}
       {error ? <p className="text-xs font-medium text-destructive" role="alert">{error}</p> : hint && <p className="text-xs leading-snug text-muted-foreground">{hint}</p>}
     </div>
@@ -68,12 +68,12 @@ export function Field({ label, hint, children, className, error }: { label: stri
 export function Section({ title, description, actions, children, className, bodyClassName }: { title: string; description?: ReactNode; actions?: ReactNode; children: ReactNode; className?: string; bodyClassName?: string }) {
   return (
     <section className={cn("rounded-xl border border-card-border bg-card text-card-foreground shadow-card", className)}>
-      <header className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2 px-5 pb-1 pt-4">
-        <div className="min-w-0">
+      <header className="flex flex-wrap items-start sm:flex-nowrap justify-between gap-x-4 gap-y-2 px-5 pb-1 pt-4">
+        <div className="min-w-0 flex-1 basis-64">
           <h2 className="text-[15px] font-semibold tracking-tight">{title}</h2>
           {description && <p className="mt-0.5 max-w-2xl text-[13px] leading-snug text-muted-foreground">{description}</p>}
         </div>
-        {actions && <div className="flex flex-wrap gap-2">{actions}</div>}
+        {actions && <div className="flex shrink-0 flex-wrap gap-2">{actions}</div>}
       </header>
       <div className={cn("px-5 pb-5 pt-3", bodyClassName)}>{children}</div>
     </section>

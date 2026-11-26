@@ -9,6 +9,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useConfirm } from "@/components/ConfirmDialog";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Skeleton } from "@/components/ui/skeleton";
 import { OffsiteBackupSettings } from "@/components/settings/OffsiteBackupSettings";
 import { Field, NumberInput, Section } from "@/components/workspace/fields";
 
@@ -50,7 +51,7 @@ export function DataSettings() {
       <Section title="Backup" description="Download everything as one JSON file — timesheets, locations, categories, rates and preferences.">
         <div className="flex flex-wrap items-center gap-4">
           <Button onClick={backup} disabled={!!busy} data-testid="button-backup">{busy === "backup" ? <Loader2 className="animate-spin" /> : <Download />} Download backup</Button>
-          <label className="flex items-center gap-2 text-sm"><Checkbox checked={secrets} onCheckedChange={(v) => setSecrets(!!v)} />Include password and Square tokens</label>
+          <label className="flex items-center gap-2 text-[13px]"><Checkbox checked={secrets} onCheckedChange={(v) => setSecrets(!!v)} />Include password and Square tokens</label>
         </div>
       </Section>
       <Section title="Restore" description="Load a backup file into the current database.">
@@ -62,7 +63,7 @@ export function DataSettings() {
       <Section title="Keep history" description="When a location has more than this many draft timesheets, the oldest move to the Trash (kept 30 days). Finalized timesheets are never moved. 0 keeps everything.">
         <div className="flex flex-wrap items-end gap-3">
           <Field label="Timesheets per location" className="w-48"><NumberInput step="1" value={keep} onChange={(n) => setKeep(Math.max(0, Math.round(n)))} data-testid="input-retention" /></Field>
-          <Button variant="outline" className="mb-0.5" disabled={keep === app.prefs.retentionPerSite} onClick={async () => {
+          <Button variant="outline" disabled={keep === app.prefs.retentionPerSite} onClick={async () => {
             if (keep > 0 && !(await confirm({ title: `Keep only ${keep} timesheets per location?`, description: "Older drafts move to the Trash the next time a timesheet is created there.", confirmLabel: "Save" }))) return;
             try { await api("PUT", "/api/prefs", { retentionPerSite: keep }); await app.refresh(); toast({ title: "Saved" }); } catch (e) { toast({ title: "Couldn't save", description: errorMessage(e), variant: "destructive" }); }
           }}>Save</Button>
@@ -117,17 +118,17 @@ function ServerBackups() {
     <Section title="Automatic backups" description="The server saves a full backup every day and keeps the last 30. They are stored in the app's data folder on the server.">
       <div className="space-y-3">
         <Button variant="outline" onClick={runNow} disabled={!!busy} data-testid="button-backup-now">{busy === "run" ? <Loader2 className="animate-spin" /> : <Archive />} Back up now</Button>
-        {list.isLoading ? <p className="text-sm text-muted-foreground">Loading…</p> : exports.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No server backups yet. The first one is made a minute after the app starts.</p>
+        {list.isLoading ? <Skeleton className="h-14 rounded-xl" /> : exports.length === 0 ? (
+          <p className="rounded-lg border border-dashed border-border px-4 py-6 text-center text-[13px] text-muted-foreground">No server backups yet. The first one is made a minute after the app starts.</p>
         ) : (
           <ul className="max-h-72 divide-y divide-border/70 overflow-y-auto rounded-xl border border-border/80" data-testid="list-backups">
             {exports.map((b) => (
-              <li key={b.name} className="flex items-center gap-3 px-3 py-2 text-sm">
+              <li key={b.name} className="flex items-center gap-2 px-3 py-2.5 text-[13px]">
                 <div className="min-w-0 flex-1">
-                  <p className="font-medium">{new Date(b.createdAt).toLocaleString()}</p>
-                  <p className="text-xs text-muted-foreground">{label(b.reason)} · {size(b.size)} · {timeAgo(b.createdAt)}</p>
+                  <p className="font-medium tabular">{new Date(b.createdAt).toLocaleString([], { dateStyle: "medium", timeStyle: "short" })}</p>
+                  <p className="text-xs text-muted-foreground tabular">{label(b.reason)} · {size(b.size)} · {timeAgo(b.createdAt)}</p>
                 </div>
-                <Button size="icon" variant="ghost" className="h-8 w-8" aria-label="Download" disabled={!!busy} onClick={() => download(b)}>{busy === b.name ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}</Button>
+                <Button size="icon" variant="ghost" className="h-8 w-8" aria-label="Download backup" disabled={!!busy} onClick={() => download(b)}>{busy === b.name ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}</Button>
                 <Button size="sm" variant="outline" disabled={!!busy} onClick={() => restore(b)}><RotateCcw className="h-3.5 w-3.5" />Restore</Button>
               </li>
             ))}

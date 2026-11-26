@@ -40,7 +40,7 @@ export function useIdle(ms: number, onIdle: () => void, deps: unknown[] = []) {
 /** A large, glove-friendly secondary button. */
 export function BigSecondary({ children, onClick, testid, className = "" }: { children: React.ReactNode; onClick: () => void; testid?: string; className?: string }) {
   return (
-    <button type="button" onClick={onClick} className={`kiosk-tap min-h-16 rounded-2xl px-8 text-xl font-medium text-neutral-800 ring-2 ring-neutral-300 transition active:scale-[0.98] active:bg-neutral-100 ${className}`} data-testid={testid}>
+    <button type="button" onClick={onClick} className={`kiosk-tap min-h-16 rounded-2xl px-8 text-xl font-medium text-neutral-800 ring-2 ring-neutral-300 transition active:scale-[0.98] active:bg-neutral-100 active:ring-neutral-400 disabled:opacity-50 ${className}`} data-testid={testid}>
       {children}
     </button>
   );

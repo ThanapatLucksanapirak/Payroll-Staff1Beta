@@ -1,15 +1,14 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+/* The employee portal uses the admin app's design tokens and components
+   (see DESIGN.md), light only, with phone-sized type and targets. */
+@import "../index.css";
 
-/* The employee portal has its own look, like the kiosk: plain white, large
-   readable type, built for phones. It does not use the admin app's theme. */
 html, body, #root { min-height: 100%; }
 body {
   margin: 0;
-  background: #fff;
-  color: #1d1d1f;
-  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Segoe UI Variable Display", "Segoe UI", system-ui, Roboto, "Helvetica Neue", Arial, sans-serif;
+  background: hsl(var(--background));
+  color: hsl(var(--foreground));
+  font-family: var(--font-sans);
+  font-size: 16px;
   -webkit-font-smoothing: antialiased;
   -webkit-tap-highlight-color: transparent;
   -webkit-text-size-adjust: 100%;
@@ -18,13 +17,13 @@ body {
 .pt-safe { padding-top: max(env(safe-area-inset-top), 0px); }
 .pb-safe { padding-bottom: max(env(safe-area-inset-bottom), 8px); }
 .portal-tap { touch-action: manipulation; }
-.portal-tap:focus-visible, .portal-input:focus-visible { outline: 3px solid #0a84ff; outline-offset: 2px; }
+.portal-tap:focus-visible, .portal-input:focus-visible { outline: 3px solid hsl(var(--ring) / 0.45); outline-offset: 2px; }
 
 @keyframes portal-fade-up {
   from { transform: translateY(8px); opacity: 0; }
   to { transform: translateY(0); opacity: 1; }
 }
-.portal-fade-up { animation: portal-fade-up 0.25s ease-out both; }
+.portal-fade-up { animation: portal-fade-up 0.2s cubic-bezier(0.2, 0, 0, 1) both; }
 @keyframes portal-shake {
   0%, 100% { transform: translateX(0); }
   20%, 60% { transform: translateX(-8px); }

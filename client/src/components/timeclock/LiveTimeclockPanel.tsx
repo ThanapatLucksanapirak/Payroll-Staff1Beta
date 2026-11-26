@@ -39,6 +39,8 @@ export function LiveTimeclockPanel({ site }: { site: Site }) {
   const y = dayCount(yesterday);
   const td = dayCount(today);
   const watch = (ot.data?.employees ?? []).filter((e) => e.state !== "ok");
+  // Without the overtime card the review card spans the row: actions sit on the right.
+  const single = !ot.data?.enabled;
 
   const approve = async () => {
     setBusy(true);
@@ -52,8 +54,8 @@ export function LiveTimeclockPanel({ site }: { site: Site }) {
     <section data-testid="section-timeclock-review">
       <SectionLabel>Review</SectionLabel>
       <div className={cn("grid gap-4", ot.data?.enabled && "lg:grid-cols-2")}>
-        <div className="rounded-xl border border-card-border bg-card p-4 shadow-card">
-          <div className="flex items-start gap-3">
+        <div className={cn("rounded-xl border border-card-border bg-card p-4 shadow-card", single && "sm:flex sm:items-center sm:justify-between sm:gap-6")}>
+          <div className="flex min-w-0 items-start gap-3">
             <span className={cn("flex h-9 w-9 shrink-0 items-center justify-center rounded-full", r?.counts.fix ? "bg-danger-soft text-danger" : r?.counts.review ? "bg-warning-soft text-warning" : "bg-success-soft text-success")}>
               {r && !r.counts.fix && !r.counts.review ? <CheckCircle2 className="h-[18px] w-[18px]" /> : <Wrench className="h-[18px] w-[18px]" />}
             </span>
@@ -67,7 +69,7 @@ export function LiveTimeclockPanel({ site }: { site: Site }) {
               </p>
             </div>
           </div>
-          <div className="mt-4 flex flex-wrap gap-2">
+          <div className={cn("mt-4 flex flex-wrap gap-2", single && "sm:mt-0 sm:shrink-0 sm:justify-end")}>
             <Button asChild size="sm" variant={r?.counts.fix ? "default" : "outline"}><Link href="/live/fix" data-testid="link-fix-punches"><Wrench />Fix punches & approve<ChevronRight /></Link></Button>
             {editable && !!r?.counts.clean && (
               <Button size="sm" variant="tinted" disabled={busy} onClick={approve} data-testid="button-live-approve-clean">{busy ? <Loader2 className="animate-spin" /> : <ShieldCheck />}Approve {r.counts.clean} clean day{r.counts.clean === 1 ? "" : "s"}</Button>
@@ -117,7 +119,7 @@ function OvertimeRow({ e, tz }: { e: OvertimeStatus; tz: string }) {
       <span className={cn("h-2 w-2 shrink-0 rounded-full", e.working ? "bg-success" : "bg-muted-foreground/40")} title={e.working ? "Working now" : "Not working now"} />
       <span className="min-w-0 flex-1 truncate font-medium">{e.employeeName}</span>
       <Badge variant={e.state === "over" ? "destructive" : e.state === "near" ? "warning" : "secondary"}>{text}</Badge>
-      <span className="w-16 text-right tabular text-muted-foreground">{hm(e.weekMinutes)}</span>
+      <span className="w-16 shrink-0 text-right tabular text-muted-foreground">{hm(e.weekMinutes)}</span>
     </li>
   );
 }

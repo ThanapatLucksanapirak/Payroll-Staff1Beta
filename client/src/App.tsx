@@ -62,7 +62,7 @@ function Gate() {
       <FullScreen>
         <div className="space-y-3">
           <ServerCrash className="mx-auto h-8 w-8 text-muted-foreground" />
-          <p className="font-semibold">Can't reach the server</p>
+          <p className="text-[17px] font-semibold">Can't reach the server</p>
           <p className="max-w-sm text-sm text-muted-foreground">{error}</p>
           <Button variant="outline" onClick={load}><RefreshCw /> Try again</Button>
         </div>
@@ -79,9 +79,10 @@ function Gate() {
       fallback={({ error: e, retry }) => (
         <FullScreen>
           {e ? (
-            <div className="space-y-3 max-w-md">
+            <div className="max-w-md space-y-3">
               <ServerCrash className="mx-auto h-8 w-8 text-muted-foreground" />
-              <p className="text-sm">{e.message}</p>
+              <p className="text-[17px] font-semibold">Couldn't load your data</p>
+              <p className="text-sm text-muted-foreground">{e.message}</p>
               <div className="flex justify-center gap-2">
                 <Button variant="outline" onClick={retry}><RefreshCw /> Retry</Button>
                 <Button variant="ghost" onClick={() => void signOut()}>Sign out</Button>

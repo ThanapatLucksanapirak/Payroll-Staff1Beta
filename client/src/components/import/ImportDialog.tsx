@@ -52,7 +52,7 @@ export function ImportDialog({ open, onOpenChange, site, mode, initialSource, on
         ) : (
           <div className="space-y-4">
             {!initialSource && (
-              <button className="inline-flex items-center gap-0.5 rounded-md text-[13px] font-medium text-primary hover:underline" onClick={() => setSource(null)} data-testid="button-import-back">
+              <button type="button" className="-ml-1 inline-flex items-center gap-0.5 rounded-md px-1 py-0.5 text-[13px] font-medium text-primary hover:underline focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/35" onClick={() => setSource(null)} data-testid="button-import-back">
                 <ChevronLeft className="h-4 w-4" /> All sources
               </button>
             )}
@@ -70,7 +70,8 @@ export function ImportDialog({ open, onOpenChange, site, mode, initialSource, on
 
 function SourcePicker({ onPick, showBlank, site }: { onPick: (s: ImportSource) => void; showBlank: boolean; site: Site }) {
   const timeSource = site.timeSource ?? "square";
-  const tint: Record<ImportSource, string> = { square: "bg-[#0a84ff]", kiosk: "bg-[#5e5ce6]", csv: "bg-[#30d158]", pdf: "bg-[#ff9f0a]", blank: "bg-[#8e8e93]" };
+  // Same source colours as the Home quick actions (categories use chart-*; the blank option stays neutral).
+  const tint: Record<ImportSource, string> = { square: "bg-chart-1/10 text-chart-1 dark:bg-chart-1/20", kiosk: "bg-chart-4/10 text-chart-4 dark:bg-chart-4/20", csv: "bg-chart-2/10 text-chart-2 dark:bg-chart-2/20", pdf: "bg-chart-3/10 text-chart-3 dark:bg-chart-3/20", blank: "bg-foreground/[0.06] text-foreground/70 dark:bg-foreground/10" };
   const opts: { id: ImportSource; title: string; desc: string; icon: any }[] = [
     ...(timeSource !== "square" ? [{ id: "kiosk" as const, title: "From the time clock", desc: "Clock-ins and outs from the kiosk for a date range", icon: Tablet }] : []),
     ...(timeSource !== "kiosk" ? [{ id: "square" as const, title: "Pull from Square", desc: "Fetch closed timecards for a date range", icon: CalendarRange }] : []),
@@ -81,8 +82,8 @@ function SourcePicker({ onPick, showBlank, site }: { onPick: (s: ImportSource) =
   return (
     <div className="grid gap-3 sm:grid-cols-2">
       {opts.map((o) => (
-        <button key={o.id} onClick={() => onPick(o.id)} className="flex items-start gap-3 rounded-xl border border-border/80 bg-card p-4 text-left shadow-card transition-[border-color,box-shadow,transform] duration-150 hover:border-primary/40 hover:shadow-float focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/35 active:scale-[0.99]" data-testid={`button-source-${o.id}`}>
-          <span className={cn("flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] text-white shadow-sm", tint[o.id])}><o.icon className="h-[18px] w-[18px]" /></span>
+        <button key={o.id} type="button" onClick={() => onPick(o.id)} className="flex items-start gap-3 rounded-xl border border-card-border bg-card p-4 text-left shadow-card transition-[background-color,box-shadow,transform] duration-150 hover:bg-foreground/[0.015] hover:shadow-float focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/35 active:scale-[0.99]" data-testid={`button-source-${o.id}`}>
+          <span className={cn("flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px]", tint[o.id])}><o.icon className="h-[18px] w-[18px]" /></span>
           <span className="min-w-0">
             <span className="block text-[14px] font-semibold">{o.title}</span>
             <span className="mt-0.5 block text-xs leading-snug text-muted-foreground">{o.desc}</span>
@@ -109,9 +110,9 @@ function SquareStep({ site, onResult }: { site: Site; onResult: (r: ImportResult
 
   if (!connected) {
     return (
-      <div className="flex flex-col items-center gap-3 rounded-xl border border-dashed border-border px-6 py-8 text-center">
+      <div className="flex flex-col items-center gap-3 rounded-xl border border-card-border bg-foreground/[0.02] px-6 py-8 text-center">
         <span className="flex h-11 w-11 items-center justify-center rounded-full bg-foreground/[0.05]"><CalendarRange className="h-5 w-5 text-muted-foreground" /></span>
-        <div><p className="text-[15px] font-semibold">Square isn't connected for {site.name}</p><p className="mt-1 text-[13px] text-muted-foreground">Add an access token once and timecards can be pulled in one click.</p></div>
+        <div><p className="text-[15px] font-semibold">Square isn't connected for {site.name}</p><p className="mx-auto mt-1 max-w-sm text-[13px] text-muted-foreground">Add an access token once and timecards can be pulled in one click.</p></div>
         <Button asChild size="sm"><Link href="/settings/locations">Connect in Settings</Link></Button>
       </div>
     );
@@ -129,7 +130,7 @@ function SquareStep({ site, onResult }: { site: Site; onResult: (r: ImportResult
       <div className="flex flex-wrap gap-2">
         {[{ l: "Last pay period", p: prev }, { l: "Current pay period", p: cur }].map(({ l, p }) => (
           <Button key={l} size="sm" variant={start === p.start && end === p.end ? "tinted" : "outline"} aria-pressed={start === p.start && end === p.end} onClick={() => { setStart(p.start); setEnd(p.end); }}>
-            {l} <span className="font-normal opacity-75">{app.date(p.start)}–{app.date(p.end)}</span>
+            {l} <span className="font-normal tabular opacity-75">{app.date(p.start)} – {app.date(p.end)}</span>
           </Button>
         ))}
       </div>
@@ -140,7 +141,7 @@ function SquareStep({ site, onResult }: { site: Site; onResult: (r: ImportResult
       <p className="text-xs text-muted-foreground">Times are converted to {site.rules.timezone}. Unpaid breaks are recorded on each shift.</p>
       {error && <ErrorNote>{error}</ErrorNote>}
       <Button onClick={fetchIt} disabled={busy || !start || !end} className="w-full" data-testid="button-square-fetch">
-        {busy ? <Loader2 className="animate-spin" /> : <RefreshCw />} Fetch timecards
+        {busy ? <Loader2 className="animate-spin" /> : <RefreshCw />}{busy ? "Fetching timecards…" : "Fetch timecards"}
       </Button>
     </div>
   );
@@ -167,7 +168,7 @@ function KioskStep({ site, onResult }: { site: Site; onResult: (r: ImportResult)
       <div className="flex flex-wrap gap-2">
         {[{ l: "Last pay period", p: prev }, { l: "Current pay period", p: cur }].map(({ l, p }) => (
           <Button key={l} size="sm" variant={start === p.start && end === p.end ? "tinted" : "outline"} aria-pressed={start === p.start && end === p.end} onClick={() => { setStart(p.start); setEnd(p.end); }}>
-            {l} <span className="font-normal opacity-75">{app.date(p.start)}–{app.date(p.end)}</span>
+            {l} <span className="font-normal tabular opacity-75">{app.date(p.start)} – {app.date(p.end)}</span>
           </Button>
         ))}
       </div>
@@ -178,7 +179,7 @@ function KioskStep({ site, onResult }: { site: Site; onResult: (r: ImportResult)
       <p className="text-xs text-muted-foreground">Clock-ins are paired with clock-outs in {site.rules.timezone}; breaks are recorded on each shift. Shifts without a clock-out are listed as warnings. <Link href="/live" className="font-medium text-primary hover:underline">Fix punches</Link> first if needed.</p>
       {error && <ErrorNote>{error}</ErrorNote>}
       <Button onClick={fetchIt} disabled={busy || !start || !end} className="w-full" data-testid="button-kiosk-fetch">
-        {busy ? <Loader2 className="animate-spin" /> : <RefreshCw />} Get shifts
+        {busy ? <Loader2 className="animate-spin" /> : <RefreshCw />}{busy ? "Getting shifts…" : "Get shifts"}
       </Button>
     </div>
   );
@@ -196,12 +197,12 @@ function FileDrop({ accept, onFile, label, busy }: { accept: string; onFile: (f:
       role="button"
       tabIndex={0}
       onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") ref.current?.click(); }}
-      className={cn("flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed p-10 text-center transition-colors duration-150 focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/35", over ? "border-primary bg-primary/5" : "border-border hover:border-primary/40 hover:bg-foreground/[0.015]")}
+      className={cn("flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed px-6 py-10 text-center transition-colors duration-150 focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/35", over ? "border-primary bg-primary/5" : "border-border hover:border-primary/40 hover:bg-foreground/[0.015]")}
       data-testid="dropzone"
     >
       <span className="flex h-11 w-11 items-center justify-center rounded-full bg-primary/10 text-primary">{busy ? <Loader2 className="h-5 w-5 animate-spin" /> : <Upload className="h-5 w-5" />}</span>
-      <p className="text-[14px] font-semibold">{label}</p>
-      <p className="text-xs text-muted-foreground">Drag a file here or click to browse</p>
+      <p className="max-w-full truncate text-[14px] font-semibold" title={label}>{label}</p>
+      <p className="text-xs text-muted-foreground">{busy ? "Reading the file…" : "Drag a file here or click to browse"}</p>
       <input ref={ref} type="file" accept={accept} className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) onFile(f); e.target.value = ""; }} data-testid="input-file" />
     </div>
   );
@@ -246,9 +247,9 @@ function CsvStep({ onResult }: { onResult: (r: ImportResult) => void }) {
               <div key={f} className="space-y-1">
                 <Label className="text-xs">{CSV_FIELD_LABELS[f]}</Label>
                 <Select value={mapping[f] ?? NONE} onValueChange={(v) => setMapping({ ...mapping, [f]: v === NONE ? undefined : v })}>
-                  <SelectTrigger className="h-8 text-xs" data-testid={`select-map-${f}`}><SelectValue /></SelectTrigger>
+                  <SelectTrigger className="h-9 text-[13px]" aria-label={CSV_FIELD_LABELS[f]} data-testid={`select-map-${f}`}><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value={NONE}>— not in file —</SelectItem>
+                    <SelectItem value={NONE}>Not in file</SelectItem>
                     {parsed.headers.map((h) => <SelectItem key={h} value={h}>{h}</SelectItem>)}
                   </SelectContent>
                 </Select>
@@ -298,10 +299,10 @@ function PdfStep({ site, onResult }: { site: Site; onResult: (r: ImportResult) =
       {error && <ErrorNote>{error}</ErrorNote>}
       {res && (res.needsWeekStart || !res.shifts.length) && (
         <div className="space-y-3 rounded-xl border border-border/80 p-4">
-          {res.warnings.map((w, i) => <p key={i} className="text-sm">{w}</p>)}
+          {res.warnings.map((w, i) => <p key={i} className="text-[13px]">{w}</p>)}
           {res.unmatched.length > 0 && (
             <details className="text-xs"><summary className="cursor-pointer text-muted-foreground">Lines with times we couldn't place ({res.unmatched.length})</summary>
-              <pre className="mt-2 whitespace-pre-wrap rounded bg-muted p-2">{res.unmatched.join("\n")}</pre>
+              <pre className="mt-2 max-h-40 overflow-y-auto whitespace-pre-wrap rounded-md bg-muted p-2 font-mono text-[11px]">{res.unmatched.join("\n")}</pre>
             </details>
           )}
           <div className="grid grid-cols-2 gap-3">
@@ -349,14 +350,14 @@ function ReviewStep({ result, onBack, onConfirm, mode }: { result: ImportResult;
   return (
     <div className="space-y-4">
       {result.warnings.length > 0 && (
-        <ul className="space-y-1 rounded-lg bg-foreground/[0.04] px-3 py-2.5 text-xs text-muted-foreground">
+        <ul className="space-y-1 rounded-lg bg-foreground/[0.04] px-3 py-2.5 text-xs leading-snug text-muted-foreground">
           {result.warnings.map((w, i) => <li key={i}>{w}</li>)}
         </ul>
       )}
       <div className="grid grid-cols-3 divide-x divide-border/70 rounded-xl border border-border/80 text-center">
         <div className="px-3 py-2.5"><p className="text-[20px] font-semibold tabular">{kept.length}</p><p className="text-xs text-muted-foreground">shifts</p></div>
         <div className="px-3 py-2.5"><p className="text-[20px] font-semibold tabular">{names.length - excluded.size}</p><p className="text-xs text-muted-foreground">employees</p></div>
-        <div className="flex flex-col justify-center px-3 py-2.5"><p className="text-[13px] font-semibold">{dates.length > 0 ? `${app.date(dates[0])} – ${app.date(dates[dates.length - 1])}` : "—"}</p><p className="text-xs text-muted-foreground">dates</p></div>
+        <div className="flex flex-col justify-center px-3 py-2.5"><p className="text-[13px] font-semibold tabular">{dates.length > 0 ? `${app.date(dates[0])} – ${app.date(dates[dates.length - 1])}` : "—"}</p><p className="text-xs text-muted-foreground">dates</p></div>
       </div>
       <div className="max-h-[40dvh] divide-y divide-border/70 overflow-y-auto rounded-xl border border-border/80">
         {names.map((n) => {
@@ -365,7 +366,7 @@ function ReviewStep({ result, onBack, onConfirm, mode }: { result: ImportResult;
           return (
             <label key={n} className={cn("flex cursor-pointer items-center gap-3 px-3.5 py-2.5 text-[13px] transition-colors hover:bg-foreground/[0.02]", off && "opacity-50")}>
               <Checkbox checked={!off} onCheckedChange={(v) => { const s = new Set(excluded); v ? s.delete(employeeKey(n)) : s.add(employeeKey(n)); setExcluded(s); }} data-testid={`checkbox-import-${employeeKey(n)}`} />
-              <span className="flex-1 min-w-0 truncate font-medium">{n}</span>
+              <span className="min-w-0 flex-1 truncate font-medium" title={n}>{n}</span>
               <span className="text-xs text-muted-foreground tabular whitespace-nowrap">{list.length} shift{list.length === 1 ? "" : "s"}</span>
             </label>
           );
@@ -375,7 +376,7 @@ function ReviewStep({ result, onBack, onConfirm, mode }: { result: ImportResult;
         <div className="space-y-1.5"><Label>Timesheet name (optional)</Label><Input value={label} onChange={(e) => setLabel(e.target.value)} placeholder={result.filename} data-testid="input-import-label" /></div>
       )}
       {error && <ErrorNote>{error}</ErrorNote>}
-      <div className="flex justify-end gap-2 border-t border-border/70 pt-4">
+      <div className="flex flex-col-reverse gap-2 border-t border-border/70 pt-4 sm:flex-row sm:justify-end">
         <Button variant="outline" onClick={onBack}>Back</Button>
         <Button
           disabled={busy || !kept.length}

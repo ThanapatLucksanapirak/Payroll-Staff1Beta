@@ -34,13 +34,28 @@ export function PayrollTab(p: WsProps) {
   const warns = result.warnings.filter((w) => w.level === "warn");
   const allOpen = list.length > 0 && list.every((e) => open[e.sourceId]);
 
+  // Full / half day counts only mean something for day-rate pay; hourly staff are counted in days worked.
+  const paid = result.employees.filter((e) => !e.excluded && !e.isManual);
+  const dayRate = paid.filter((e) => e.payBasis === "day_rate");
+  const daysWorked = paid.reduce((n, e) => n + e.days.filter((d) => d.punches > 0 && !d.cancelled).length, 0);
+  const flagged = t.flaggedDays ? ` · ${t.flaggedDays} flagged` : "";
+  const daysSub = dayRate.length
+    ? `${dayRate.reduce((n, e) => n + e.fullDays, 0)} full · ${dayRate.reduce((n, e) => n + e.halfDays, 0)} half days${dayRate.length < paid.length ? ` · ${paid.length - dayRate.length} hourly` : ""}${flagged}`
+    : `${daysWorked} day${daysWorked === 1 ? "" : "s"} worked${flagged}`;
+  // Net-pay staff are quoted take-home; gross-pay staff before tax. Name the card after what is actually in the run.
+  const payKpi = !t.netPay
+    ? { label: "Gross pay", value: app.money(t.grossPay), sub: "Everyone is paid gross" }
+    : !t.grossPay
+      ? { label: "Net pay", value: app.money(t.netPay), sub: "Everyone is paid net" }
+      : { label: "Gross / net", value: app.money(t.grossPay), sub: `Net ${app.money(t.netPay)}` };
+
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4 md:gap-4">
         <Kpi label="Total payroll" value={app.money(t.totalPay)} strong testid="kpi-total" />
-        <Kpi label="Employees" value={String(t.employees)} sub={`${t.fullDays} full · ${t.halfDays} half${t.flaggedDays ? ` · ${t.flaggedDays} flagged` : ""}`} />
-        <Kpi label="Net / Gross" value={`${app.money(t.netPay)}`} sub={`Gross ${app.money(t.grossPay)}`} />
-        <Kpi label="Hours" value={String(t.hours)} sub={`${t.overtimeHours ? `${t.overtimeHours} OT · ` : ""}Bonuses ${app.money(t.bonuses)}`} />
+        <Kpi label="Employees" value={String(t.employees)} sub={daysSub} />
+        <Kpi label={payKpi.label} value={payKpi.value} sub={payKpi.sub} />
+        <Kpi label="Hours" value={`${t.hours} h`} sub={[t.overtimeHours ? `${t.overtimeHours} h overtime` : "", t.bonuses ? `Bonuses ${app.money(t.bonuses)}` : ""].filter(Boolean).join(" · ") || "No overtime or bonuses"} />
       </div>
 
       <PayoutStrip cash={t.cash} bank={t.bank} check={t.check} people={result.employees.filter((e) => !e.excluded)} />
@@ -173,7 +188,7 @@ function EmployeeCard(p: WsProps & { emp: EmployeeSummary; open: boolean; onTogg
         {noRate && !emp.excluded && <Badge variant="warning" className="hidden sm:inline-flex">No rate</Badge>}
         <Badge variant="secondary" className="hidden sm:inline-flex">{emp.isNetPay ? "Net" : "Gross"}</Badge>
         {!emp.excluded && <Badge variant="outline" className="hidden md:inline-flex" data-testid={`badge-payment-${emp.sourceId}`}>{paymentLabel(emp.payment, app.money)}</Badge>}
-        <p className="w-24 text-right text-[15px] font-semibold tabular" data-testid={`text-total-${employeeKey(emp.name)}`}>{app.money(emp.totalPay)}</p>
+        <p className="min-w-[6rem] shrink-0 whitespace-nowrap text-right text-[15px] font-semibold tabular" data-testid={`text-total-${employeeKey(emp.name)}`}>{app.money(emp.totalPay)}</p>
       </div>
 
       {p.open && (
@@ -182,8 +197,8 @@ function EmployeeCard(p: WsProps & { emp: EmployeeSummary; open: boolean; onTogg
             <table className="w-full text-sm min-w-[34rem]">
               <thead>
                 <tr className="text-left text-xs text-muted-foreground">
-                  <th className="pb-2 font-medium">Date</th><th className="font-medium">In</th><th className="font-medium">Out</th>
-                  <th className="font-medium text-right">Hours</th><th className="font-medium pl-3">Type</th><th className="font-medium text-right">Pay</th><th />
+                  <th className="pb-2 font-medium">Date</th><th className="pb-2 font-medium">In</th><th className="pb-2 font-medium">Out</th>
+                  <th className="pb-2 font-medium text-right">Hours</th><th className="pb-2 pl-4 font-medium">Type</th><th className="pb-2 font-medium text-right">Pay</th><th className="pb-2"><span className="sr-only">Actions</span></th>
                 </tr>
               </thead>
               <tbody>
@@ -193,7 +208,7 @@ function EmployeeCard(p: WsProps & { emp: EmployeeSummary; open: boolean; onTogg
                     <td className="tabular whitespace-nowrap">{d.start != null ? app.time(d.start) : "—"}</td>
                     <td className="tabular whitespace-nowrap">{d.end != null ? app.time(d.end) : "—"}</td>
                     <td className="tabular text-right">{d.punches ? d.hours : ""}</td>
-                    <td className="pl-3">
+                    <td className="pl-4">
                       {d.punches ? (
                         <span className="flex flex-wrap items-center gap-1">
                           <span className={cn("rounded-full px-2 py-0.5 text-[11px] font-semibold", `status-${d.dayType}`, d.cancelled && "line-through")}>{DAY_LABELS[d.dayType]}</span>

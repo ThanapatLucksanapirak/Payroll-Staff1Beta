@@ -34,7 +34,7 @@ export function AccountMenu({ collapsed = false }: { collapsed?: boolean }) {
       aria-label={`Account: ${name}`}
       data-testid="button-account"
     >
-      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[12px] font-semibold text-primary" aria-hidden>{initials(name)}</span>
+      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-foreground/[0.08] text-[12px] font-semibold text-foreground/80" aria-hidden>{initials(name)}</span>
       {!collapsed && (
         <>
           <span className="min-w-0 flex-1">

@@ -27,18 +27,22 @@ export function AccessNotices() {
   return (
     <div className="mb-6 space-y-3">
       {failing.map((f) => (
-        <div key={f.target} className="flex flex-wrap items-center gap-3 rounded-xl bg-danger-soft px-4 py-3 text-[13px]" role="alert" data-testid={`notice-offsite-${f.target}`}>
-          <AlertTriangle className="h-4 w-4 shrink-0 text-danger" />
-          <span className="min-w-[12rem] flex-1">Backups aren't reaching {NAMES[f.target]}: {f.error}</span>
-          <Button asChild size="sm" variant="outline"><Link href="/settings/data">Backup settings</Link></Button>
+        <div key={f.target} className="flex items-start gap-3 rounded-xl bg-danger-soft px-4 py-3 text-[13px] text-danger sm:items-center" role="alert" data-testid={`notice-offsite-${f.target}`}>
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 sm:mt-0" aria-hidden />
+          <div className="flex min-w-0 flex-1 flex-col items-start gap-2.5 sm:flex-row sm:items-center sm:gap-3">
+            <p className="min-w-0 flex-1 break-words font-medium">Backups aren't reaching {NAMES[f.target]}: <span className="font-normal">{f.error}</span></p>
+            <Button asChild size="sm" variant="outline" className="shrink-0"><Link href="/settings/data">Backup settings</Link></Button>
+          </div>
         </div>
       ))}
       {prompt && (
-        <div className="flex flex-wrap items-center gap-3 rounded-xl border border-card-border bg-card px-4 py-3 text-[13px] shadow-card" data-testid="notice-2fa">
-          <ShieldCheck className="h-4 w-4 shrink-0 text-primary" />
-          <span className="min-w-[12rem] flex-1">Protect payroll with two-factor sign-in: a code from your phone after your password.</span>
-          <Button asChild size="sm" variant="tinted"><Link href="/settings/security">Set up</Link></Button>
-          <Button size="icon" variant="ghost" className="h-8 w-8" aria-label="Not now" onClick={() => { safeStorage.set(DISMISS_KEY, app.user.id); setDismissed(true); }}><X className="h-4 w-4" /></Button>
+        <div className="flex items-start gap-3 rounded-xl border border-card-border bg-card py-3 pl-4 pr-2 text-[13px] shadow-card sm:items-center" data-testid="notice-2fa">
+          <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-primary sm:mt-0" aria-hidden />
+          <div className="flex min-w-0 flex-1 flex-col items-start gap-2.5 sm:flex-row sm:items-center sm:gap-3">
+            <p className="min-w-0 flex-1">Protect payroll with two-factor sign-in: a code from your phone after your password.</p>
+            <Button asChild size="sm" variant="tinted" className="shrink-0"><Link href="/settings/security">Set up</Link></Button>
+          </div>
+          <Button size="icon" variant="ghost" className="-my-1.5 h-9 w-9 shrink-0 text-muted-foreground hover:text-foreground sm:my-0 sm:h-8 sm:w-8" aria-label="Not now" title="Not now" onClick={() => { safeStorage.set(DISMISS_KEY, app.user.id); setDismissed(true); }}><X className="h-4 w-4" /></Button>
         </div>
       )}
     </div>

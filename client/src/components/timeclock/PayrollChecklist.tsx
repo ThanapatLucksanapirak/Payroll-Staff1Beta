@@ -1,7 +1,7 @@
 import { useMemo, useState, type ReactNode } from "react";
 import { useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
-import { AlertTriangle, CheckCircle2, ChevronRight, CircleDashed, ListChecks, Loader2, Wrench } from "lucide-react";
+import { AlertTriangle, CheckCircle2, ChevronRight, CircleDashed, ListChecks, Wrench } from "lucide-react";
 import type { AnalysisResult, Site } from "@shared/schema";
 import { type ChecklistItem, mergeChecklists, timesheetChecklist } from "@shared/payrollChecklist";
 import { isISODate, todayISO } from "@shared/dates";
@@ -10,6 +10,7 @@ import { errorMessage } from "@/lib/api";
 import { payPeriod } from "@/lib/periods";
 import { type ChecklistData, tcKeys } from "@/lib/timeclock";
 import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
@@ -71,9 +72,16 @@ export function PayrollChecklistDialog({ site, onClose, period, result, onTab, f
           </Tabs>
         )}
         {loading ? (
-          <div className="flex justify-center py-10"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>
+          <div className="divide-y divide-border/70 overflow-hidden rounded-xl border border-card-border" aria-busy="true" aria-label="Checking this pay period">
+            {[0, 1, 2].map((i) => (
+              <div key={i} className="flex items-start gap-3 px-4 py-3">
+                <Skeleton className="h-7 w-7 shrink-0 rounded-full" />
+                <div className="flex-1 space-y-2 pt-0.5"><Skeleton className="h-3.5 w-2/5" /><Skeleton className="h-3 w-4/5" /></div>
+              </div>
+            ))}
+          </div>
         ) : q.error ? (
-          <p className="flex items-center gap-2 rounded-lg bg-danger-soft px-3 py-2 text-[13px] text-danger"><AlertTriangle className="h-4 w-4" />{errorMessage(q.error)}</p>
+          <p className="flex items-start gap-2 rounded-lg bg-danger-soft px-3 py-2 text-[13px] font-medium text-danger" role="alert"><AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />{errorMessage(q.error)}</p>
         ) : items.length === 0 ? (
           <div className="flex flex-col items-center gap-2 py-8 text-center" data-testid="checklist-all-clear">
             <span className="flex h-11 w-11 items-center justify-center rounded-full bg-success-soft text-success"><CheckCircle2 className="h-5 w-5" /></span>
@@ -90,7 +98,7 @@ export function PayrollChecklistDialog({ site, onClose, period, result, onTab, f
                     type="button"
                     disabled={!target}
                     onClick={() => go(i)}
-                    className={cn("flex w-full items-start gap-3 px-4 py-3 text-left transition-colors", target && "hover:bg-foreground/[0.02] focus-visible:bg-foreground/[0.03] focus-visible:outline-none")}
+                    className={cn("flex w-full items-start gap-3 px-4 py-3 text-left transition-colors", target && "hover:bg-foreground/[0.03] focus-visible:bg-foreground/[0.03] focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-inset focus-visible:ring-ring/35")}
                     data-testid={`checklist-${i.id}`}
                   >
                     <span className={cn("mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full", i.severity === "fix" ? "bg-danger-soft text-danger" : "bg-warning-soft text-warning")}>
@@ -108,7 +116,7 @@ export function PayrollChecklistDialog({ site, onClose, period, result, onTab, f
           </ul>
         )}
         <DialogFooter className="gap-2 sm:justify-between">
-          <span className="self-center text-xs text-muted-foreground">{items.length ? `${fixCount} to fix · ${items.length - fixCount} to review` : ""}</span>
+          <span className="self-center text-xs tabular text-muted-foreground">{items.length ? `${fixCount} to fix · ${items.length - fixCount} to review` : ""}</span>
           <div className="flex gap-2">{footer}<Button variant={footer ? "outline" : "default"} onClick={onClose}>Close</Button></div>
         </DialogFooter>
       </DialogContent>

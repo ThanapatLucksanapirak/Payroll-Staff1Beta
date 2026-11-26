@@ -142,7 +142,7 @@ export function ReportsPage() {
       </div>
 
       {list.isLoading ? (
-        <div className="space-y-4"><div className="grid gap-4 sm:grid-cols-4">{[0, 1, 2, 3].map((i) => <Skeleton key={i} className="h-24 rounded-xl" />)}</div><Skeleton className="h-72 rounded-xl" /></div>
+        <div className="space-y-8"><Skeleton className="h-[13.5rem] rounded-xl lg:h-[6.75rem]" /><Skeleton className="h-72 rounded-xl" /></div>
       ) : list.error ? (
         <EmptyState icon={AlertTriangle} title="Couldn't load timesheets" description={errorMessage(list.error)} action={<Button variant="outline" size="sm" onClick={() => list.refetch()}>Try again</Button>} />
       ) : inRange.length === 0 ? (
@@ -154,15 +154,14 @@ export function ReportsPage() {
         />
       ) : (
         <div className="space-y-8">
-          <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+          <div className="grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-card-border bg-border/70 shadow-card lg:grid-cols-4">
             <Kpi label="Total payroll" value={app.money(total)} sub={`${inRange.length} timesheet${inRange.length === 1 ? "" : "s"}`} testid="kpi-report-total" />
             <Kpi label="Pay periods" value={String(periods.length)} sub={periods.length ? `${app.date(periods[0].start)} – ${app.date(last!.end)}` : ""} />
-            <Kpi label="Average per period" value={app.money(avg)} />
+            <Kpi label="Average per period" value={app.money(avg)} sub={periods.length ? `Across ${periods.length} period${periods.length === 1 ? "" : "s"}` : undefined} />
             <Kpi
               label="Latest vs previous"
               value={change === null ? "—" : `${change >= 0 ? "+" : "−"}${Math.abs(change * 100).toFixed(1)}%`}
               sub={last && prev ? `${app.money(last.total - prev.total)} difference` : "Needs two periods"}
-              tone={change === null ? undefined : change >= 0 ? "up" : "down"}
             />
           </div>
 
@@ -198,7 +197,7 @@ export function ReportsPage() {
               <div className="overflow-hidden rounded-xl border border-card-border bg-card shadow-card">
                 <div className="max-h-[22rem] overflow-y-auto">
                   <table className="w-full text-[13px]" data-testid="table-periods">
-                    <thead className="sticky top-0 bg-card/95 backdrop-blur">
+                    <thead className="sticky top-0 bg-card">
                       <tr className="border-b border-border/70 text-left text-xs text-muted-foreground">
                         <th className="px-4 py-2 font-medium">Pay period</th>
                         <th className="px-4 py-2 text-right font-medium">Total</th>
@@ -211,11 +210,11 @@ export function ReportsPage() {
                         const ch = before && before.total > 0 ? (p.total - before.total) / before.total : null;
                         return (
                           <tr key={p.key}>
-                            <td className="px-4 py-2.5">{app.date(p.start)} – {app.date(p.end)}{p.count > 1 && <span className="ml-1.5 text-xs text-muted-foreground">({p.count})</span>}</td>
+                            <td className="whitespace-nowrap px-4 py-2.5 tabular">{app.date(p.start)} – {app.date(p.end)}{p.count > 1 && <span className="ml-1.5 text-xs text-muted-foreground">{p.count} timesheets</span>}</td>
                             <td className="px-4 py-2.5 text-right font-medium tabular">{app.money(p.total)}</td>
                             <td className="px-4 py-2.5 text-right tabular">
                               {ch === null ? <span className="text-muted-foreground">—</span> : (
-                                <span className={cn("inline-flex items-center gap-0.5", ch >= 0 ? "text-success" : "text-danger")}>
+                                <span className="inline-flex items-center gap-0.5 text-foreground/80" aria-label={`${ch >= 0 ? "Up" : "Down"} ${Math.abs(ch * 100).toFixed(1)}%`}>
                                   {ch >= 0 ? <ArrowUpRight className="h-3.5 w-3.5" /> : <ArrowDownRight className="h-3.5 w-3.5" />}{Math.abs(ch * 100).toFixed(1)}%
                                 </span>
                               )}
@@ -310,11 +309,11 @@ function EmployeeBreakdown({ timesheets }: { timesheets: TimesheetSummary[] }) {
               const s = app.sites.find((x) => x.id === t.siteId);
               return (
                 <li key={t.id}>
-                  <label className={cn("flex cursor-pointer items-center gap-2.5 rounded-lg px-2.5 py-2 text-[13px] hover:bg-foreground/[0.03]", !on && selected.size >= MAX_DOCS && "cursor-not-allowed opacity-50")}>
+                  <label className={cn("flex cursor-pointer items-center gap-2.5 rounded-lg px-2.5 py-2 text-[13px] hover:bg-foreground/[0.03]", !on && selected.size >= MAX_DOCS && "cursor-not-allowed opacity-45")}>
                     <Checkbox checked={on} onCheckedChange={() => toggle(t.id)} disabled={!on && selected.size >= MAX_DOCS} data-testid={`checkbox-report-${t.id}`} />
                     <span className="min-w-0 flex-1">
-                      <span className="block truncate font-medium">{t.customLabel || t.filename || "Untitled"}</span>
-                      <span className="flex items-center gap-1 truncate text-xs text-muted-foreground">{s && <SiteDot color={s.color} className="h-2 w-2" />}{app.date(t.periodStart)} – {app.date(t.periodEnd)}</span>
+                      <span className="block truncate font-medium" title={t.customLabel || t.filename || undefined}>{t.customLabel || t.filename || "Untitled"}</span>
+                      <span className="flex items-center gap-1 truncate text-xs text-muted-foreground tabular">{s && <SiteDot color={s.color} className="h-2 w-2" />}{app.date(t.periodStart)} – {app.date(t.periodEnd)}</span>
                     </span>
                   </label>
                 </li>
@@ -351,7 +350,7 @@ function EmployeeBreakdown({ timesheets }: { timesheets: TimesheetSummary[] }) {
                 <tbody className="divide-y divide-border/60">
                   {rows.map((r) => (
                     <tr key={r.name} className="hover:bg-foreground/[0.02]">
-                      <td className="px-4 py-2.5 font-medium">{r.name}</td>
+                      <td className="max-w-[14rem] truncate px-4 py-2.5 font-medium" title={r.name}>{r.name}</td>
                       <td className="px-3 py-2.5 text-right tabular text-muted-foreground">{r.sheets}</td>
                       <td className="px-3 py-2.5 text-right tabular">{r.fullDays}</td>
                       <td className="px-3 py-2.5 text-right tabular">{r.halfDays}</td>
@@ -377,12 +376,13 @@ function EmployeeBreakdown({ timesheets }: { timesheets: TimesheetSummary[] }) {
   );
 }
 
-function Kpi({ label, value, sub, tone, testid }: { label: string; value: string; sub?: string; tone?: "up" | "down"; testid?: string }) {
+/** One cell of the KPI strip. A rise in payroll isn't good or bad by itself, so change is shown with its sign, not status colour. */
+function Kpi({ label, value, sub, testid }: { label: string; value: string; sub?: string; testid?: string }) {
   return (
-    <div className="min-w-0 rounded-xl border border-card-border bg-card p-4 shadow-card sm:p-5">
-      <p className="text-[13px] font-medium text-muted-foreground">{label}</p>
-      <p className={cn("mt-2 truncate text-[24px] font-semibold leading-none tracking-tight tabular", tone === "up" && "text-success", tone === "down" && "text-danger")} data-testid={testid}>{value}</p>
-      {sub && <p className="mt-1.5 truncate text-xs text-muted-foreground">{sub}</p>}
+    <div className="flex min-w-0 flex-col bg-card p-4 sm:p-5">
+      <p className="truncate text-[13px] font-medium text-muted-foreground">{label}</p>
+      <p className="mt-3 truncate text-[22px] font-semibold leading-none tracking-tight tabular sm:text-[26px]" data-testid={testid}>{value}</p>
+      <p className="mt-2 min-h-[1rem] truncate text-xs text-muted-foreground tabular">{sub}</p>
     </div>
   );
 }

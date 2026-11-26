@@ -44,10 +44,12 @@ const hm = (min: number) => { const h = Math.floor(min / 60), m = Math.round(min
 
 function Banner({ children, action }: { children: React.ReactNode; action?: React.ReactNode }) {
   return (
-    <div className="mb-6 flex flex-wrap items-center gap-3 rounded-xl bg-warning-soft px-4 py-3 text-[13px]" role="status">
-      <AlertTriangle className="h-4 w-4 shrink-0 text-warning" />
-      <span className="flex-1">{children}</span>
-      {action}
+    <div className="mb-6 flex flex-col gap-2.5 rounded-xl bg-warning-soft px-4 py-3 text-[13px] sm:flex-row sm:items-center sm:gap-3" role="status">
+      <span className="flex min-w-0 flex-1 items-start gap-3">
+        <AlertTriangle className="mt-px h-4 w-4 shrink-0 text-warning" />
+        <span className="min-w-0 flex-1">{children}</span>
+      </span>
+      {action && <span className="shrink-0 pl-7 sm:pl-0">{action}</span>}
     </div>
   );
 }
@@ -124,7 +126,9 @@ export function LivePage() {
               Who's working now
             </SectionLabel>
             {groups.on.length === 0 ? (
-              <EmptyState icon={Users} title="Nobody is clocked in right now" description="Clock-ins from the kiosk appear here the moment they happen." />
+              <div className="rounded-xl border border-card-border bg-card shadow-card">
+                <EmptyState compact icon={Users} title="Nobody is clocked in right now" description="Clock-ins from the kiosk appear here the moment they happen." />
+              </div>
             ) : (
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 {groups.on.map((e) => (
@@ -169,25 +173,30 @@ export function LivePage() {
             <SectionLabel action={<span className="text-xs text-muted-foreground">{data.punches.length} punch{data.punches.length === 1 ? "" : "es"}</span>}>Today's punches</SectionLabel>
             <div className="overflow-hidden rounded-xl border border-card-border bg-card shadow-card">
               {data.punches.length === 0 ? (
-                <EmptyState compact icon={Clock} title="No punches yet today" />
+                <EmptyState compact icon={Clock} title="No punches yet today" description="Clock-ins, breaks and clock-outs show up here as they happen." />
               ) : (
                 <ul className="divide-y divide-border/70" data-testid="list-punches">
                   {data.punches.map((p) => (
-                    <li key={p.id} className="flex min-h-[3rem] min-w-0 items-center gap-2 px-3 py-2 text-[13px] sm:gap-3 sm:px-4">
-                      <span className="w-16 shrink-0 tabular font-semibold sm:w-20">{t(p.at)}</span>
+                    <li key={p.id} className="flex min-h-[3.25rem] min-w-0 items-center gap-3 px-4 py-2 text-[13px]">
+                      <span className="w-[4.5rem] shrink-0 tabular font-semibold sm:w-20">{t(p.at)}</span>
                       <PunchPhoto punch={p} canView={editable} label={`${names[p.employeeId] ?? p.employeeName} · ${PUNCH_LABELS[p.type]} at ${t(p.at)}`} />
-                      <span className="flex min-w-0 flex-1 flex-col">
-                        <span className="truncate font-medium" title={names[p.employeeId] ?? p.employeeName}>{names[p.employeeId] ?? p.employeeName}</span>
-                        {p.meta?.station && <StationTag station={p.meta.station} className="mt-0.5 self-start" />}
+                      <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+                        <span className="flex min-w-0 items-center gap-2">
+                          <span className="truncate font-medium" title={names[p.employeeId] ?? p.employeeName}>{names[p.employeeId] ?? p.employeeName}</span>
+                          {p.flags?.autoClosed && !p.editedAt && <Badge variant="warning" className="shrink-0">Auto-closed</Badge>}
+                          {p.editedAt && <Badge variant="secondary" className="shrink-0">Edited</Badge>}
+                        </span>
+                        <span className={cn("text-xs font-medium sm:hidden", TYPE_CLS[p.type])}>{PUNCH_LABELS[p.type]}</span>
+                        {p.meta?.station && <StationTag station={p.meta.station} className="self-start" />}
                       </span>
-                      <span className={cn("hidden w-28 shrink-0 font-medium sm:block", TYPE_CLS[p.type])}>{PUNCH_LABELS[p.type]}</span>
-                      <span className="hidden w-24 shrink-0 items-center gap-1 text-xs text-muted-foreground md:flex">
+                      <span className={cn("hidden w-24 shrink-0 font-medium sm:block", TYPE_CLS[p.type])}>{PUNCH_LABELS[p.type]}</span>
+                      <span className="hidden w-20 shrink-0 items-center gap-1.5 text-xs text-muted-foreground md:flex">
                         {p.source === "kiosk" ? <><Tablet className="h-3.5 w-3.5" />Kiosk</> : <><UserRound className="h-3.5 w-3.5" />Admin</>}
                       </span>
-                      {(p.editedAt || p.source === "admin") && p.note && <span className="hidden max-w-[14rem] truncate text-xs text-muted-foreground lg:block" title={p.note}>“{p.note}”</span>}
-                      {p.flags?.autoClosed && !p.editedAt && <Badge variant="warning" className="shrink-0">Auto-closed</Badge>}
-                      {p.editedAt && <Badge variant="secondary" className="shrink-0">Edited</Badge>}
-                      {editable && <Button variant="ghost" size="sm" className="text-muted-foreground" onClick={() => setFix(p)} data-testid={`button-fix-${p.id}`}><Pencil /> <span className="hidden sm:inline">Fix</span></Button>}
+                      <span className="hidden w-52 shrink-0 truncate text-xs text-muted-foreground lg:block" title={(p.editedAt || p.source === "admin") && p.note ? p.note : undefined}>
+                        {(p.editedAt || p.source === "admin") && p.note ? `“${p.note}”` : ""}
+                      </span>
+                      {editable && <Button variant="ghost" size="sm" className="-mr-2 shrink-0 text-muted-foreground" aria-label={`Fix ${PUNCH_LABELS[p.type].toLowerCase()} at ${t(p.at)}`} onClick={() => setFix(p)} data-testid={`button-fix-${p.id}`}><Pencil /> <span className="hidden sm:inline">Fix</span></Button>}
                     </li>
                   ))}
                 </ul>
@@ -294,7 +303,7 @@ function FixPunchDialog({ punch, tz, name, onClose }: { punch: Punch; tz: string
           ) : (
             <Button variant="ghost" className="text-destructive" disabled={busy} onClick={() => setConfirmDelete(true)}><Trash2 /> Delete</Button>
           )}
-          <div className="flex gap-2">
+          <div className="flex flex-col-reverse gap-2 sm:flex-row">
             <Button variant="outline" onClick={onClose}>Cancel</Button>
             <Button disabled={busy || !note.trim()} onClick={() => save(!!conflict && !confirmDelete)} data-testid="button-save-punch">
               {busy && <Loader2 className="animate-spin" />}{conflict && !confirmDelete ? "Save anyway" : "Save"}

@@ -54,6 +54,7 @@ export function ShiftDialog({ draft, dates, people, onSave, onDelete, onClose }:
   const endMin = overnight ? end + 1440 : end;
   const length = (endMin - start) / 60;
   const tooLong = endMin - start > 24 * 60;
+  const extra = draft.id ? 0 : repeat.filter((d) => d !== date).length;
 
   const save = async () => {
     if (!person) return;
@@ -77,7 +78,7 @@ export function ShiftDialog({ draft, dates, people, onSave, onDelete, onClose }:
       <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle>{draft.id ? "Edit shift" : "Add shift"}</DialogTitle>
-          <DialogDescription>{person ? person.employeeName : "Pick who works, the day and the hours."}</DialogDescription>
+          <DialogDescription className="break-words">{person ? person.employeeName : "Pick who works, the day and the hours."}</DialogDescription>
         </DialogHeader>
         <div className="space-y-3">
           {!draft.person && <Field label="Employee"><PersonSelect people={people} value={person} onChange={setPerson} testid="select-shift-employee" /></Field>}
@@ -91,7 +92,7 @@ export function ShiftDialog({ draft, dates, people, onSave, onDelete, onClose }:
             <Field label="Start"><TimeInput value={start} onChange={setStart} data-testid="input-shift-start" /></Field>
             <Field label="End" hint={overnight ? "Ends the next day" : undefined}><TimeInput value={end} onChange={setEnd} data-testid="input-shift-end" /></Field>
           </div>
-          <p className={cn("px-0.5 text-xs", tooLong ? "font-medium text-danger" : "text-muted-foreground")}>
+          <p className={cn("-mt-1 px-0.5 text-xs tabular", tooLong ? "font-medium text-danger" : "text-muted-foreground")}>
             {tooLong ? "A shift can be at most 24 hours." : `${Number.isInteger(length) ? length : length.toFixed(2)} hours`}
           </p>
           <div className="grid grid-cols-2 gap-3">
@@ -109,7 +110,7 @@ export function ShiftDialog({ draft, dates, people, onSave, onDelete, onClose }:
                       type="button"
                       aria-pressed={on}
                       onClick={() => setRepeat((r) => (on ? r.filter((x) => x !== d) : [...r, d]))}
-                      className={cn("h-8 rounded-full border px-3 text-xs font-medium transition-colors", on ? "border-primary bg-primary text-primary-foreground" : "border-border text-muted-foreground hover:bg-accent")}
+                      className={cn("h-9 min-w-[3rem] rounded-full border px-3 text-xs font-medium outline-none transition-colors focus-visible:ring-[3px] focus-visible:ring-ring/35", on ? "border-primary bg-primary text-primary-foreground" : "border-border text-muted-foreground hover:bg-accent hover:text-foreground")}
                     >
                       {WEEKDAYS_SHORT[dayOfWeek(d)]}
                     </button>
@@ -120,10 +121,10 @@ export function ShiftDialog({ draft, dates, people, onSave, onDelete, onClose }:
           )}
         </div>
         <DialogFooter className="gap-2 sm:justify-between">
-          {onDelete ? <Button variant="ghost" className="text-destructive" disabled={busy} onClick={remove} data-testid="button-delete-shift"><Trash2 /> Delete</Button> : <span />}
-          <div className="flex gap-2">
+          {onDelete ? <Button variant="ghost" className="text-destructive" disabled={busy} onClick={remove} data-testid="button-delete-shift"><Trash2 /> Delete</Button> : <span className="hidden sm:block" />}
+          <div className="flex flex-col-reverse gap-2 sm:flex-row">
             <Button variant="outline" onClick={onClose}>Cancel</Button>
-            <Button disabled={busy || !person || tooLong} onClick={save} data-testid="button-save-shift">{busy && <Loader2 className="animate-spin" />}Save</Button>
+            <Button disabled={busy || !person || tooLong} onClick={save} data-testid="button-save-shift">{busy && <Loader2 className="animate-spin" />}{draft.id ? "Save shift" : extra ? `Add ${extra + 1} shifts` : "Add shift"}</Button>
           </div>
         </DialogFooter>
       </DialogContent>
@@ -178,7 +179,7 @@ export function TimeOffDialog({ siteId, people, entry, initial, onClose }: {
           <DialogDescription>Approved time off shows as a grey block and silences late alerts.</DialogDescription>
         </DialogHeader>
         <div className="space-y-3">
-          {entry ? <p className="text-[14px] font-medium">{entry.employeeName}</p> : <Field label="Employee"><PersonSelect people={people} value={person} onChange={setPerson} testid="select-timeoff-employee" /></Field>}
+          {entry ? <p className="break-words text-[15px] font-semibold">{entry.employeeName}</p> : <Field label="Employee"><PersonSelect people={people} value={person} onChange={setPerson} testid="select-timeoff-employee" /></Field>}
           <div className="grid grid-cols-2 gap-3">
             <Field label="First day"><Input type="date" value={start} onChange={(e) => { setStart(e.target.value); if (!end || end < e.target.value) setEnd(e.target.value); }} data-testid="input-timeoff-start" /></Field>
             <Field label="Last day"><Input type="date" value={end} min={start} onChange={(e) => setEnd(e.target.value)} data-testid="input-timeoff-end" /></Field>
@@ -191,10 +192,10 @@ export function TimeOffDialog({ siteId, people, entry, initial, onClose }: {
           {problem && <p className="rounded-lg bg-danger-soft px-3 py-2 text-[13px] font-medium text-danger" role="alert">{problem}</p>}
         </div>
         <DialogFooter className="gap-2 sm:justify-between">
-          {entry ? <Button variant="ghost" className="text-destructive" disabled={busy} onClick={remove}><Trash2 /> Remove</Button> : <span />}
-          <div className="flex gap-2">
+          {entry ? <Button variant="ghost" className="text-destructive" disabled={busy} onClick={remove}><Trash2 /> Remove</Button> : <span className="hidden sm:block" />}
+          <div className="flex flex-col-reverse gap-2 sm:flex-row">
             <Button variant="outline" onClick={onClose}>Cancel</Button>
-            <Button disabled={busy || !person || !start || !end || end < start} onClick={save} data-testid="button-save-timeoff">{busy && <Loader2 className="animate-spin" />}Save</Button>
+            <Button disabled={busy || !person || !start || !end || end < start} onClick={save} data-testid="button-save-timeoff">{busy && <Loader2 className="animate-spin" />}{entry ? "Save" : "Add time off"}</Button>
           </div>
         </DialogFooter>
       </DialogContent>

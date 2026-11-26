@@ -109,7 +109,7 @@ export function WorkspacePage({ id }: { id: string }) {
               <span className="line-clamp-1 break-all sm:break-words" data-testid="text-timesheet-title">{title}</span>
               {doc.status === "final" ? <Badge variant="success"><Lock />Final</Badge> : <Badge variant="secondary">Draft</Badge>}
             </h1>
-            <p className="mt-1 flex flex-wrap items-center gap-x-1.5 text-[13px] text-muted-foreground"><span className="inline-flex items-center gap-1.5 whitespace-nowrap"><SiteDot color={site.color} />{site.name}</span><span aria-hidden>·</span><span className="whitespace-nowrap">{periodTitle}</span></p>
+            <p className="mt-1 flex flex-wrap items-center gap-x-1.5 text-[13px] text-muted-foreground"><span className="inline-flex items-center gap-1.5 whitespace-nowrap"><SiteDot color={site.color} />{site.name}</span><span aria-hidden className="hidden sm:inline">·</span><span className="basis-full whitespace-nowrap tabular sm:basis-auto">{periodTitle}</span></p>
           </div>
           <div className="flex items-center gap-1">
             <SaveIndicator state={ts.saveState} error={ts.saveError} savedAt={ts.lastSavedAt} legacy={ts.legacy} />
@@ -177,11 +177,11 @@ export function WorkspacePage({ id }: { id: string }) {
       <Tabs value={tab} onValueChange={setTab} className="mt-4">
         <div className="-mx-4 overflow-x-auto px-4 sm:mx-0 sm:px-0">
           <TabsList className="w-full sm:w-auto">
-            <TabsTrigger value="payroll" data-testid="tab-payroll">Payroll</TabsTrigger>
-            <TabsTrigger value="rates" data-testid="tab-rates">Rates</TabsTrigger>
-            <TabsTrigger value="shifts" data-testid="tab-shifts">Shifts</TabsTrigger>
-            <TabsTrigger value="extras" data-testid="tab-extras">Tips & extras</TabsTrigger>
-            <TabsTrigger value="details" data-testid="tab-details">Details</TabsTrigger>
+            <TabsTrigger value="payroll" className={tabCls} data-testid="tab-payroll">Payroll</TabsTrigger>
+            <TabsTrigger value="rates" className={tabCls} data-testid="tab-rates">Rates</TabsTrigger>
+            <TabsTrigger value="shifts" className={tabCls} data-testid="tab-shifts">Shifts</TabsTrigger>
+            <TabsTrigger value="extras" className={tabCls} data-testid="tab-extras">Tips & extras</TabsTrigger>
+            <TabsTrigger value="details" className={tabCls} data-testid="tab-details">Details</TabsTrigger>
           </TabsList>
         </div>
         <TabsContent value="payroll" className="mt-5"><PayrollTab {...props} /></TabsContent>
@@ -214,3 +214,6 @@ function SaveIndicator({ state, error, savedAt, legacy }: { state: SaveState; er
     </span>
   );
 }
+
+/** Phones: let the five segments fit 358px without scrolling. */
+const tabCls = "max-sm:min-w-0 max-sm:px-2";

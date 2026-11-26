@@ -51,7 +51,7 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
           {opts?.typeToConfirm && (
             <div className="space-y-1.5">
               <p className="text-sm">Type <span className="font-mono font-semibold">{opts.typeToConfirm}</span> to confirm.</p>
-              <Input value={typed} onChange={(e) => setTyped(e.target.value)} autoFocus data-testid="input-type-confirm" />
+              <Input value={typed} onChange={(e) => setTyped(e.target.value)} autoFocus autoComplete="off" spellCheck={false} aria-label={`Type ${opts.typeToConfirm} to confirm`} data-testid="input-type-confirm" />
             </div>
           )}
           <AlertDialogFooter>
