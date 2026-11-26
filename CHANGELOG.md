@@ -6,7 +6,7 @@ Settings → About, next to the matching update.
 Add an entry with every pull request: a `## YYYY-MM-DD · Title (#PR)` heading and a
 few short bullets written for the people who use the app, not for developers.
 
-## 2026-11-26 · Kiosk and app polish from feedback (#PR)
+## 2026-11-26 · Kiosk and app polish from feedback (#22)
 - Live: each person who is clocked in has Clock out and Cancel clock-in, for when the kiosk went offline or someone clocked in by mistake.
 - With photos on, the time clock checks for a face: a blocked or covered camera, or nobody in view, stops the punch and says "Face not detected".
 - Settings → Locations: kiosk options, stations, break reminder, auto clock-out and the employee portal now save with the one Save changes button, which lists what's unsaved.
