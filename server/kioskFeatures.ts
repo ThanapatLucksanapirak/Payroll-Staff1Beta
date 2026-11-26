@@ -8,7 +8,7 @@ import { randomUUID } from "node:crypto";
 import type { Express, NextFunction, Request, Response } from "express";
 import { z } from "zod";
 import type { Site } from "@shared/schema";
-import { localToInstant } from "@shared/dates";
+import { isISODate, localToInstant } from "@shared/dates";
 import { PUNCH_TYPES } from "@shared/punches";
 import {
   type FixRequest, type ShiftNote, FIX_TYPE_LABELS, MAX_STATIONS, acknowledge, fixTimeProblem, noteActive,
@@ -32,7 +32,7 @@ const h = (fn: Handler) => (req: Request, res: Response, next: NextFunction) => 
 };
 
 const newId = (prefix: string) => `${prefix}_${randomUUID().replace(/-/g, "").slice(0, 16)}`;
-const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
+const isoDate = z.string().refine(isISODate, "Use a real date (YYYY-MM-DD).");
 const instant = z.string().refine((s) => Number.isFinite(Date.parse(s)), "Enter a valid date and time.");
 
 /** What the kiosk routes need from kiosk.ts (passed in to avoid a circular import). */
@@ -118,7 +118,7 @@ export function registerKioskFeatureAdminRoutes(app: Express) {
     const site = await siteOr404(req, res); if (!site) return;
     const patch = z.object({
       stations: z.array(z.string().max(80)).max(MAX_STATIONS).optional(),
-      breakReminderHours: z.number().min(0).max(16).nullable().optional(),
+      breakReminderHours: z.number().max(16).nullable().optional().refine((v) => v == null || v === 0 || v >= 0.5, "Break reminder: use 0.5 to 16 hours, or turn it off."),
       photoRetentionDays: z.number().int().min(1).max(3650).optional(),
       faceRetentionDays: z.number().int().min(FACE_RETENTION_MIN_DAYS).max(FACE_RETENTION_MAX_DAYS).optional(),
     }).strict().parse(req.body ?? {});

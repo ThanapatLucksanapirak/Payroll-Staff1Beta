@@ -6,6 +6,13 @@ Settings → About, next to the matching update.
 Add an entry with every pull request: a `## YYYY-MM-DD · Title (#PR)` heading and a
 few short bullets written for the people who use the app, not for developers.
 
+## 2026-11-27 · Safer backups, real dates only (#47)
+- Only an owner can include sign-in details (password hashes and two-factor secrets) in a downloaded backup. Administrators can still download a backup without them, and the option is hidden for them.
+- Dates that don't exist, like 2026-13-45 or 30 February, are now refused with a clear message on pay rates, advances, time off, sales, the schedule and timesheets, instead of being saved or causing an error.
+- A new timesheet must be for a location that exists.
+- The kiosk-only address (KIOSK_HOST) now also applies when it is written with a trailing dot.
+- The break reminder can't be set below 0.5 hours; a smaller number is refused instead of quietly turning the reminder off.
+
 ## 2026-11-27 · Face data is kept through a database switch or restore (#47)
 - Switching to another database, or restoring an older backup, no longer lets the daily clean-up delete saved face data. Face data isn't in backups, so before this it couldn't be got back after switching back.
 - The clean-up now skips a location when the database in use doesn't have it, has no employees there, or has no punches there within the face data retention period.

@@ -1,6 +1,7 @@
 import express, { type Express, type NextFunction, type Request, type Response } from "express";
 import { parsePatch } from "@shared/patch";
 import { z } from "zod";
+import { isISODate } from "@shared/dates";
 import {
   type TimesheetDoc, categorySchema, databaseConfigSchema, employeeConfigSchema, prefsSchema, siteInputSchema, siteRulesSchema, timesheetDocSchema,
 } from "@shared/schema";
@@ -42,7 +43,7 @@ import { getPublishedMap, invalidatePublishedCache, publishedRecord, registerPub
 
 type Handler = (req: Request, res: Response) => Promise<unknown>;
 const h = (fn: Handler) => (req: Request, res: Response, next: NextFunction) => { fn(req, res).catch(next); };
-const iso = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
+const iso = z.string().refine(isISODate, "Use a real date (YYYY-MM-DD).");
 
 function ctxFor(sites: Awaited<ReturnType<typeof settings.getSites>>, siteId: string | null | undefined) {
   const site = sites.find((s) => s.id === siteId) ?? sites.find((s) => s.id === settings.LEGACY_SITE_ID) ?? sites[0];
@@ -426,6 +427,7 @@ export function registerRoutes(app: Express) {
 
   app.post("/api/timesheets", h(async (req, res) => {
     const doc = { ...timesheetDocSchema.parse(req.body.doc), paidResult: undefined };
+    if (!(await settings.getSites()).some((s) => s.id === doc.siteId)) return res.status(400).json({ error: "That location doesn't exist. Pick a location from the list." });
     const store = await db();
     const summary = await store.insertTimesheet(await rowFromDoc(doc));
     const removed = await applyRetention(doc.siteId, summary.id);
@@ -547,6 +549,7 @@ export function registerRoutes(app: Express) {
   // ── Backups ─────────────────────────────────────────────────────────────────
   app.get("/api/backup", h(async (req, res) => {
     const includeSecrets = req.query.secrets === "1";
+    if (includeSecrets && currentUser(res)?.role !== "owner") return res.status(403).json({ error: "Only an owner can include sign-in details (password hashes and two-factor secrets) in a backup." });
     const store = await db();
     const secret = (k: string) => k === "password_hash" || k === USERS_KEY || k.startsWith("square_token:") || k.startsWith("kiosk_manager_pin:") || k === "square_access_token" || k.startsWith("email:");
     const all = await store.allSettings();

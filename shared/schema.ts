@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { isISODate } from "./dates";
 import { docPayExtrasSchema, rateSegmentSchema } from "./payTypes";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -152,7 +153,7 @@ export type ShiftSource = (typeof SHIFT_SOURCES)[number];
 export const shiftSchema = z.object({
   id: z.string().min(1),
   employee: z.string().min(1),
-  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  date: z.string().refine(isISODate, "Use a real date (YYYY-MM-DD)."),
   start: z.number().int().min(0).max(2880),
   end: z.number().int().min(0).max(4320),
   breakMinutes: z.number().int().min(0).max(1440).default(0),
@@ -235,8 +236,8 @@ export const timesheetDocSchema = z.object({
   source: z.string().default("manual"),
   status: z.enum(TIMESHEET_STATUSES).default("draft"),
   notes: z.string().default(""),
-  periodStart: z.string().default(""),
-  periodEnd: z.string().default(""),
+  periodStart: z.string().refine((v) => v === "" || isISODate(v), "Use a real date (YYYY-MM-DD).").default(""),
+  periodEnd: z.string().refine((v) => v === "" || isISODate(v), "Use a real date (YYYY-MM-DD).").default(""),
   rules: siteRulesSchema,
   shifts: z.array(shiftSchema),
   employees: z.array(employeeConfigSchema),
