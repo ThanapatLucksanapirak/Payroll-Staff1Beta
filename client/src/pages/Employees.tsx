@@ -92,7 +92,15 @@ export function EmployeesPage() {
   };
 
   const remove = async (e: EmployeeRow) => {
-    if (!(await confirm({ title: `Remove ${e.name}?`, description: "They can no longer use the time clock. Their face data (if any) is deleted now. Their past punches, timesheets and punch photos are kept, because they're pay records; punch photos are deleted at the end of the photo retention period (Settings → Locations & rules). To pause someone instead, turn off Active.", confirmLabel: "Remove", destructive: true }))) return;
+    // Clocked in right now? Say so: they'd stay on Live as "Removed, still clocked in" until someone clocks them out.
+    let clockedIn = false;
+    if (site.timeSource !== "square") {
+      try {
+        const day = await api<{ employees: { id: string; status: string }[] }>("GET", `/api/sites/${site.id}/timeclock`);
+        clockedIn = day.employees.some((x) => x.id === e.id && x.status !== "out");
+      } catch { /* not knowing doesn't block removing */ }
+    }
+    if (!(await confirm({ title: `Remove ${e.name}?`, description: (clockedIn ? `${e.name} is clocked in right now. Clock them out on Live first, or they'll show there as "Removed" until someone does. ` : "") + "They can no longer use the time clock. Their face data (if any) is deleted now. Their past punches, timesheets and punch photos are kept, because they're pay records; punch photos are deleted at the end of the photo retention period (Settings → Locations & rules). To pause someone instead, turn off Active.", confirmLabel: "Remove", destructive: true }))) return;
     try {
       await api("DELETE", `/api/sites/${site.id}/employees/${e.id}`);
       await queryClient.invalidateQueries({ queryKey: key });

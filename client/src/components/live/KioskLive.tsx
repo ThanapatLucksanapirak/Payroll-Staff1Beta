@@ -104,7 +104,7 @@ const when = (iso: string, tz: string) => {
 };
 
 // ── Fix requests ─────────────────────────────────────────────────────────────
-/** Punches refused because the face didn't match (face match on for that person), until a manager dismisses them. */
+/** Punches refused by face match (not their face, or their face data can't be read), until a manager dismisses them. */
 export function FaceAlerts({ siteId, tz, editable }: { siteId: string; tz: string; editable: boolean }) {
   const key = ["/api/sites", siteId, "face-alerts"];
   const q = useQuery<FaceAlert[]>({ queryKey: key, staleTime: 0 });
@@ -131,8 +131,12 @@ export function FaceAlerts({ siteId, tz, editable }: { siteId: string; tz: strin
                 ? <button type="button" onClick={() => setOpen(a)} className="h-9 w-9 shrink-0 overflow-hidden rounded-md ring-2 ring-amber-500 focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/35" aria-label={`Photo: ${a.employeeName}, refused ${PUNCH_LABELS[a.type as PunchType] ?? a.type}`} data-testid={`button-alert-photo-${a.id}`}><img src={photo(a)} alt="" className="h-full w-full object-cover" /></button>
                 : <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-foreground/[0.05] text-muted-foreground" title="Photo no longer kept"><CameraOff className="h-3.5 w-3.5" /></span>}
               <div className="min-w-0 flex-1 basis-48">
-                <p className="break-words"><b className="font-semibold">{a.employeeName}</b>'s PIN · {PUNCH_LABELS[a.type as PunchType] ?? a.type} refused at <b className="font-medium">{when(a.at, tz)}</b></p>
-                <p className="text-xs text-muted-foreground">{a.reason === "unreadable" ? `Their face data can't be read, so face match couldn't check (${a.deviceName}). Add the punch if it was them, then delete their face data and set it up again (Employees).` : `The face didn't match their reference photos (${a.deviceName}). If it was them, add the punch.`}</p>
+                <p className="break-words"><b className="font-semibold">{a.employeeName}</b>'s PIN · {PUNCH_LABELS[a.type as PunchType] ?? a.type} refused at <b className="font-medium">{when(a.at, tz)}</b>{" "}
+                  {a.reason === "unreadable"
+                    ? <Badge variant="destructive" className="ml-1 align-middle" data-testid={`badge-alert-unreadable-${a.id}`}>Face profile needs redoing</Badge>
+                    : <Badge variant="warning" className="ml-1 align-middle" data-testid={`badge-alert-mismatch-${a.id}`}>Face didn't match</Badge>}
+                </p>
+                <p className="text-xs text-muted-foreground">{a.reason === "unreadable" ? `Face match isn't working for this person: their face data can't be read, so nothing was checked (${a.deviceName}). Add the punch if it was them, then re-enrol them: Employees → Photos → Delete face data, and set face match up again.` : `The face didn't match their reference photos (${a.deviceName}). If it was them, add the punch.`}</p>
               </div>
               {editable && <Button size="sm" variant="ghost" className="text-muted-foreground" onClick={() => void dismiss(a)} data-testid={`button-dismiss-alert-${a.id}`}><Check /> Dismiss</Button>}
             </li>
@@ -143,7 +147,7 @@ export function FaceAlerts({ siteId, tz, editable }: { siteId: string; tz: strin
         <Dialog open onOpenChange={(o) => !o && setOpen(null)}>
           <DialogContent className="max-w-sm">
             <DialogHeader>
-              <DialogTitle className="flex items-center gap-2"><Camera className="h-4 w-4 text-muted-foreground" />Refused punch</DialogTitle>
+              <DialogTitle className="flex items-center gap-2"><Camera className="h-4 w-4 text-muted-foreground" />{open.reason === "unreadable" ? "Face profile needs redoing" : "Face didn't match"}</DialogTitle>
               <DialogDescription className="break-words">{open.employeeName}'s PIN · {PUNCH_LABELS[open.type as PunchType] ?? open.type} at {when(open.at, tz)} · {open.deviceName}</DialogDescription>
             </DialogHeader>
             <img src={photo(open)} alt={`Photo of the refused punch for ${open.employeeName}`} className="w-full rounded-lg bg-foreground/[0.04]" />

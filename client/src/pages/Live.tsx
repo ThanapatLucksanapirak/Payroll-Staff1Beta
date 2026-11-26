@@ -81,7 +81,9 @@ export function LivePage() {
     const order: Record<ClockStatus, number> = { in: 0, break: 1, out: 2 };
     const on = list.filter((e) => e.status !== "out").sort((a, b) => order[a.status] - order[b.status] || a.name.localeCompare(b.name));
     const off = list.filter((e) => e.status === "out" && (e.active || e.minutes > 0)).sort((a, b) => (b.minutes > 0 ? 1 : 0) - (a.minutes > 0 ? 1 : 0) || a.name.localeCompare(b.name));
-    return { on, off, working: list.filter((e) => e.status === "in").length, onBreak: list.filter((e) => e.status === "break").length };
+    // Someone removed from the employee list while clocked in is shown (to clock them out), not counted as working.
+    const listed = list.filter((e) => e.inDirectory);
+    return { on, off, working: listed.filter((e) => e.status === "in").length, onBreak: listed.filter((e) => e.status === "break").length };
   }, [data]);
 
   const names = useMemo(() => Object.fromEntries((data?.employees ?? []).map((e) => [e.id, e.name])), [data]);
@@ -138,11 +140,13 @@ export function LivePage() {
                       <Initials name={e.name} status={e.status} />
                       <div className="min-w-0 flex-1">
                         <p className="truncate text-[15px] font-semibold tracking-tight">{e.name}</p>
-                        <p className="truncate text-xs text-muted-foreground">{e.role || (e.inDirectory ? " " : "Not in the employee list")}</p>
+                        <p className="truncate text-xs text-muted-foreground">{e.inDirectory ? (e.role || " ") : "Not in the list anymore: clock them out"}</p>
                         {e.station && <StationTag station={e.station} className="mt-1" />}
                       </div>
                       <div className="flex shrink-0 flex-col items-end gap-1">
-                        <Badge variant={STATUS_VARIANT[e.status]} className="shrink-0">{e.status === "break" && <Coffee />}{STATUS_LABEL[e.status]}</Badge>
+                        {e.inDirectory
+                          ? <Badge variant={STATUS_VARIANT[e.status]} className="shrink-0">{e.status === "break" && <Coffee />}{STATUS_LABEL[e.status]}</Badge>
+                          : <Badge variant="destructive" className="shrink-0" title="Removed from the employee list while still clocked in. Clock them out so their hours are right." data-testid={`badge-removed-${e.id}`}>Removed</Badge>}
                         <BreakDueBadge due={e.breakDue} />
                       </div>
                     </div>

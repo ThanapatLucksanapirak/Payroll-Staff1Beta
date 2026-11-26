@@ -265,6 +265,11 @@ test("retention: removed employees and people who stopped punching", async () =>
   assert.ok(kept, "his punch photo is kept (a pay record) until photo retention");
   assert.equal(kept.employeeName, "Ben Lee");
   assert.equal(kept.removed, true);
+  // Removed while clocked in: Live still lists him (so he can be clocked out), marked as not in the list
+  const live = await A("GET", `/api/sites/${siteId}/timeclock`);
+  const benNow = live.body.employees.find((e: any) => e.id === ben);
+  assert.equal(benNow?.status, "in");
+  assert.equal(benNow?.inDirectory, false);
 
   // Ana: consent only. Nothing expires today; a year and a bit from now she hasn't punched, so it goes.
   await A("POST", `${url(ana)}/consent`, { confirm: true });
