@@ -28,7 +28,8 @@ Services (deploy/systemd/):
 - cloudflared.service — installed by `cloudflared service install <token>` (token mode) or our own unit for config mode
 
 payroll.env keys: NODE_ENV=production, HOST=127.0.0.1 (0.0.0.0 if LAN access chosen), PORT=5000, DATA_DIR=/var/lib/payroll,
-TRUST_PROXY=loopback, KIOSK_HOST=, APP_HOST=, REPO_URL=, BRANCH=main, AUTO_UPDATE=1, SETUP_CODE=(only during install)
+TRUST_PROXY=loopback, KIOSK_HOST=, APP_HOST=, REPO_URL=, BRANCH=main, AUTO_UPDATE=1, SETUP_CODE=(only during install),
+ANDROID_CERT_SHA256=, ANDROID_APP_PACKAGE= (optional; `payroll android`)
 
 App interfaces:
 - GET http://127.0.0.1:$PORT/api/health -> 200 {"ok":true,...}

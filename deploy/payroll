@@ -757,9 +757,49 @@ cmd_help() {
   h "admin disable-2fa" "Turn off two-factor sign-in for an account  [--username NAME]"
   h "tunnel setup|status|remove" "Cloudflare Tunnel for access from anywhere"
   h "tunnel hosts" "Set the admin and kiosk web addresses"
+  h "android status|fingerprint|off" "Link the Android Time Clock app to the kiosk address"
   h "version" "Installed version"
   h "uninstall [--purge]" "Remove the program (--purge also erases all data)"
   echo
+}
+
+# ── Android app (Time Clock on Google Play) ───────────────────────────────────
+# Sets the signing-key fingerprint(s) the kiosk hostname publishes in
+# /.well-known/assetlinks.json, so the Android app opens full screen.
+cmd_android() {
+  local sub="${1:-status}"
+  [[ $# -gt 0 ]] && shift
+  case "$sub" in
+    fingerprint|key)
+      local raw="${*:-}" fp hex out=() parts=()
+      [[ -n "$raw" ]] || die "Usage: sudo payroll android fingerprint AB:CD:...   (SHA-256 from Play Console → App integrity; comma-separate several)"
+      IFS=',' read -r -a parts <<<"$raw"
+      for fp in "${parts[@]}"; do
+        hex="$(printf '%s' "$fp" | tr -cd '0-9A-Fa-f' | tr 'a-f' 'A-F')"
+        [[ ${#hex} -eq 64 ]] || die "Not a SHA-256 fingerprint: $fp (it has 32 pairs like AB:CD:...)"
+        out+=("$(printf '%s' "$hex" | sed 's/../&:/g; s/:$//')")
+      done
+      env_set ANDROID_CERT_SHA256 "$(IFS=','; printf '%s' "${out[*]}")"
+      ok "Saved. The kiosk address now vouches for the Android app."
+      restart_app || true; wait_healthy 60 || true
+      ;;
+    package)
+      [[ "${1:-}" =~ ^[A-Za-z][A-Za-z0-9_]*(\.[A-Za-z][A-Za-z0-9_]*)+$ ]] || die "Usage: sudo payroll android package com.example.app"
+      env_set ANDROID_APP_PACKAGE "$1"; ok "Package name set to $1."
+      restart_app || true; wait_healthy 60 || true
+      ;;
+    off)
+      env_unset ANDROID_CERT_SHA256; ok "Android app link removed."
+      restart_app || true; wait_healthy 60 || true
+      ;;
+    status) ;;
+    *) die "Usage: payroll android status|fingerprint <SHA-256>|package <name>|off" ;;
+  esac
+  local kiosk pkg prints
+  kiosk="$(env_get KIOSK_HOST)"; pkg="$(env_get ANDROID_APP_PACKAGE)"; prints="$(env_get ANDROID_CERT_SHA256)"
+  row "Package" "${pkg:-com.shijirigroup.timeclock}"
+  row "Fingerprints" "${prints:-none (the app will show a browser bar)}"
+  if [[ -n "$kiosk" ]]; then row "Check" "https://${kiosk%%,*}/.well-known/assetlinks.json"; fi
 }
 
 main() {
@@ -788,6 +828,7 @@ main() {
     auto-update|autoupdate) cmd_auto_update "$@" ;;
     tunnel)              cmd_tunnel "$@" ;;
     admin)               cmd_admin "$@" ;;
+    android)             cmd_android "$@" ;;
     open|url|urls)       cmd_open ;;
     doctor)              cmd_doctor ;;
     uninstall)           cmd_uninstall "$@" ;;

@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Matches theme_color / background_color in client/public/kiosk.webmanifest -->
+    <color name="background">#FFFFFF</color>
+    <color name="launcher_background">#1E6FE0</color>
+</resources>
