@@ -293,6 +293,11 @@ test("pay statements: finalized only, my own data only", async () => {
   const draft = await make("Draft", ["Ana Ruiz"], ["2026-03-05"], false);
   const other = await make("Other site", ["Ana Ruiz"], ["2026-03-06"], true, site2);
 
+  // No accountant here: publishing would show nothing to anyone, so the server refuses it.
+  const pub = await A("POST", `/api/timesheets/${both}/publish`, {});
+  assert.equal(pub.status, 409);
+  assert.equal(pub.body.code, "no-accountant");
+
   const ana = await signIn("Ana Ruiz", "1234");
   const list = await P(ana, "GET", "/api/portal/statements");
   assert.equal(list.status, 200);
