@@ -17,6 +17,7 @@ import { SiteDot } from "@/components/AppShell";
 import { RulesEditor } from "./RulesEditor";
 import { TimeClockSection } from "./TimeClockSettings";
 import { cn } from "@/lib/utils";
+import { PendingChangesProvider, usePendingRegistry } from "./pendingChanges";
 
 const COLORS = ["#0f766e", "#2563eb", "#7c3aed", "#db2777", "#ea580c", "#ca8a04", "#16a34a", "#475569"];
 
@@ -50,20 +51,35 @@ function SiteEditor({ site, onDeleted }: { site: Site; onDeleted: () => void }) 
   const [draft, setDraft] = useState<Site>(site);
   const [saving, setSaving] = useState(false);
   useEffect(() => setDraft(site), [site]);
-  const dirty = JSON.stringify(draft) !== JSON.stringify(site);
+  const pending = usePendingRegistry();
+  const siteDirty = JSON.stringify(draft) !== JSON.stringify(site);
+  const dirty = siteDirty || pending.count > 0;
+  const unsavedLabels = [...(siteDirty ? ["Location"] : []), ...pending.labels];
+
+  // Warn before leaving the page with unsaved changes.
+  useEffect(() => {
+    if (!dirty) return;
+    const warn = (e: BeforeUnloadEvent) => { e.preventDefault(); e.returnValue = ""; };
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [dirty]);
 
   const save = async () => {
     if (!draft.name.trim()) { toast({ title: "Give the location a name", variant: "destructive" }); return; }
     setSaving(true);
     try {
-      const { id, createdAt, ...patch } = draft;
-      await api("PUT", `/api/sites/${site.id}`, { ...patch, name: patch.name.trim() });
+      if (siteDirty) {
+        const { id, createdAt, ...patch } = draft;
+        await api("PUT", `/api/sites/${site.id}`, { ...patch, name: patch.name.trim() });
+      }
+      await pending.saveAll();
       await app.refresh();
-      toast({ title: "Location saved", description: "New timesheets use these rules. Existing ones keep theirs until you reapply." });
+      toast({ title: "Changes saved", description: siteDirty ? "New timesheets use these rules. Existing ones keep theirs until you reapply." : undefined });
     } catch (e) {
       toast({ title: "Couldn't save", description: errorMessage(e), variant: "destructive" });
     } finally { setSaving(false); }
   };
+  const discard = () => { setDraft(site); pending.discardAll(); };
 
   const remove = async () => {
     if (!(await confirm({ title: `Delete ${site.name}?`, description: "Its saved rates, Square connection and location-only categories are removed. Timesheets must be moved or deleted first.", confirmLabel: "Delete location", destructive: true, typeToConfirm: "DELETE" }))) return;
@@ -78,6 +94,7 @@ function SiteEditor({ site, onDeleted }: { site: Site; onDeleted: () => void }) 
   };
 
   return (
+    <PendingChangesProvider registry={pending.registry}>
     <div className="min-w-0 space-y-5">
       <Section
         title="Location"
@@ -109,20 +126,24 @@ function SiteEditor({ site, onDeleted }: { site: Site; onDeleted: () => void }) 
         <RulesEditor rules={draft.rules} siteLevel onChange={(rules) => setDraft({ ...draft, rules })} />
       </Section>
 
-      <SquareSection site={site} />
+      <SquareSection site={site} draft={draft} onChange={setDraft} />
 
       <TimeClockSection site={site} draft={draft} onChange={setDraft} />
 
       <div className={cn("z-10 -mx-1 flex items-center justify-end gap-2 rounded-xl border px-3 py-2.5 transition-shadow duration-200", dirty ? "glass sticky bottom-[calc(3.5rem+env(safe-area-inset-bottom))] border-border/70 shadow-float md:bottom-4" : "border-transparent")} data-testid="bar-save">
-        <span className="mr-auto text-xs text-muted-foreground">{dirty ? "Unsaved changes" : "All changes saved"}</span>
-        <Button variant="outline" disabled={!dirty || saving} onClick={() => setDraft(site)}>Discard</Button>
-        <Button disabled={!dirty || saving} onClick={save} data-testid="button-save-location">{saving && <Loader2 className="animate-spin" />}Save location</Button>
+        <span className="mr-auto min-w-0 text-xs text-muted-foreground" data-testid="text-save-status">
+          {dirty ? <><b className="font-semibold text-foreground">Unsaved changes</b><span className="hidden sm:inline">: {unsavedLabels.join(", ")}</span></> : "All changes saved"}
+        </span>
+        <Button variant="outline" disabled={!dirty || saving} onClick={discard} data-testid="button-discard-location">Discard</Button>
+        <Button disabled={!dirty || saving} onClick={save} data-testid="button-save-location">{saving && <Loader2 className="animate-spin" />}Save changes</Button>
       </div>
+      <p className="-mt-3 px-1 text-xs text-muted-foreground">Settings on this page are saved together with Save changes. Adding or removing a kiosk device, connecting Square and the manager PIN happen right away.</p>
     </div>
+    </PendingChangesProvider>
   );
 }
 
-function SquareSection({ site }: { site: Site }) {
+function SquareSection({ site, draft, onChange }: { site: Site; draft: Site; onChange: (s: Site) => void }) {
   const app = useApp();
   const { toast } = useToast();
   const confirm = useConfirm();
@@ -153,13 +174,10 @@ function SquareSection({ site }: { site: Site }) {
     await api("DELETE", `/api/sites/${site.id}/square`).catch(() => undefined);
     await app.refresh();
   };
-  const pick = async (id: string) => {
+  // Part of the location draft: saved with the page's Save changes button.
+  const pick = (id: string) => {
     const l = locations?.find((x) => x.id === id);
-    try {
-      await api("PUT", `/api/sites/${site.id}`, { squareLocationId: id, squareLocationName: l?.name ?? "" });
-      await app.refresh();
-      toast({ title: `Pulling timecards from ${l?.name ?? id}` });
-    } catch (e) { toast({ title: "Couldn't save", description: errorMessage(e), variant: "destructive" }); }
+    onChange({ ...draft, squareLocationId: id, squareLocationName: l?.name ?? "" });
   };
 
   return (
@@ -168,7 +186,7 @@ function SquareSection({ site }: { site: Site }) {
         <div className="flex flex-wrap items-end gap-3">
           <Field label="Square location" className="min-w-0 flex-1 basis-64">
             {locations === null ? <div className="flex h-9 items-center text-sm text-muted-foreground"><Loader2 className="mr-2 h-4 w-4 animate-spin" />Loading…</div> : (
-              <Select value={site.squareLocationId || undefined} onValueChange={pick}>
+              <Select value={draft.squareLocationId || undefined} onValueChange={pick}>
                 <SelectTrigger data-testid="select-square-location"><SelectValue placeholder={locations.length ? "Choose a location" : "No locations found"} /></SelectTrigger>
                 <SelectContent>{locations.map((l) => <SelectItem key={l.id} value={l.id}>{l.name}{l.timezone ? ` · ${l.timezone}` : ""}</SelectItem>)}</SelectContent>
               </Select>

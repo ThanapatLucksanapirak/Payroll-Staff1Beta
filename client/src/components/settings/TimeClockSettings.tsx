@@ -27,7 +27,7 @@ const SOURCES: { id: TimeSource; title: string; desc: string }[] = [
   { id: "both", title: "Both", desc: "Use either, per timesheet" },
 ];
 
-/** Settings → Locations → Time clock. `draft` fields are saved with the location; devices change immediately. */
+/** Settings → Locations → Time clock. Everything here is saved with the page's Save changes button, except adding/removing devices and the manager PIN. */
 export function TimeClockSection({ site, draft, onChange }: { site: Site; draft: Site; onChange: (s: Site) => void }) {
   const kioskOn = draft.timeSource !== "square";
   return (
@@ -128,7 +128,8 @@ function Devices({ site, enabled }: { site: Site; enabled: boolean }) {
                 <Button variant="ghost" size="sm" className="text-muted-foreground" aria-expanded={openOptions === d.id} onClick={() => setOpenOptions(openOptions === d.id ? null : d.id)} data-testid={`button-device-options-${d.id}`}><SlidersHorizontal /> Options</Button>
                 <Button variant="ghost" size="icon-sm" className="text-muted-foreground hover:text-destructive" aria-label={`Remove ${d.name}`} onClick={() => revoke(d)} data-testid={`button-revoke-${d.id}`}><Trash2 /></Button>
               </div>
-              {openOptions === d.id && <DeviceOptionsPanel siteId={site.id} deviceId={d.id} options={d.options} hasStations={(cfg.data?.stations.length ?? 0) > 0} />}
+              {/* Kept mounted while closed so unsaved changes survive collapsing the panel. */}
+              <div hidden={openOptions !== d.id}><DeviceOptionsPanel siteId={site.id} deviceId={d.id} deviceName={d.name} options={d.options} hasStations={(cfg.data?.stations.length ?? 0) > 0} /></div>
             </li>
           ))}
         </ul>
