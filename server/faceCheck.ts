@@ -14,8 +14,13 @@ import { createRequire } from "node:module";
 export const FACE_MIN_SCORE = 0.6;
 
 export type FaceVerdict =
-  | { ok: true; score: number }
+  | { ok: true; score: number; /** Faces found above the threshold. */ faces?: number; /** 128 numbers describing the clearest face (face recognition), when asked for. */ descriptor?: number[] }
   | { ok: false; reason: "no_face" | "bad_image" | "unavailable" | "busy"; score?: number };
+
+export interface FaceCheckOptions {
+  /** Also work out the face's descriptor for face recognition (about 0.1 s more). */
+  descriptor?: boolean;
+}
 
 /** A check that takes longer than this (waiting included) answers "unavailable"; more than this many waiting answer "busy". */
 export const faceLimits = { timeoutMs: 10_000, maxWaiting: 10 };
@@ -41,6 +46,10 @@ export function loadFaceModel(): Promise<FaceApi> {
     const dir = path.join(path.dirname(req.resolve("@vladmandic/face-api/package.json")), "model");
     if (!fs.existsSync(path.join(dir, "ssd_mobilenetv1_model.bin"))) throw new Error(`face model not found in ${dir}`);
     await faceapi.nets.ssdMobilenetv1.loadFromDisk(dir);
+    // Face recognition: 68-point landmarks to line the face up, then the
+    // recognition network's 128-number descriptor (about 6.5 MB more).
+    await faceapi.nets.faceLandmark68Net.loadFromDisk(dir);
+    await faceapi.nets.faceRecognitionNet.loadFromDisk(dir);
     return faceapi;
   })().catch((err) => {
     loading = null;
@@ -56,8 +65,8 @@ let queue: Promise<unknown> = Promise.resolve();
 
 let waiting = 0;
 
-/** Is there a face in this JPEG? */
-export function checkFaceJpeg(bytes: Buffer): Promise<FaceVerdict> {
+/** Is there a face in this JPEG? With `descriptor`, also describe it for face recognition. */
+export function checkFaceJpeg(bytes: Buffer, opts: FaceCheckOptions = {}): Promise<FaceVerdict> {
   if (waiting >= faceLimits.maxWaiting) return Promise.resolve({ ok: false, reason: "busy" });
   waiting++;
   const deadline = Date.now() + faceLimits.timeoutMs;
@@ -66,7 +75,7 @@ export function checkFaceJpeg(bytes: Buffer): Promise<FaceVerdict> {
   const next = async (): Promise<FaceVerdict> => {
     await new Promise((r) => setImmediate(r));
     if (Date.now() > deadline) return { ok: false, reason: "unavailable" };
-    return detect(bytes);
+    return detect(bytes, opts);
   };
   const run = queue.then(next, next).finally(() => { waiting--; });
   queue = run.catch(() => undefined);
@@ -80,7 +89,7 @@ export function checkFaceJpeg(bytes: Buffer): Promise<FaceVerdict> {
   return Promise.race([run.catch((): FaceVerdict => ({ ok: false, reason: "unavailable" })), timeout]).finally(() => clearTimeout(timer));
 }
 
-async function detect(bytes: Buffer): Promise<FaceVerdict> {
+async function detect(bytes: Buffer, opts: FaceCheckOptions): Promise<FaceVerdict> {
   let faceapi: FaceApi;
   try { faceapi = await loadFaceModel(); } catch { return { ok: false, reason: "unavailable" }; }
   const jpeg: typeof import("jpeg-js") = req("jpeg-js");
@@ -94,9 +103,19 @@ async function detect(bytes: Buffer): Promise<FaceVerdict> {
   const rgba = tf.tensor3d(img.data, [img.height, img.width, 4], "int32");
   const rgb = tf.slice(rgba, [0, 0, 0], [-1, -1, 3]) as unknown as Parameters<typeof faceapi.detectAllFaces>[0];
   try {
-    const found = await faceapi.detectAllFaces(rgb, new faceapi.SsdMobilenetv1Options({ minConfidence: 0.3, maxResults: 3 }));
-    const score = Math.max(0, ...found.map((d) => d.score));
-    return score >= FACE_MIN_SCORE ? { ok: true, score } : { ok: false, reason: "no_face", score };
+    const options = new faceapi.SsdMobilenetv1Options({ minConfidence: 0.3, maxResults: 3 });
+    if (!opts.descriptor) {
+      const found = await faceapi.detectAllFaces(rgb, options);
+      const score = Math.max(0, ...found.map((d) => d.score));
+      const faces = found.filter((d) => d.score >= FACE_MIN_SCORE).length;
+      return score >= FACE_MIN_SCORE ? { ok: true, score, faces } : { ok: false, reason: "no_face", score };
+    }
+    const found = await faceapi.detectAllFaces(rgb, options).withFaceLandmarks().withFaceDescriptors();
+    const best = found.reduce<(typeof found)[number] | null>((b, f) => (!b || f.detection.score > b.detection.score ? f : b), null);
+    const score = best?.detection.score ?? 0;
+    if (!best || score < FACE_MIN_SCORE) return { ok: false, reason: "no_face", score };
+    const faces = found.filter((f) => f.detection.score >= FACE_MIN_SCORE).length;
+    return { ok: true, score, faces, descriptor: Array.from(best.descriptor, (x) => Math.round(x * 1e6) / 1e6) };
   } finally {
     tf.dispose([rgba, rgb as unknown as import("@tensorflow/tfjs").Tensor]);
   }

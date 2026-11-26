@@ -197,13 +197,22 @@ export async function updateEmployee(siteId: string, id: string, patch: Partial<
   });
 }
 
+/** Called after an employee is removed (face data is deleted with them). */
+export const employeeRemovedHooks: ((siteId: string, employeeId: string) => void | Promise<void>)[] = [];
+
 export async function deleteEmployee(siteId: string, id: string): Promise<boolean> {
-  return withLock(siteId, async () => {
+  const removed = await withLock(siteId, async () => {
     const dir = await load(siteId);
     if (!dir.employees.some((e) => e.id === id)) return false;
     await save(siteId, { ...dir, employees: dir.employees.filter((e) => e.id !== id) });
     return true;
   });
+  if (removed) {
+    for (const hook of employeeRemovedHooks) {
+      try { await hook(siteId, id); } catch (err: any) { console.error(`[employees] clean-up after removing ${id} failed: ${err?.message ?? err}`); }
+    }
+  }
+  return removed;
 }
 
 /** Names already used at this location (saved wages and recent timesheets) that are not in the directory yet. */

@@ -13,6 +13,7 @@ import { PUNCH_TYPES } from "@shared/punches";
 import {
   type FixRequest, type ShiftNote, FIX_TYPE_LABELS, MAX_STATIONS, acknowledge, fixTimeProblem, noteActive,
 } from "@shared/kiosk";
+import { FACE_RETENTION_MAX_DAYS, FACE_RETENTION_MIN_DAYS } from "@shared/face";
 import { db } from "./db";
 import * as settings from "./settings";
 import { actorOf, audit } from "./audit";
@@ -119,6 +120,7 @@ export function registerKioskFeatureAdminRoutes(app: Express) {
       stations: z.array(z.string().max(80)).max(MAX_STATIONS).optional(),
       breakReminderHours: z.number().min(0).max(16).nullable().optional(),
       photoRetentionDays: z.number().int().min(1).max(3650).optional(),
+      faceRetentionDays: z.number().int().min(FACE_RETENTION_MIN_DAYS).max(FACE_RETENTION_MAX_DAYS).optional(),
     }).strict().parse(req.body ?? {});
     const next = await setSiteConfig(site.id, patch);
     audit({ ...actorOf(req, res), action: "kiosk.settings", target: `site:${site.id}`, detail: Object.keys(patch).join(", ") });

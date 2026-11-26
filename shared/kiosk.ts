@@ -3,6 +3,7 @@
 // breaks, break reminders, per-device options, shift notes and fix requests.
 // Everything here is pure so it can be unit tested.
 import { type ClockStatus, type Punch, type PunchType, PUNCH_TYPES, STALE_SHIFT_HOURS, byTime, clockState, transitionCode } from "./punches";
+import { FACE_RETENTION_DEFAULT_DAYS, normalizeFaceRetention } from "./face";
 
 // ── Wrong-action guard ───────────────────────────────────────────────────────
 export interface ActionCheck {
@@ -146,9 +147,11 @@ export interface KioskSiteConfig {
   breakReminderHours: number | null;
   /** Delete punch photos older than this many days. */
   photoRetentionDays: number;
+  /** Delete someone's face data (reference photos and face templates) this many days after their last punch. */
+  faceRetentionDays: number;
 }
 
-export const DEFAULT_SITE_CONFIG: KioskSiteConfig = { stations: [], breakReminderHours: null, photoRetentionDays: 90 };
+export const DEFAULT_SITE_CONFIG: KioskSiteConfig = { stations: [], breakReminderHours: null, photoRetentionDays: 90, faceRetentionDays: FACE_RETENTION_DEFAULT_DAYS };
 export const MAX_STATIONS = 30;
 
 export function cleanStation(s: unknown): string {
@@ -169,6 +172,7 @@ export function normalizeSiteConfig(raw: unknown): KioskSiteConfig {
     stations,
     breakReminderHours: o.breakReminderHours == null || !Number.isFinite(h) || h <= 0 ? null : Math.min(16, Math.round(h * 4) / 4),
     photoRetentionDays: Number.isFinite(days) && days >= 1 ? Math.min(3650, Math.round(days)) : DEFAULT_SITE_CONFIG.photoRetentionDays,
+    faceRetentionDays: normalizeFaceRetention(o.faceRetentionDays),
   };
 }
 

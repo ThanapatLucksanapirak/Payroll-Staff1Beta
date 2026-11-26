@@ -2,7 +2,8 @@
 // location's stations, break reminder and photo retention.
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Camera, Coffee, Loader2, MapPin, Plus, X } from "lucide-react";
+import { Camera, Coffee, Loader2, MapPin, Plus, ScanFace, X } from "lucide-react";
+import { FACE_RETENTION_MAX_DAYS, FACE_RETENTION_MIN_DAYS } from "@shared/face";
 import type { Site } from "@shared/schema";
 import { type DeviceLoginMode, type KioskDeviceOptions, type KioskSiteConfig, DEFAULT_DEVICE_OPTIONS, IDLE_MAX, IDLE_MIN, MAX_STATIONS, cleanStation } from "@shared/kiosk";
 import { api, errorMessage, queryClient } from "@/lib/api";
@@ -93,12 +94,14 @@ export function KioskLocationExtras({ site }: { site: Site }) {
   const [reminderOn, setReminderOn] = useState(false);
   const [hours, setHours] = useState("");
   const [days, setDays] = useState("");
+  const [faceDays, setFaceDays] = useState("");
   const [busy, setBusy] = useState(false);
   const reset = (c: KioskSiteConfig) => {
     setStations(c.stations);
     setReminderOn(!!c.breakReminderHours);
     setHours(c.breakReminderHours ? String(c.breakReminderHours) : "5");
     setDays(String(c.photoRetentionDays));
+    setFaceDays(String(c.faceRetentionDays));
     setStation("");
   };
   useEffect(() => { if (cfg) reset(cfg); }, [cfg]);
@@ -107,25 +110,29 @@ export function KioskLocationExtras({ site }: { site: Site }) {
   const hoursValid = !reminderOn || (Number.isFinite(hoursNum) && hoursNum >= 0.5 && hoursNum <= 16);
   const daysNum = Math.round(Number(days));
   const daysValid = Number.isFinite(daysNum) && daysNum >= 1 && daysNum <= 3650;
+  const faceDaysNum = Math.round(Number(faceDays));
+  const faceDaysValid = Number.isFinite(faceDaysNum) && faceDaysNum >= FACE_RETENTION_MIN_DAYS && faceDaysNum <= FACE_RETENTION_MAX_DAYS;
   const patch: Partial<KioskSiteConfig> = {};
   if (cfg) {
     if (JSON.stringify(stations) !== JSON.stringify(cfg.stations)) patch.stations = stations;
     const br = reminderOn ? (hoursValid ? hoursNum : cfg.breakReminderHours) : null;
     if (br !== cfg.breakReminderHours || (reminderOn && !hoursValid)) patch.breakReminderHours = br;
     if (daysNum !== cfg.photoRetentionDays || !daysValid) patch.photoRetentionDays = daysNum;
+    if (cfg.faceRetentionDays !== undefined && (faceDaysNum !== cfg.faceRetentionDays || !faceDaysValid)) patch.faceRetentionDays = faceDaysNum;
   }
   const dirty = !!cfg && Object.keys(patch).length > 0;
 
   const save = async () => {
     if (!hoursValid) throw new Error("Break reminder: use 0.5 to 16 hours.");
     if (!daysValid) throw new Error("Punch photos: keep them 1 to 3650 days.");
+    if ("faceRetentionDays" in patch && !faceDaysValid) throw new Error(`Face data: keep it ${FACE_RETENTION_MIN_DAYS} to ${FACE_RETENTION_MAX_DAYS} days.`);
     if (!Object.keys(patch).length) return;
     const next = await api<KioskSiteConfig>("PUT", `/api/sites/${site.id}/kiosk-config`, patch);
     queryClient.setQueryData(key, next);
     void queryClient.invalidateQueries({ queryKey: ["/api/sites", site.id, "timeclock"] });
   };
   const discard = () => { if (cfg) reset(cfg); };
-  const inPage = usePendingChange(`kiosk-config:${site.id}`, dirty, { label: "Stations, break reminder and photos", save, discard });
+  const inPage = usePendingChange(`kiosk-config:${site.id}`, dirty, { label: "Stations, break reminder, photos and face data", save, discard });
   const saveHere = async () => {
     setBusy(true);
     try { await save(); toast({ title: "Saved" }); } catch (e) { toast({ title: "Couldn't save", description: errorMessage(e), variant: "destructive" }); } finally { setBusy(false); }
@@ -142,6 +149,7 @@ export function KioskLocationExtras({ site }: { site: Site }) {
   const stationsDirty = "stations" in patch;
   const reminderDirty = "breakReminderHours" in patch;
   const daysDirty = "photoRetentionDays" in patch;
+  const faceDaysDirty = "faceRetentionDays" in patch;
 
   return (
     <div className="space-y-4">
@@ -193,6 +201,18 @@ export function KioskLocationExtras({ site }: { site: Site }) {
           {!daysValid && <span className="w-full text-xs text-destructive">Use 1 to 3650 days.</span>}
         </div>
       </div>
+
+      {cfg.faceRetentionDays !== undefined && (
+        <div className="space-y-2 border-t border-border/70 pt-4">
+          <p className="flex items-center gap-2 text-[13px] font-semibold"><ScanFace className="h-4 w-4 text-muted-foreground" />Face data <UnsavedDot show={faceDaysDirty} /></p>
+          <p className="text-xs text-muted-foreground">For face match (Employees → Photos): reference photos and face templates are deleted when someone is removed, and automatically once they haven't punched for:</p>
+          <div className="flex flex-wrap items-center gap-2 text-[13px]">
+            <Input type="number" inputMode="numeric" min={FACE_RETENTION_MIN_DAYS} max={FACE_RETENTION_MAX_DAYS} value={faceDays} onChange={(e) => setFaceDays(e.target.value)} className={cn("w-24", !faceDaysValid && "border-destructive")} aria-invalid={!faceDaysValid} data-testid="input-face-days" />
+            days
+            {!faceDaysValid && <span className="w-full text-xs text-destructive">Use {FACE_RETENTION_MIN_DAYS} to {FACE_RETENTION_MAX_DAYS} days (3 years at most).</span>}
+          </div>
+        </div>
+      )}
       {dirty && !inPage && (
         <div className="flex justify-end gap-2">
           <Button variant="ghost" size="sm" onClick={discard}>Cancel</Button>

@@ -6,6 +6,11 @@ Settings → About, next to the matching update.
 Add an entry with every pull request: a `## YYYY-MM-DD · Title (#PR)` heading and a
 few short bullets written for the people who use the app, not for developers.
 
+## 2026-11-26 · Photo gallery and face match set-up (#44)
+- Employees → Photos: see every punch photo at the location, newest first, or one person's photos. The camera button next to each employee opens their photos.
+- Face match set-up: print the consent notice for an employee to sign, record that they signed it, then pick three clear photos of them as reference photos. The app checks each one shows only them and looks like the same person.
+- Delete someone's face data at any time (optionally with all their punch photos). It's also deleted when you remove the employee, and automatically after they haven't punched for a while (Settings → Locations & rules → Face data, default one year).
+- Face data stays on your server, encrypted, and is never in backups. Turning face match on at the time clock comes in the next update.
 ## 2026-11-26 · Small safety checks (#43)
 - Pay extras: a holiday on a date that doesn't exist (like 2026-02-30) is refused instead of saved.
 - Locations: an unknown time zone is refused, so a typo can't shift every time at a location.

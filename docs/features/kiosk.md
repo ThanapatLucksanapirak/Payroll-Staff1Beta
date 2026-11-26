@@ -63,6 +63,49 @@ device.
 - Photos taken while offline are kept with the queued punch (up to 20; after
   that, queued punches are saved without a photo).
 
+## Photo gallery and face match set-up
+
+**Employees → Photos** shows every punch photo kept at the location, newest
+first, with a filter per person. The camera button on each employee opens
+their own photos and **Face match**. Owners, administrators and managers can
+look (the same people who can open photos on Live); setting up face match
+(consent, reference photos, deleting face data) needs **Manage employees and PINs**.
+
+Setting up face match for someone:
+
+1. **Consent notice**: print or copy it, and have them read and sign it. It
+   says what is collected, why, how long it's kept, and that it's never sold.
+   Then tap **<name> signed it**. The date and who recorded it are saved and
+   written to Settings → Activity. No face data is made before this.
+2. **Reference photos**: open clear photos of them and tap **Use as reference
+   photo**. The server checks there is exactly one clear face, and that it
+   looks like the same person as their other reference photos (closest
+   distance at most 0.55), so a coworker's photo can't be added by mistake.
+   Three are needed; up to ten are kept (the oldest goes first).
+
+The server turns each reference photo into a face template (128 numbers from
+face-api's face recognition model, on the server, no outside service).
+
+Where face data lives: `DATA_DIR/face-data/<location>/<employee>/` (set
+`FACE_DATA_DIR` to move it). The consent record and templates are in
+`profile.enc`, encrypted (AES-256-GCM, key derived from the server's PIN key);
+reference photos are copies in `refs/`, so they stay when punch photos expire.
+**Face data is never in backups or the database.**
+
+Deleting face data:
+
+- **Delete face data** in the person's Face match card removes their consent
+  record, reference photos and templates. Tick **Also delete all their punch
+  photos** to remove those too (punches and hours are kept).
+- Removing an employee deletes their face data.
+- **Settings → Locations & rules → Face data** (default 365 days, 30 to 1095): face
+  data is deleted automatically once someone hasn't punched for that long,
+  checked daily.
+
+Biometric privacy laws (Illinois BIPA, Texas, Washington and others) ask for
+written consent, a published retention schedule and deletion when no longer
+needed; the steps above are built for that, but they aren't legal advice.
+
 ## Big buttons, high contrast, idle reset
 
 The kiosk uses large, high-contrast buttons (at least 64 px, bigger keypad)

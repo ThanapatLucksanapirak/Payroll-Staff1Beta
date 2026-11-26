@@ -19,7 +19,7 @@ export interface SettingsSectionMeta {
 }
 
 export const SETTINGS_SECTIONS: SettingsSectionMeta[] = [
-  { id: "locations", label: "Locations & rules", description: "Sites, pay rules, Square and time clock", icon: MapPin, group: "Payroll", adminOnly: true, keywords: "site rules cutoffs overtime square timezone pay period kiosk time clock devices pair" },
+  { id: "locations", label: "Locations & rules", description: "Sites, pay rules, Square and time clock", icon: MapPin, group: "Payroll", adminOnly: true, keywords: "site rules cutoffs overtime square timezone pay period kiosk time clock devices pair photos face data retention" },
   { id: "categories", label: "Pay categories", description: "Shared rate templates", icon: Tags, group: "Payroll", adminOnly: true, keywords: "rates chef server wage" },
   { id: "pay", label: "Pay extras", description: "Cash, holidays, standing items, advances, accounting", icon: HandCoins, group: "Payroll", adminOnly: true, keywords: "cash denominations bills coins rounding holiday premium recurring bonus deduction uniform advance loan tips points quickbooks xero journal accounts" },
   { id: "preferences", label: "Preferences", description: "Appearance, formats, PDF", icon: SlidersHorizontal, group: "App", adminOnly: true, keywords: "theme dark light date currency autosave pdf branding logo" },

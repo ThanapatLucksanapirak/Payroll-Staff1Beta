@@ -134,6 +134,12 @@ const POLICY: Rule[] = [
   { method: "POST", path: /^\/sites\/[^/]+\/kiosk-notes$/, need: "editor", perm: "punches.edit", sites: fromParam },
   { method: "DELETE", path: /^\/sites\/[^/]+\/kiosk-notes\/[^/]+$/, need: "editor", perm: "punches.edit", sites: fromParam },
   { method: "POST", path: /^\/sites\/[^/]+\/fix-requests\/[^/]+\/(approve|decline)$/, need: "editor", perm: "punches.edit", sites: fromParam },
+  // Face recognition (server/faceData.ts): editors see the photo gallery and who has face
+  // data; consent, reference photos and deleting face data need "employees.manage".
+  { method: "GET", path: /^\/sites\/[^/]+\/(face|photos)$/, need: "editor", sites: fromParam },
+  { method: "GET", path: /^\/sites\/[^/]+\/employees\/[^/]+\/face(\/refs\/[^/]+\/photo)?$/, need: "editor", sites: fromParam },
+  { method: "POST", path: /^\/sites\/[^/]+\/employees\/[^/]+\/face\/(consent|refs)$/, need: "admin", perm: "employees.manage", sites: fromParam },
+  { method: "DELETE", path: /^\/sites\/[^/]+\/employees\/[^/]+\/face(\/refs\/[^/]+)?$/, need: "admin", perm: "employees.manage", sites: fromParam },
   // Employee portal on/off per location: owners and admins. (/api/portal/* itself is handled
   // before this middleware by server/portal.ts with the employee's own session.)
   { method: "GET", path: /^\/sites\/[^/]+\/portal$/, need: "admin", sites: fromParam },
