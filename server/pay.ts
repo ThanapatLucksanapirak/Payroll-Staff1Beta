@@ -277,9 +277,12 @@ export function registerPayRoutes(app: Express, deps: { rowFromDoc: (doc: Timesh
     res.json(currentUser(res)?.role === "accountant" ? { ...ps, recurring: [] } : ps);
   }));
 
+  const realDate = (d: string) => { const t = Date.parse(`${d}T00:00:00Z`); return Number.isFinite(t) && new Date(t).toISOString().slice(0, 10) === d; };
   const settingsPatch = z.object({
     cash: cashConfigSchema.optional(),
-    holidays: z.array(holidaySchema).max(400).optional(),
+    // Only real calendar days ("2026-13-45" fits the pattern but isn't one). Checked on save,
+    // not on read, so an old bad entry can still be loaded and fixed.
+    holidays: z.array(holidaySchema.refine((h) => realDate(h.date), { message: "Use a real date (YYYY-MM-DD).", path: ["date"] })).max(400).optional(),
     recurring: z.array(recurringItemSchema).max(2000).optional(),
     accounts: accountsSchema.optional(),
     tipPoints: z.record(z.string().max(64), z.coerce.number().min(0).max(100)).optional(),

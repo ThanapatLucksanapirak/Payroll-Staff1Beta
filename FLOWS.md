@@ -37,7 +37,8 @@
 - Category select / custom full + half day rates / Net-Gross toggle per employee
 - Save Wages (profile), Categories manager (create/edit/delete)
 - Manual employees: lump sum or by-date pay
-- Analyze Timesheet -> results
+- Pay recalculates as you edit (there is no separate "Analyze" step); the timesheet opens on
+  the Payroll tab, with Rates, Shifts and Details tabs beside it
 
 ## Results
 - Stats (employees, total pay, full days, flags), per-employee cards with day table

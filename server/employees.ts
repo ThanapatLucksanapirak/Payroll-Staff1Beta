@@ -249,17 +249,32 @@ export function registerEmployeeRoutes(app: Express) {
     const site = await siteOr404(req, res); if (!site) return;
     res.json((await listEmployees(site.id)).map(view).sort((a, b) => a.name.localeCompare(b.name)));
   }));
+  // Employee changes go to Settings → Activity: who added, changed or removed whom,
+  // and when a PIN was set or cleared (never the PIN itself).
   app.post("/api/sites/:siteId/employees", h(async (req, res) => {
     const site = await siteOr404(req, res); if (!site) return;
-    res.json(view(await createEmployee(site.id, req.body)));
+    const e = await createEmployee(site.id, req.body);
+    audit({ ...actorOf(req, res), action: "employee.create", target: `employee:${e.id}`, detail: `${e.name} at ${site.name}${e.pinHash ? ", with a PIN" : ""}` });
+    res.json(view(e));
   }));
   app.put("/api/sites/:siteId/employees/:id", h(async (req, res) => {
     const site = await siteOr404(req, res); if (!site) return;
-    res.json(view(await updateEmployee(site.id, String(req.params.id), req.body)));
+    const id = String(req.params.id);
+    const before = (await listEmployees(site.id)).find((x) => x.id === id);
+    const e = await updateEmployee(site.id, id, req.body);
+    const changed = Object.keys(req.body ?? {}).filter((k) => k !== "pin");
+    const pin = req.body && "pin" in req.body ? (req.body.pin ? "PIN changed" : "PIN cleared") : "";
+    const renamed = before && before.name !== e.name ? `renamed from ${before.name}` : "";
+    audit({ ...actorOf(req, res), action: pin ? "employee.pin" : "employee.update", target: `employee:${e.id}`, detail: [e.name, renamed, pin, changed.length ? `fields: ${changed.slice(0, 8).join(", ")}` : ""].filter(Boolean).join(", ") });
+    res.json(view(e));
   }));
   app.delete("/api/sites/:siteId/employees/:id", h(async (req, res) => {
     const site = await siteOr404(req, res); if (!site) return;
-    res.json({ ok: await deleteEmployee(site.id, String(req.params.id)) });
+    const id = String(req.params.id);
+    const before = (await listEmployees(site.id)).find((x) => x.id === id);
+    const ok = await deleteEmployee(site.id, id);
+    if (ok) audit({ ...actorOf(req, res), action: "employee.delete", target: `employee:${id}`, detail: `${before?.name ?? id} at ${site.name}` });
+    res.json({ ok });
   }));
   // Owners: show the location's PINs after re-entering their password. Every
   // look-up is written to Settings → Activity.
@@ -318,6 +333,7 @@ export function registerEmployeeRoutes(app: Express) {
     for (const n of names) {
       try { created.push(view(await createEmployee(site.id, { name: n }))); } catch { skipped.push(n); }
     }
+    if (created.length) audit({ ...actorOf(req, res), action: "employee.create", target: `site:${site.id}`, detail: `${created.length} added from a timesheet at ${site.name}` });
     res.json({ created, skipped });
   }));
 }
