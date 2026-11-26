@@ -40,3 +40,14 @@ One-time setup in Google Cloud (console.cloud.google.com), signed in as the Goog
 - The client secret and the Google token stay on your server; they're never shown again, logged, or put in backups without secrets. **Disconnect** removes the token and cancels it at Google.
 - The From address must be the Google account's own address or a "Send mail as" address in Gmail, otherwise Gmail sends from the account's address.
 - The App password method still works (choose **App password**).
+
+## Email payroll PDFs to anyone
+On a finalized timesheet, **Email PDFs…** (next to Publish, or in Export) sends the reports as attachments from the address in Settings → Email.
+- Pick any of: Full report, Manager summary, Pay statements, Pay-out sheet (the same PDFs as Export).
+- Send to accountants in the app and/or any email addresses you type (up to 10 per email). Optionally send yourself a copy and add a message.
+- **Preview…** shows exactly what will go out (from, to, replies-to, subject, attachments and the email itself). Nothing is sent until you press **Send email**.
+- Owners and administrators only, 10 emails per person per hour, and every send is in Activity with its recipients. Replies go to the person who sent it.
+
+## Replies and tidying
+- **Block replies** (Settings → Email, on by default): app emails set Reply-To to `no-reply@<your domain>` (replies bounce), ask mail servers not to send out-of-office replies, and say the mailbox isn't read. Emails a person sends (PDFs) still reply to that person.
+- **Keep the app's emails out of your inbox** (Connect with Google only, on by default): each sent copy gets a Gmail label named after the From name and is archived and marked read. Needs the **Gmail API** turned on in the same Google Cloud project (APIs & Services → Library → Gmail API → Enable). With an App password instead, make a Gmail filter: from `contact@shijiri.com` → Skip the inbox, apply a label.

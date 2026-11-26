@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "wouter";
-import { AlertTriangle, Banknote, BookOpen, Check, ChevronLeft, Circle, CloudOff, Download, FileDown, FileSpreadsheet, FileText, Files, ListChecks, Loader2, Lock, Redo2, RefreshCw, Save, Table2, Undo2 } from "lucide-react";
+import { AlertTriangle, Banknote, Mail, BookOpen, Check, ChevronLeft, Circle, CloudOff, Download, FileDown, FileSpreadsheet, FileText, Files, ListChecks, Loader2, Lock, Redo2, RefreshCw, Save, Table2, Undo2 } from "lucide-react";
 import { computePayroll } from "@shared/engine";
 import { computeTimesheet, journalCsv, ytdStatementMap } from "@shared/payExtras";
 import { useApp } from "@/context/AppData";
@@ -8,7 +8,7 @@ import { useTimesheet, type SaveState } from "@/hooks/useTimesheet";
 import { downloadBlob, safeFilename, timeAgo } from "@/lib/doc";
 import { shiftsToCsv } from "@shared/importers/csv";
 import { errorMessage } from "@/lib/api";
-import { can, canEdit, isAccountant } from "@/lib/roles";
+import { can, canEdit, isAccountant, isAdmin } from "@/lib/roles";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -28,6 +28,7 @@ import { ExtrasTab } from "@/components/pay/ExtrasTab";
 import { ReopenDialog } from "@/components/pay/ReopenDialog";
 import { VarianceCard } from "@/components/pay/VarianceCard";
 import { PublishPanel } from "@/components/pay/PublishPanel";
+import { ShareDialog, type ReportKind } from "@/components/pay/ShareDialog";
 
 export function WorkspacePage({ id }: { id: string }) {
   const app = useApp();
@@ -37,6 +38,7 @@ export function WorkspacePage({ id }: { id: string }) {
   const ts = useTimesheet(id, { autosave: app.prefs.autosave && !readOnly });
   const [tab, setTab] = useState("payroll");
   const [checklist, setChecklist] = useState(false);
+  const [sharing, setSharing] = useState(false);
   const doc = ts.doc;
   const site = (doc && app.sites.find((s) => s.id === doc.siteId)) || app.site;
 
@@ -82,6 +84,15 @@ export function WorkspacePage({ id }: { id: string }) {
   const title = doc.label || doc.filename || "Untitled timesheet";
   const periodTitle = result.periodStart ? `${app.date(result.periodStart)} – ${app.date(result.periodEnd)}` : "No dates yet";
   const props = { doc, result, site, locked, edit: ts.edit };
+
+  /** The same PDF as Export, as bytes (for emailing). */
+  const makePdf = async (kind: ReportKind): Promise<ArrayBuffer> => {
+    const pdf = await import("@/lib/pdf");
+    const o = { result, prefs: app.prefs, site, title: doc.label || `Payroll ${periodTitle}`, notes: doc.notes, ytd: ytd.data ? ytdStatementMap(ytd.data.rows, result) : undefined, ytdYear, cash: pay.settings.cash };
+    const build = kind === "summary" ? pdf.buildSummaryPdf : kind === "statements" ? pdf.buildPayStatementsPdf : kind === "payout" ? pdf.buildPayoutSheetPdf : pdf.buildPayrollPdf;
+    return build(o).output("arraybuffer");
+  };
+  const canShare = isAdmin(app.user) && doc.status === "final" && !ts.dirty;
 
   const exportPdf = async (kind: "report" | "summary" | "statements" | "payout" = "report") => {
     try {
@@ -131,6 +142,7 @@ export function WorkspacePage({ id }: { id: string }) {
                 <DropdownMenuItem onClick={() => exportPdf("summary")} data-testid="button-export-summary-pdf"><FileText />Manager summary (PDF)</DropdownMenuItem>
                 <DropdownMenuItem onClick={() => exportPdf("statements")} data-testid="button-export-statements-pdf"><Files />Pay statements (PDF)</DropdownMenuItem>
                 <DropdownMenuItem onClick={() => exportPdf("payout")} data-testid="button-export-payout-pdf"><Banknote />Pay-out sheet (PDF)</DropdownMenuItem>
+                {canShare && <DropdownMenuItem onClick={() => setSharing(true)} data-testid="button-share-open"><Mail />Email PDFs…</DropdownMenuItem>}
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={async () => downloadBlob((await import("@/lib/pdf")).payrollSummaryCsv(result), `${base}_summary.csv`, "text/csv")} data-testid="button-export-csv"><FileSpreadsheet />Summary CSV</DropdownMenuItem>
                 <DropdownMenuItem onClick={() => downloadBlob(shiftsToCsv(doc.shifts), `${base}_shifts.csv`, "text/csv")} data-testid="button-export-shifts"><Table2 />Shifts CSV (re-importable)</DropdownMenuItem>
@@ -163,7 +175,8 @@ export function WorkspacePage({ id }: { id: string }) {
             {app.user.role === "owner" && <Button size="sm" variant="tinted" onClick={() => setReopening(true)} data-testid="button-reopen">Reopen…</Button>}
           </div>
         )}
-        {doc.status === "final" && !ts.dirty && <PublishPanel id={id} title={title} />}
+        {doc.status === "final" && !ts.dirty && <PublishPanel id={id} title={title} onShare={canShare ? () => setSharing(true) : undefined} />}
+        {canShare && <ShareDialog id={id} open={sharing} onOpenChange={setSharing} makePdf={makePdf} />}
         {ts.saveState === "error" && ts.saveError && /finalized|locked/i.test(ts.saveError) && (
           <div className="flex flex-wrap items-center gap-3 rounded-xl bg-warning-soft px-4 py-3 text-[13px]" role="alert">
             <Lock className="h-4 w-4 shrink-0 text-warning" />

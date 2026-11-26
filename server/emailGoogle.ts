@@ -21,7 +21,7 @@ import type { Express, NextFunction, Request, Response } from "express";
 import { randomBytes } from "node:crypto";
 import { actorOf, audit } from "./audit";
 import { currentUser } from "./auth";
-import { getEmailConfig, saveEmailConfig } from "./email";
+import { type EmailConfig, brandName, getEmailConfig, recordTidyStatus, saveEmailConfig } from "./email";
 import { getUser } from "./users";
 
 export const GOOGLE_CALLBACK_PATH = "/api/email/google/callback";
@@ -32,7 +32,7 @@ const TOKEN_URL = "https://oauth2.googleapis.com/token";
 const REVOKE_URL = "https://oauth2.googleapis.com/revoke";
 const STATE_MS = 10 * 60_000;
 
-type Fetch = (url: string, init: { method: string; headers: Record<string, string>; body: string }) => Promise<{ ok: boolean; status: number; json(): Promise<any> }>;
+type Fetch = (url: string, init: { method: string; headers: Record<string, string>; body?: string }) => Promise<{ ok: boolean; status: number; json(): Promise<any> }>;
 let fetcher: Fetch = (url, init) => fetch(url, { ...init, signal: AbortSignal.timeout(15_000) });
 /** Tests only: stand-in for Google's token endpoint. */
 export function setGoogleFetchForTests(fn: Fetch | null) { fetcher = fn ?? ((url, init) => fetch(url, { ...init, signal: AbortSignal.timeout(15_000) })); }
@@ -142,4 +142,67 @@ export function registerGoogleEmailRoutes(app: Express) {
     audit({ ...actorOf(req, res), action: "settings.email", target: "email", detail: `disconnected Google account${cfg.googleAccount ? ` ${cfg.googleAccount}` : ""}` });
     res.json({ ok: true });
   }));
+}
+
+// ── Tidy sent mail (Gmail) ───────────────────────────────────────────────────
+// Gmail keeps a copy of every email the app sends in Sent, and in the inbox too
+// when someone emails themselves (a test email, a sign-in code). After each
+// send we put those copies under a label named after the sender ("Shijiri
+// Payroll Service") and take them out of the inbox, marked read. Needs the
+// Gmail API turned on in the same Google Cloud project; when it isn't, sending
+// still works and Settings → Email says how to turn it on. Never throws.
+const GMAIL_API = "https://gmail.googleapis.com/gmail/v1/users/me";
+let tidyDelayMs = 2_000;
+/** Tests only. */
+export function setTidyDelayForTests(ms: number) { tidyDelayMs = ms; }
+
+async function accessToken(cfg: EmailConfig): Promise<string> {
+  const r = await fetcher(TOKEN_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({ client_id: cfg.googleClientId, client_secret: cfg.googleClientSecret, refresh_token: cfg.googleRefreshToken, grant_type: "refresh_token" }).toString(),
+  });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok || typeof j?.access_token !== "string") throw new Error("Google didn't give an access token. Connect your Google account again.");
+  return j.access_token;
+}
+
+const gmailError = (status: number, j: any) => {
+  const reason = String(j?.error?.errors?.[0]?.reason ?? j?.error?.status ?? "");
+  if (status === 403 && /accessNotConfigured|SERVICE_DISABLED/i.test(reason + JSON.stringify(j?.error?.details ?? ""))) return "Turn on the Gmail API in your Google Cloud project (APIs & Services → Library → Gmail API → Enable) so the app can tidy its sent emails.";
+  return `Gmail said ${status}${reason ? ` (${reason.slice(0, 60)})` : ""}.`;
+};
+
+export async function tidySentGmail(cfg: EmailConfig, messageId: string): Promise<{ ok: boolean; tidied: number; error?: string }> {
+  try {
+    const token = await accessToken(cfg);
+    const auth = { Authorization: `Bearer ${token}` };
+    const call = async (method: string, path: string, body?: unknown) => {
+      const r = await fetcher(`${GMAIL_API}${path}`, { method, headers: body ? { ...auth, "Content-Type": "application/json" } : auth, body: body ? JSON.stringify(body) : undefined });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(gmailError(r.status, j));
+      return j;
+    };
+    const id = messageId.replace(/^<|>$/g, "");
+    // Gmail can take a moment to file a message it just accepted.
+    let ids: string[] = [];
+    for (let attempt = 0; attempt < 4 && !ids.length; attempt++) {
+      if (attempt || tidyDelayMs) await new Promise((r) => setTimeout(r, tidyDelayMs * (attempt + 1)));
+      const found = await call("GET", `/messages?q=${encodeURIComponent(`rfc822msgid:${id}`)}&maxResults=10`);
+      ids = (found?.messages ?? []).map((m: any) => String(m.id)).filter(Boolean);
+    }
+    if (!ids.length) { await recordTidyStatus(null); return { ok: true, tidied: 0 }; }
+    const name = (await brandName(cfg)).replace(/[^\p{L}\p{N} ._-]/gu, "").trim().slice(0, 60) || "Payroll app";
+    const labels = await call("GET", "/labels");
+    let label = (labels?.labels ?? []).find((l: any) => String(l.name).toLowerCase() === name.toLowerCase());
+    if (!label) label = await call("POST", "/labels", { name, labelListVisibility: "labelShow", messageListVisibility: "show" });
+    await call("POST", "/messages/batchModify", { ids, addLabelIds: [label.id], removeLabelIds: ["INBOX", "UNREAD"] });
+    await recordTidyStatus(null);
+    return { ok: true, tidied: ids.length };
+  } catch (err: any) {
+    const error = String(err?.message ?? err).slice(0, 300);
+    console.error(`[email] could not tidy sent Gmail: ${error}`);
+    await recordTidyStatus(error).catch(() => undefined);
+    return { ok: false, tidied: 0, error };
+  }
 }

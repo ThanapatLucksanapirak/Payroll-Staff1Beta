@@ -635,8 +635,9 @@ export function kioskHostGuard() {
     const p = req.path;
     if (p === "/" && (req.method === "GET" || req.method === "HEAD")) return res.redirect(302, "/kiosk");
     if (p === "/api/health" || p.startsWith("/api/kiosk/") || p === "/kiosk" || p === "/kiosk/" || p === "/favicon.svg") return next();
-    // Installable kiosk (home-screen icon, manifest and the static-shell service worker)
-    if (p === "/kiosk.webmanifest" || p === "/sw.js" || /^\/icons\/[\w.-]+$/.test(p)) return next();
+    // Installable kiosk (home-screen icon, manifest, the static-shell service worker,
+    // and the Android app's Digital Asset Links file)
+    if (p === "/kiosk.webmanifest" || p === "/sw.js" || p === "/.well-known/assetlinks.json" || /^\/icons\/[\w.-]+$/.test(p)) return next();
     // Face check for photo on punch (model and WebAssembly runtime)
     if (FACE_FILES.has(p)) return next();
     if (kioskAssetSet().has(p)) return next();

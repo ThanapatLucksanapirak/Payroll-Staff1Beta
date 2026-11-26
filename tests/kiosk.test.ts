@@ -376,6 +376,30 @@ test("KIOSK_HOST serves only the kiosk on that hostname", async () => {
   }
 });
 
+test("assetlinks.json for the Android app, also on the kiosk hostname", async () => {
+  const fp = "ab:cd:ef:01:23:45:67:89:ab:cd:ef:01:23:45:67:89:ab:cd:ef:01:23:45:67:89:ab:cd:ef:01:23:45:67:89";
+  delete process.env.ANDROID_CERT_SHA256;
+  assert.equal((await rawGet("/.well-known/assetlinks.json", `127.0.0.1:${port}`)).status, 404, "not configured yet");
+  process.env.ANDROID_CERT_SHA256 = `${fp}, not-a-fingerprint, ${fp.replace(/:/g, "").toUpperCase()}`;
+  process.env.KIOSK_HOST = "clock.example.com";
+  try {
+    const r = await rawGet("/.well-known/assetlinks.json", "clock.example.com");
+    assert.equal(r.status, 200);
+    assert.match(String(r.headers["content-type"]), /application\/json/);
+    const body = JSON.parse(r.body);
+    assert.deepEqual(body, [{
+      relation: ["delegate_permission/common.handle_all_urls"],
+      target: { namespace: "android_app", package_name: "com.shijirigroup.timeclock", sha256_cert_fingerprints: [fp.toUpperCase()] },
+    }]);
+    process.env.ANDROID_APP_PACKAGE = "bad package";
+    assert.equal((await rawGet("/.well-known/assetlinks.json", "clock.example.com")).status, 404);
+  } finally {
+    delete process.env.KIOSK_HOST;
+    delete process.env.ANDROID_CERT_SHA256;
+    delete process.env.ANDROID_APP_PACKAGE;
+  }
+});
+
 test("manager PIN guards kiosk settings and unpairing", async () => {
   const dev = await A("POST", `/api/sites/${siteId}/kiosk-devices`, { name: "Locked tablet" });
   const tok = dev.body.token;

@@ -1,0 +1,83 @@
+name: Android app (Time Clock)
+# Builds the Google Play bundle for the kiosk app in android/.
+# • On pull requests: checks it builds (unsigned).
+# • Run it by hand (Actions → "Android app (Time Clock)" → Run workflow) to get a
+#   signed .aab to upload to Play. Signing needs these repository secrets
+#   (Settings → Secrets and variables → Actions); see android/README.md:
+#     ANDROID_KEYSTORE_BASE64, ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_ALIAS,
+#     ANDROID_KEY_PASSWORD (optional; defaults to the keystore password)
+on:
+  pull_request:
+    paths: ["android/**", ".github/workflows/android.yml"]
+  workflow_dispatch:
+    inputs:
+      versionCode:
+        description: "Version code (a whole number, higher than the last upload to Play)"
+        required: true
+      versionName:
+        description: "Version name shown to users, e.g. 1.0.1"
+        required: true
+        default: "1.0.0"
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: android
+    env:
+      KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Signing key (manual runs only)
+        if: github.event_name == 'workflow_dispatch' && env.KEYSTORE_B64 != ''
+        run: |
+          echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/upload.jks"
+          echo "ANDROID_KEYSTORE_FILE=$RUNNER_TEMP/upload.jks" >> "$GITHUB_ENV"
+
+      - name: Build
+        env:
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          VERSION_CODE: ${{ inputs.versionCode }}
+          VERSION_NAME: ${{ inputs.versionName }}
+        run: |
+          args=()
+          if [ -n "${VERSION_CODE:-}" ]; then
+            [[ "$VERSION_CODE" =~ ^[1-9][0-9]{0,8}$ ]] || { echo "::error::versionCode must be a whole number"; exit 1; }
+            args+=("-PversionCode=$VERSION_CODE")
+          fi
+          if [ -n "${VERSION_NAME:-}" ]; then
+            [[ "$VERSION_NAME" =~ ^[0-9A-Za-z.+-]{1,40}$ ]] || { echo "::error::versionName may only use letters, digits, . + -"; exit 1; }
+            args+=("-PversionName=$VERSION_NAME")
+          fi
+          chmod +x gradlew
+          ./gradlew --no-daemon "${args[@]}" assembleDebug bundleRelease
+
+      - name: Show the signing fingerprint (for ANDROID_CERT_SHA256 on the server)
+        if: env.ANDROID_KEYSTORE_FILE != ''
+        env:
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+        run: |
+          jarsigner -verify app/build/outputs/bundle/release/app-release.aab >/dev/null
+          keytool -printcert -jarfile app/build/outputs/bundle/release/app-release.aab | grep -E "SHA256:" | head -1 | tee -a "$GITHUB_STEP_SUMMARY"
+          rm -f "$ANDROID_KEYSTORE_FILE"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: time-clock-${{ github.event_name == 'workflow_dispatch' && 'release' || 'check' }}
+          path: |
+            android/app/build/outputs/bundle/release/*.aab
+            android/app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
+          retention-days: 14
