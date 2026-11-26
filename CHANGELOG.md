@@ -6,7 +6,7 @@ Settings → About, next to the matching update.
 Add an entry with every pull request: a `## YYYY-MM-DD · Title (#PR)` heading and a
 few short bullets written for the people who use the app, not for developers.
 
-## 2026-11-26 · iPhone home screen edges, and labor from Square (#30)
+## 2026-11-26 · iPhone home screen edges, and labor from Square (#32)
 - On an iPhone added to the home screen, the app now fills the whole screen neatly: the tab bar sits above the home bar, the top bar clears the status bar and camera, and nothing is cut off by the rounded corners, in portrait and landscape. The time clock and staff portal got the same care.
 - Home and Reports: for a location that tracks time in Square, "Labor vs. sales" now counts this week's Square timecards at your saved pay rates (marked est.), instead of showing $0.00 labor until a timesheet is saved. The payroll forecast counts them too.
 - If Square won't share timecards, Reports says so. With sales but no hours yet, Home shows "No hours counted yet" instead of 0.0%.
