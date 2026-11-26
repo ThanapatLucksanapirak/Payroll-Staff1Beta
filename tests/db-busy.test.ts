@@ -48,3 +48,13 @@ test("database is locked → 503 busy with Retry-After", async () => {
   assert.equal(body.code, undefined, "no code, so the kiosk queues the punch as offline");
   assert.equal(body.busy, true);
 });
+
+test("the kiosk treats that busy reply as offline and queues the punch", async () => {
+  const { KioskError } = await import("../client/src/kiosk/api");
+  const res = await fetch(`${base}/api/kiosk/punch`, { method: "POST" });
+  const body = await res.json();
+  const e = new KioskError(res.status, body.error, body.code, body);
+  assert.equal(e.offline, true);
+  // whereas a 503 that carries a code (e.g. the face check is busy) is shown, not queued
+  assert.equal(new KioskError(503, "busy", "photo").offline, false);
+});
