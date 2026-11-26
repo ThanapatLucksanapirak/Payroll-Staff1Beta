@@ -4,9 +4,9 @@ import { z } from "zod";
 import { siteRulesSchema } from "@shared/schema";
 import { dbStatus } from "./db";
 import * as settings from "./settings";
-import { clearSessionCookie, clearSetupCode, currentUser, loginThrottle, recordLogin, requestToken, revokeToken, setSessionCookie, setupCodeMatches } from "./auth";
+import { clearSessionCookie, passwordKey, clearSetupCode, currentUser, loginThrottle, recordLogin, requestToken, revokeToken, setSessionCookie, setupCodeMatches } from "./auth";
 import { actorOf, audit, queryAudit } from "./audit";
-import {
+import { loginTargetId,
   type UserRecord, ROLE_LABELS, bumpSessionVersion, createUser, createUserSchema, deleteUser, displayNameSchema, getUser, listUsers,
   isAdmin, notificationEmailSchema, passwordSchema, setUserPassword, setupRequired, toPublic, updateProfile, updateUser, updateUserSchema, usernameSchema, authenticate,
 } from "./users";
@@ -40,9 +40,13 @@ async function confirmOwnPassword(req: Request, res: Response, userId: string, p
   const ip = req.ip ?? "unknown";
   const blocked = loginThrottle(ip, res);
   if (blocked) { res.status(429).json({ error: blocked }); return false; }
+  const acct = passwordKey({ userId });
+  const acctBlocked = loginThrottle(acct, res);
+  if (acctBlocked) { res.status(429).json({ error: acctBlocked }); return false; }
   const fresh = await getUser(userId, { fresh: true });
   const ok = !!fresh && password.length <= 200 && (await verifyHash(password, fresh.passwordHash));
   recordLogin(ip, ok);
+  recordLogin(acct, ok);
   if (!ok) { res.status(400).json({ error: "Your password is incorrect.", needPassword: true }); return false; }
   return true;
 }
@@ -64,8 +68,14 @@ export function registerAuthRoutes(app: Express) {
       password: z.string().min(1).max(200),
       remember: z.boolean().optional(),
     }).parse(req.body);
+    // Also limit guesses per account, so many addresses can't share the work.
+    const targetId = await loginTargetId(username);
+    const acct = passwordKey(targetId ? { userId: targetId } : { unknownName: username });
+    const acctBlocked = loginThrottle(acct, res);
+    if (acctBlocked) return res.status(429).json({ error: acctBlocked });
     const r = await authenticate(username, password);
     recordLogin(ip, r.ok);
+    recordLogin(acct, r.ok);
     if (!r.ok) {
       audit({ userId: null, userName: r.username || username.trim(), ip, action: "auth.login-failed", detail: r.reason === "username-required" ? "username missing" : "wrong username or password" });
       return res.status(401).json({ error: r.reason === "username-required" ? "Enter your username and password." : "Incorrect username or password. Use your sign-in username, not your display name." });
@@ -132,8 +142,16 @@ export function registerAuthRoutes(app: Express) {
   app.post("/api/auth/change-password", h(async (req, res) => {
     const u = me(res);
     const { current, next } = z.object({ current: z.string().min(1).max(200), next: passwordSchema }).parse(req.body);
+    // Rate limited like sign-in, so a borrowed session can't guess the current password.
+    const ip = req.ip ?? "unknown";
+    const acct = passwordKey({ userId: u.id });
+    const blocked = loginThrottle(ip, res) ?? loginThrottle(acct, res);
+    if (blocked) return res.status(429).json({ error: blocked });
     const fresh = await getUser(u.id, { fresh: true });
-    if (!fresh || !(await verifyHash(current, fresh.passwordHash))) return res.status(400).json({ error: "Current password is incorrect." });
+    const ok = !!fresh && (await verifyHash(current, fresh.passwordHash));
+    recordLogin(ip, ok);
+    recordLogin(acct, ok);
+    if (!ok) return res.status(400).json({ error: "Current password is incorrect." });
     const updated = await setUserPassword({ id: u.id, role: u.role }, u.id, next);
     const { expiresAt } = setSessionCookie(req, res, updated, { days: await sessionDays(), remember: true });
     audit({ ...actorOf(req, res), action: "user.password", target: `user:${u.id}`, detail: "changed own password" });

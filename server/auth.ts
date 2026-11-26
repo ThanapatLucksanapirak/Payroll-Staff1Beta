@@ -184,9 +184,31 @@ export async function announceSetupCode() {
   console.log("");
 }
 
-// ── Brute-force protection (per client address, in memory) ───────────────────
+// ── Brute-force protection (in memory) ───────────────────────────────────────
+// Two kinds of key share these counters:
+// - a client address (any other string): MAX_TRIES_IP failures in the window.
+//   A success does NOT clear it, so signing in to your own account can't reset
+//   the count for guesses against someone else's.
+// - an account (accountKey(...)): MAX_TRIES failures in the window, cleared only
+//   by a success on that same account, so guesses spread over many addresses
+//   still lock the account they target.
 const MAX_TRIES = 8;
+const MAX_TRIES_IP = 30;
 const WINDOW_MS = 15 * 60_000;
+const ACCOUNT_PREFIX = "acct:";
+/** A raw account counter key. Use passwordKey / twoFactorKey so every check shares one counter. */
+export function accountKey(name: string) { return ACCOUNT_PREFIX + name.trim().toLowerCase(); }
+/**
+ * The one password counter for an account: sign-in and every "enter your password"
+ * check share it. Keyed by user id; a username with no account gets its own
+ * namespace, so nothing typed at sign-in can land on another account's counter.
+ */
+export function passwordKey(target: { userId: string } | { unknownName: string }) {
+  return "userId" in target ? accountKey(`pw:id:${target.userId}`) : accountKey(`pw:name:${target.unknownName}`);
+}
+/** The counter for an account's two-step sign-in codes. */
+export function twoFactorKey(userId: string) { return accountKey(`2fa:id:${userId}`); }
+const limitFor = (key: string) => (key.startsWith(ACCOUNT_PREFIX) ? MAX_TRIES : MAX_TRIES_IP);
 const attempts = new Map<string, { n: number; until: number }>();
 
 function prune(now = Date.now()) {
@@ -215,7 +237,7 @@ export function loginThrottle(ip: string, res?: { once(event: "finish", fn: () =
   const now = Date.now();
   const a = attempts.get(ip);
   const failed = a && a.until > now ? a.n : 0;
-  if (failed + inFlight(ip, now) >= MAX_TRIES) {
+  if (failed + inFlight(ip, now) >= limitFor(ip)) {
     const until = a && a.until > now ? a.until : now + 60_000;
     return `Too many attempts. Try again in ${Math.ceil((until - now) / 60000)} minute(s).`;
   }
@@ -230,7 +252,10 @@ export function loginThrottle(ip: string, res?: { once(event: "finish", fn: () =
   return null;
 }
 export function recordLogin(ip: string, ok: boolean) {
-  if (ok) { attempts.delete(ip); return; }
+  if (ok) {
+    if (ip.startsWith(ACCOUNT_PREFIX)) attempts.delete(ip);
+    return;
+  }
   if (attempts.size > 10_000) prune();
   const a = attempts.get(ip);
   if (!a || a.until < Date.now()) attempts.set(ip, { n: 1, until: Date.now() + WINDOW_MS });

@@ -6,6 +6,12 @@ Settings → About, next to the matching update.
 Add an entry with every pull request: a `## YYYY-MM-DD · Title (#PR)` heading and a
 few short bullets written for the people who use the app, not for developers.
 
+## 2026-11-26 · Stronger sign-in protection (#38)
+- Wrong passwords now count against the account being tried, not only the device trying. After 8 wrong passwords for one account, that account waits 15 minutes, whichever devices the guesses came from. Signing in successfully clears it.
+- Signing in to your own account no longer resets the wrong-password count for everyone else on the same network. One network gets 30 wrong tries in 15 minutes, shared by everyone on it.
+- Two-step sign-in codes are limited the same way: 8 wrong codes for an account lock its second step for 15 minutes, even when the password is entered again to get a new code screen.
+- Changing your password, and every other "enter your password" check, counts toward the same 8 wrong tries per account as signing in.
+
 ## 2026-11-26 · "No photo" tag for offline punches without a photo (#39)
 - On Live, a punch saved on a tablet while it was offline and sent without a photo now says "No photo" instead of "No face". "No face" is only for a photo that shows no face.
 

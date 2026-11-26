@@ -20,7 +20,7 @@ import { db } from "./db";
 import { getAuthSecret } from "./config";
 import * as settings from "./settings";
 import { actorOf, audit } from "./audit";
-import { loginThrottle, recordLogin, setSessionCookie, currentUser } from "./auth";
+import { loginThrottle, passwordKey, twoFactorKey, recordLogin, setSessionCookie, currentUser } from "./auth";
 import { safeEqual, verifyHash } from "./passwords";
 import { type TwoFactorState, type UserRecord, UserError, getUser, isAdmin, mutateUser, toPublic } from "./users";
 import { brandName, brandedHtml, emailReady, getEmailConfig, sendEmail } from "./email";
@@ -421,9 +421,13 @@ async function checkPassword(req: Request, user: UserRecord, password: unknown) 
   const ip = req.ip ?? "unknown";
   const blocked = loginThrottle(ip, req.res);
   if (blocked) throw new UserError(blocked, 429);
+  const acct = passwordKey({ userId: user.id });
+  const acctBlocked = loginThrottle(acct, req.res);
+  if (acctBlocked) throw new UserError(acctBlocked, 429);
   const fresh = await getUser(user.id, { fresh: true });
   const ok = !!fresh && typeof password === "string" && !!password && (await verifyHash(password, fresh.passwordHash));
   recordLogin(ip, ok);
+  recordLogin(acct, ok);
   if (!ok) throw new UserError("Your password is incorrect.", 400);
   return fresh!;
 }
@@ -440,9 +444,15 @@ export function registerTwoFactorRoutes(app: Express) {
     const body = z.object({ ticket: z.string().max(2000), code: codeSchema, rememberDevice: z.boolean().optional() }).parse(req.body);
     const t = await ticketUser(body.ticket, "verify");
     if (!t) return res.status(401).json({ error: expired, expired: true });
+    // Wrong codes count per account across sign-ins, so a known password can't
+    // be used to get a fresh ticket (and fresh tries) over and over.
+    const acct = twoFactorKey(t.user.id);
+    const acctBlocked = loginThrottle(acct, res);
+    if (acctBlocked) return res.status(429).json({ error: acctBlocked });
     countTry(t.nonce);
     const used = await useCode(t.user.id, body.code);
     recordLogin(ip, !!used);
+    recordLogin(acct, !!used);
     if (!used) {
       audit({ userId: t.user.id, userName: t.user.username, ip, action: "auth.login-failed", detail: "wrong two-factor code" });
       return res.status(401).json({ error: t.user.twoFactor?.method === "email" ? "That code didn't work. Use the code in the newest email, or a recovery code." : "That code didn't work. Use the newest code from your app, or a recovery code." });
@@ -487,10 +497,14 @@ export function registerTwoFactorRoutes(app: Express) {
     const body = z.object({ ticket: z.string().max(2000), code: codeSchema }).parse(req.body);
     const t = await ticketUser(body.ticket, "setup");
     if (!t) return res.status(401).json({ error: expired, expired: true });
+    const acct = twoFactorKey(t.user.id);
+    const acctBlocked = loginThrottle(acct, res);
+    if (acctBlocked) return res.status(429).json({ error: acctBlocked });
     countTry(t.nonce);
     let codes: string[];
-    try { codes = await confirmEnrollment(t.user.id, body.code); } catch (err) { recordLogin(ip, false); throw err; }
+    try { codes = await confirmEnrollment(t.user.id, body.code); } catch (err) { recordLogin(ip, false); recordLogin(acct, false); throw err; }
     recordLogin(ip, true);
+    recordLogin(acct, true);
     ticketTries.delete(t.nonce);
     const user = (await getUser(t.user.id, { fresh: true })) ?? t.user;
     const { expiresAt } = setSessionCookie(req, res, user, { days: await sessionDays(), remember: t.remember });
