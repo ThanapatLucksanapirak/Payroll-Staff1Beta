@@ -7,8 +7,7 @@
 // sent anywhere). They load only on kiosks with photos turned on. If MediaPipe
 // can't start (an old or low-memory tablet), the browser's own face detector is
 // used where there is one (Chrome on Android has it). If neither runs, the
-// check says so ("unchecked") instead of passing: the kiosk then treats the
-// punch like one with no face (try again, then punch flagged for the manager).
+// check says so ("unchecked") instead of passing, and the punch isn't sent.
 // Loading is retried, so one failed download doesn't switch the check off for
 // the rest of the day.
 import type { FaceDetector as MpFaceDetector } from "@mediapipe/tasks-vision";
@@ -122,5 +121,5 @@ export const FACE_MESSAGES: Record<FaceReason, string> = {
   no_face: "Face not detected. Look at the camera and try again.",
   covered: "Face not detected: the camera looks covered or too dark. Uncover it and try again.",
   no_frame: "The camera isn't ready yet. Wait a moment and try again.",
-  unchecked: "Face not detected: this tablet couldn't check the photo. Look at the camera and try again.",
+  unchecked: "This tablet couldn't check for a face. Try again in a moment, or ask a manager.",
 };

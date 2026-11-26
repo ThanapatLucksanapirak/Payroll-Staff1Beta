@@ -52,8 +52,6 @@ export interface QueuedPunch {
   station?: string | null;
   /** JPEG data URL, null when the camera was unavailable, absent when photos are off. */
   photo?: string | null;
-  /** "missing" when no face was found and the employee punched anyway. */
-  face?: "missing";
 }
 
 /** Keep at most this many photos in the offline queue (browser storage is small). */
@@ -148,7 +146,7 @@ export function flushQueue(): Promise<FlushResult> {
       try {
         await request<PunchResult>("POST", "/api/kiosk/punch", {
           id: item.id, type: item.type, pin: item.pin, employeeId: item.employeeId, at: item.at,
-          ...(item.station ? { station: item.station } : {}), ...(item.photo !== undefined ? { photo: item.photo } : {}), ...(item.face ? { face: item.face } : {}),
+          ...(item.station ? { station: item.station } : {}), ...(item.photo !== undefined ? { photo: item.photo } : {}),
         }, 15_000);
         out.sent++;
         queue.save(queue.all().filter((x) => x.id !== item.id));

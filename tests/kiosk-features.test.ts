@@ -283,16 +283,6 @@ test("punch with station and photo; photo served only to editors; not in backups
   assert.equal(queued.body.punch.photo, "none");
   const back = await K("POST", "/api/kiosk/punch", { id: randomUUID(), type: "break_end", pin: "1234", photo: JPEG });
   assert.equal(back.status, 200);
-  // No face found, punched anyway: accepted with the photo, flagged "missing" for the manager
-  const noFace = await K("POST", "/api/kiosk/punch", { id: randomUUID(), type: "break_start", pin: "1234", photo: JPEG, face: "missing" });
-  assert.equal(noFace.status, 200, JSON.stringify(noFace.body));
-  assert.equal(noFace.body.punch.photo, "saved");
-  const live2 = await A("GET", `/api/sites/${siteId}/timeclock`);
-  assert.deepEqual(live2.body.punches.find((x: any) => x.id === noFace.body.punch.id).meta, { photo: "saved", face: "missing" });
-  // "anyway" still needs a photo, and only "missing" is a valid flag
-  assert.equal((await K("POST", "/api/kiosk/punch", { id: randomUUID(), type: "break_end", pin: "1234", photo: null, face: "missing" })).status, 422);
-  assert.equal((await K("POST", "/api/kiosk/punch", { id: randomUUID(), type: "break_end", pin: "1234", photo: JPEG, face: "seen" })).status, 400);
-  assert.equal((await K("POST", "/api/kiosk/punch", { id: randomUUID(), type: "break_end", pin: "1234", photo: JPEG })).status, 200);
   // Unknown station is ignored, not an error
   const benIn = await K("POST", "/api/kiosk/punch", { id: randomUUID(), type: "in", pin: "5678", station: "Roof", photo: JPEG });
   assert.equal(benIn.status, 200);

@@ -23,7 +23,7 @@ import { Field } from "@/components/workspace/fields";
 import { ScheduleAlerts } from "@/components/schedule/ScheduleAlerts";
 import { LiveTimeclockPanel } from "@/components/timeclock/LiveTimeclockPanel";
 import { cn } from "@/lib/utils";
-import { BreakDueBadge, FixRequests, NoFaceBadge, PunchPhoto, ShiftNotes, StationTag } from "@/components/live/KioskLive";
+import { BreakDueBadge, FixRequests, PunchPhoto, ShiftNotes, StationTag } from "@/components/live/KioskLive";
 
 interface EmployeeNow {
   id: string; name: string; role: string; active: boolean; inDirectory: boolean;
@@ -191,7 +191,6 @@ export function LivePage() {
                         <span className="flex min-w-0 items-center gap-2">
                           <span className="truncate font-medium" title={names[p.employeeId] ?? p.employeeName}>{names[p.employeeId] ?? p.employeeName}</span>
                           {p.flags?.autoClosed && !p.editedAt && <Badge variant="warning" className="shrink-0">Auto-closed</Badge>}
-                          <NoFaceBadge punch={p} />
                           {p.editedAt && <Badge variant="secondary" className="shrink-0">Edited</Badge>}
                         </span>
                         <span className={cn("text-xs font-medium sm:hidden", TYPE_CLS[p.type])}>{PUNCH_LABELS[p.type]}</span>

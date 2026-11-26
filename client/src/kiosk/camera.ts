@@ -4,12 +4,8 @@
 //
 // When photos are on, a punch needs a photo with a face in it: if the camera
 // is blocked, missing or covered, or no face is seen, the kiosk says so and
-// the punch isn't sent (see capture()). After a couple of tries without a face
-// the kiosk offers to punch anyway: the photo is still taken and the punch is
-// flagged "no face" for the manager (capture({ allowNoFace: true })), so
-// nobody is locked out but a covered camera never goes unnoticed. A blocked or
-// missing camera still stops the punch: a manager can add it on Live, or turn
-// photos off for the device.
+// the punch isn't sent (see capture()). There is no way to punch without a
+// face: a manager can add the punch on Live, or turn photos off for the device.
 import { useCallback, useEffect, useRef, useState } from "react";
 import { FACE_MESSAGES, checkFace, loadFaceDetector } from "./face";
 
@@ -19,10 +15,7 @@ const QUALITY = 0.6;
 /** off: not running · starting · ready · blocked: permission denied · unavailable: no camera / not https / failed */
 export type CameraStatus = "off" | "starting" | "ready" | "blocked" | "unavailable";
 
-/** face: "seen" when a face was found, "missing" for a punch the employee sent anyway without one. */
-export type Capture =
-  | { ok: true; photo: string; face: "seen" | "missing" }
-  | { ok: false; message: string; /** true when the camera works but no face was found (the punch may be sent anyway) */ noFace: boolean };
+export type Capture = { ok: true; photo: string } | { ok: false; message: string };
 
 export const CAMERA_MESSAGES = {
   blocked: "Camera blocked. This time clock needs the camera to take your photo. Ask a manager to allow camera access for this page.",
@@ -117,42 +110,28 @@ export function useCamera(active: boolean) {
 
   /**
    * Take the punch photo: a small JPEG of the current frame, only if the camera
-   * works and a face is in it. Otherwise a message saying why (the punch must
-   * not be sent). With allowNoFace, a working camera's frame is returned even
-   * without a face, marked face: "missing".
+   * works and a face is in it (on two frames). Otherwise a message saying why
+   * (the punch must not be sent).
    */
-  const capture = useCallback(async (opts?: { allowNoFace?: boolean }): Promise<Capture> => {
-    const fail = (message: string, noFace = false): Capture => ({ ok: false, message, noFace });
-    if (status === "blocked") return fail(CAMERA_MESSAGES.blocked);
-    if (status === "unavailable" || status === "off") return fail(CAMERA_MESSAGES.unavailable);
-    if (status === "starting") return fail(CAMERA_MESSAGES.starting);
+  const capture = useCallback(async (): Promise<Capture> => {
+    if (status === "blocked") return { ok: false, message: CAMERA_MESSAGES.blocked };
+    if (status === "unavailable" || status === "off") return { ok: false, message: CAMERA_MESSAGES.unavailable };
+    if (status === "starting") return { ok: false, message: CAMERA_MESSAGES.starting };
     const canvas = frame();
-    if (!canvas) return fail(FACE_MESSAGES.no_frame);
-    const jpeg = (c: HTMLCanvasElement): string | null => {
-      try {
-        const url = c.toDataURL("image/jpeg", QUALITY);
-        return url.startsWith("data:image/jpeg") ? url : null;
-      } catch {
-        return null;
-      }
-    };
+    if (!canvas) return { ok: false, message: FACE_MESSAGES.no_frame };
     const face = await checkFace(canvas);
-    let missing: "no_face" | "covered" | "unchecked" | null = face.ok ? null : face.reason === "no_frame" ? null : face.reason;
-    if (!face.ok && !missing) return fail(FACE_MESSAGES.no_frame);
-    if (!missing) {
-      // Confirm on a second frame a moment later, so one lucky frame isn't enough.
-      await new Promise((r) => setTimeout(r, 150));
-      const again = frame();
-      const second = again ? await checkFace(again) : ({ ok: false, reason: "no_frame" } as const);
-      if (!second.ok) {
-        if (second.reason === "no_frame") return fail(FACE_MESSAGES.no_frame);
-        missing = second.reason;
-      }
+    if (!face.ok) return { ok: false, message: FACE_MESSAGES[face.reason] };
+    // Confirm on a second frame a moment later, so one lucky frame isn't enough.
+    await new Promise((r) => setTimeout(r, 150));
+    const again = frame();
+    const second = again ? await checkFace(again) : ({ ok: false, reason: "no_frame" } as const);
+    if (!second.ok) return { ok: false, message: FACE_MESSAGES[second.reason] };
+    try {
+      const url = canvas.toDataURL("image/jpeg", QUALITY);
+      return url.startsWith("data:image/jpeg") ? { ok: true, photo: url } : { ok: false, message: FACE_MESSAGES.no_frame };
+    } catch {
+      return { ok: false, message: FACE_MESSAGES.no_frame };
     }
-    if (missing && !opts?.allowNoFace) return fail(FACE_MESSAGES[missing], true);
-    const photo = jpeg(canvas);
-    if (!photo) return fail(FACE_MESSAGES.no_frame);
-    return { ok: true, photo, face: missing ? "missing" : "seen" };
   }, [status, frame]);
 
   return { status, faceSeen, attach, capture };
