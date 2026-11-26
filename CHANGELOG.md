@@ -6,7 +6,7 @@ Settings → About, next to the matching update.
 Add an entry with every pull request: a `## YYYY-MM-DD · Title (#PR)` heading and a
 few short bullets written for the people who use the app, not for developers.
 
-## 2026-11-26 · Time clock lockout and camera polish (#PRNUM)
+## 2026-11-26 · Time clock lockout and camera polish (#42)
 - The wrong-PIN countdown shows the right time from the very first second, isn't thrown off if someone changes the tablet's clock, and comes back if the page is reloaded during a lockout.
 - The lockout message now says that each lockout in a row lasts longer (1 minute, then 2, then 4, up to 15 minutes). This was already how it worked.
 - If camera access is taken away while the time clock is open, it now says "Camera blocked" (a manager can allow it again) instead of "Camera not available".
