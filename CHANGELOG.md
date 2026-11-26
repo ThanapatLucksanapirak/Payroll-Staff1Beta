@@ -6,7 +6,7 @@ Settings → About, next to the matching update.
 Add an entry with every pull request: a `## YYYY-MM-DD · Title (#PR)` heading and a
 few short bullets written for the people who use the app, not for developers.
 
-## 2026-11-26 · Safer restores, Square pulls and Supabase backups (#PRNUM)
+## 2026-11-26 · Safer restores, Square pulls and Supabase backups (#40)
 - Restore: if any time clock punch in the file can't be read, nothing is restored and you're told how many are bad. Before, those punches were skipped, so a damaged file could wipe out punches.
 - Restore: several restores in a row each keep their own "before restore" backup instead of overwriting the previous one.
 - Square: when Square is busy ("too many requests") or briefly down, the app waits and tries again. A garbled reply from Square now shows an error instead of looking like "no timecards". Timecards with unreadable times are skipped with a warning, a timecard is never counted twice, and a very long period says when it was cut short.
