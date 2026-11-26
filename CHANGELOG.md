@@ -6,7 +6,7 @@ Settings → About, next to the matching update.
 Add an entry with every pull request: a `## YYYY-MM-DD · Title (#PR)` heading and a
 few short bullets written for the people who use the app, not for developers.
 
-## 2026-11-26 · The time clock checks for a face before a punch (#PR)
+## 2026-11-26 · The time clock checks for a face before a punch (#30)
 - With photos on, the time clock now always checks that a face is in the photo, also on Android tablets where the check could switch itself off. Covering the camera no longer goes through unnoticed.
 - No face? The kiosk asks the person to look at the camera and try again. After two tries it offers "Clock in anyway", so nobody is locked out: the photo is kept and the punch shows a "No face" tag on Live.
 - The camera view on the time clock is much bigger and sits at the top of the screen, with a green or red frame showing whether your face is in view.
