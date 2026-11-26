@@ -153,7 +153,10 @@ export type ShiftSource = (typeof SHIFT_SOURCES)[number];
 export const shiftSchema = z.object({
   id: z.string().min(1),
   employee: z.string().min(1),
-  date: z.string().refine(isISODate, "Use a real date (YYYY-MM-DD)."),
+  // Regex only here: stored timesheets are read with this too (shared/legacy.ts), and a
+  // shift that fails is dropped there. New and changed timesheets get the real-calendar
+  // check in timesheetDocSchema.
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   start: z.number().int().min(0).max(2880),
   end: z.number().int().min(0).max(4320),
   breakMinutes: z.number().int().min(0).max(1440).default(0),
@@ -239,7 +242,7 @@ export const timesheetDocSchema = z.object({
   periodStart: z.string().refine((v) => v === "" || isISODate(v), "Use a real date (YYYY-MM-DD).").default(""),
   periodEnd: z.string().refine((v) => v === "" || isISODate(v), "Use a real date (YYYY-MM-DD).").default(""),
   rules: siteRulesSchema,
-  shifts: z.array(shiftSchema),
+  shifts: z.array(shiftSchema.refine((x) => isISODate(x.date), { message: "Use a real date (YYYY-MM-DD).", path: ["date"] })),
   employees: z.array(employeeConfigSchema),
   manualEmployees: z.array(manualEmployeeSchema),
   /** Tips, holidays, standing items and advance repayments (shared/payExtras.ts). Absent on older timesheets. */
