@@ -86,7 +86,7 @@ export function timesheetChecklist(result: Pick<AnalysisResult, "employees" | "w
       flagged.length ? `Day rate: ${listNames(uniq(flagged))}. Open a day on the Payroll tab to count it as a full or half day.` : "",
       flaggedHourly.length ? `${flagged.length ? "Hourly: " : ""}${listNames(uniq(flaggedHourly))}. Hourly staff are paid for the hours worked, so just check the times look right.` : "",
     ].filter(Boolean);
-    items.push({ id: "flagged", severity: "review", title: `${plural(total, "flagged day")}`, detail: parts.join(" "), count: total, href: null, tab: "payroll", linkLabel: "Open Payroll", names });
+    items.push({ id: "flagged", severity: "review", title: `${plural(total, "flagged day")}`, detail: parts.join(" "), count: total, href: null, tab: "payroll", linkLabel: "Review flagged days", names });
   }
   const noRate = uniq(result.warnings.filter((w) => w.employee && /no pay rate/i.test(w.message)).map((w) => w.employee!));
   if (noRate.length) {

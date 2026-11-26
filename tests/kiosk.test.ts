@@ -228,8 +228,18 @@ test("PIN attempts lock the device after repeated failures", async () => {
   const dev = await A("POST", `/api/sites/${siteId}/kiosk-devices`, { name: "Lock test" });
   const t = dev.body.token;
   const codes: number[] = [];
-  for (let i = 0; i < 5; i++) codes.push((await K("POST", "/api/kiosk/identify", { pin: "0000" }, t)).status);
+  const left: (number | undefined)[] = [];
+  const msgs: string[] = [];
+  for (let i = 0; i < 5; i++) {
+    const r = await K("POST", "/api/kiosk/identify", { pin: "0000" }, t);
+    codes.push(r.status); left.push(r.body.triesLeft); msgs.push(r.body.error);
+  }
   assert.deepEqual(codes, [403, 403, 403, 403, 429]);
+  assert.deepEqual(left.slice(0, 4), [4, 3, 2, 1], "tries left before the lock");
+  assert.equal(msgs[0], "That PIN didn't match. Try again.");
+  assert.match(msgs[2], /2 tries left/);
+  assert.match(msgs[3], /1 try left/);
+  assert.ok(Number((await K("POST", "/api/kiosk/identify", { pin: "0000" }, t)).body.retryAfter) > 0, "the kiosk gets seconds to count down");
   const locked = await K("POST", "/api/kiosk/identify", { pin: "1234" }, t);
   assert.equal(locked.status, 429, "even the right PIN waits");
   assert.equal(locked.body.code, "locked");

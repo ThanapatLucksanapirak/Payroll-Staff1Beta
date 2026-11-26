@@ -449,7 +449,7 @@ function CameraMirror({ attach, status, faceSeen }: CameraProps) {
   return (
     <div className="flex flex-col items-center gap-3" data-testid="kiosk-camera" data-status={status} data-face={faceSeen === null ? "" : faceSeen ? "yes" : "no"}>
       {broken ? (
-        <span className={`kiosk-mirror flex items-center justify-center rounded-[2rem] bg-red-50 text-red-700 ring-[6px] ${ring}`}><CameraOff className="h-14 w-14" /></span>
+        <span className={`kiosk-mirror kiosk-mirror-off flex items-center justify-center rounded-[2rem] bg-red-50 text-red-700 ring-[6px] ${ring}`}><CameraOff className="h-14 w-14" /></span>
       ) : (
         <video ref={attach} className={`kiosk-mirror -scale-x-100 rounded-[2rem] bg-stone-200 object-cover ring-[6px] transition-[box-shadow] ${ring}`} muted playsInline autoPlay data-testid="kiosk-camera-video" />
       )}
@@ -600,7 +600,7 @@ function ActionsScreen({ tz, who, offline, error, busy, idleMs, camera, onPunch,
   const statusLine = who.status === "out" ? "You're not clocked in" : `${STATUS_TEXT[who.status]} since ${who.since ? timeOf(who.since, tz) : "—"}`;
   const breakDue = !offline && who.status === "in" && !!who.breakDue;
   return (
-    <div className="kiosk-actions kiosk-safe-center flex flex-1 flex-col items-center px-6 pb-10 pt-2 text-center kiosk-fade-up">
+    <div className="kiosk-actions kiosk-safe-center flex flex-1 flex-col items-center px-6 pb-10 pt-2 text-center kiosk-fade-up" data-error={error ? "" : undefined} data-count={who.actions.length}>
       {camera ? <CameraMirror {...camera} /> : <Avatar name={who.employee.name} big status={who.status} />}
       <h1 className="mt-5 max-w-full text-4xl font-display font-normal tracking-[-0.01em] text-stone-950 [overflow-wrap:anywhere] sm:text-5xl" data-testid="kiosk-employee-name">{who.employee.name}</h1>
       <p className="mt-2 text-2xl text-stone-700">

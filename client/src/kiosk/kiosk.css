@@ -157,6 +157,7 @@ html { touch-action: manipulation; -webkit-text-size-adjust: 100%; text-size-adj
   [data-testid="kiosk-done"] > span:nth-last-child(2) { margin-top: 1rem; }
   [data-testid="kiosk-done"] > span:last-child { margin-top: 0.5rem; font-size: 1rem; }
   [data-testid="kiosk-timezone"] { display: none; }
+  [data-testid="kiosk-next-hint"] { font-size: 1rem; line-height: 1.35rem; }
 }
 @media (max-height: 640px) and (max-width: 1023px) {
   [data-testid="kiosk-done"] > .kiosk-pop { width: 3.5rem; height: 3.5rem; }
@@ -181,6 +182,15 @@ html { touch-action: manipulation; -webkit-text-size-adjust: 100%; text-size-adj
   .kiosk-actions .kiosk-tap:not([data-testid^="kiosk-action-"]) { min-height: 3.25rem; font-size: 1.125rem; padding: 0 1.25rem; }
   .kiosk-actions > div:not(:has(> [data-testid^="kiosk-action-"])) { margin-top: 0.75rem; }
   .kiosk-actions > [data-testid="kiosk-camera"] { margin-top: 0; gap: 0.5rem; }
+  /* With the camera on, short phones must still show the buttons, the message and Cancel
+     without scrolling: the message below already says what's wrong, so the caption goes;
+     a blocked camera shows a small icon; two actions sit side by side, icon above the label. */
+  .kiosk-actions[data-error] [data-testid="kiosk-camera-caption"] { display: none; }
+  .kiosk-actions .kiosk-mirror-off { width: 4.5rem; height: 4.5rem; border-radius: 1.25rem; }
+  .kiosk-actions .kiosk-mirror-off svg { width: 2rem; height: 2rem; }
+  .kiosk-actions:has([data-testid="kiosk-camera"])[data-count="2"] > div:has(> [data-testid^="kiosk-action-"]) { grid-template-columns: 1fr 1fr; }
+  .kiosk-actions:has([data-testid="kiosk-camera"])[data-count="2"] [data-testid^="kiosk-action-"] { flex-direction: column; gap: 0.25rem; height: 5rem; font-size: 1.25rem; line-height: 1.5rem; }
+  .kiosk-actions:has([data-testid="kiosk-camera"])[data-count="2"] [data-testid^="kiosk-action-"] svg { width: 1.75rem; height: 1.75rem; }
 }
 @media (max-height: 640px) and (max-width: 1023px) {
   .kiosk-actions > span:first-child { width: 3rem; height: 3rem; font-size: 1.125rem; }

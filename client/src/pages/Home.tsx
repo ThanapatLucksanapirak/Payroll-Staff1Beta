@@ -54,8 +54,10 @@ export function HomePage() {
     const d = latestDoc.data?.doc;
     if (!d) return null;
     const r = computePayroll({ shifts: d.shifts, employees: d.employees, manualEmployees: d.manualEmployees, categories: app.categories, rules: d.rules });
-    return { flagged: r.totals.flaggedDays, warnings: r.warnings.filter((w) => w.level === "warn").length };
+    return { flagged: r.totals.flaggedDays, warnings: r.warnings.filter((w) => w.level === "warn").length, final: d.status === "final" };
   }, [latestDoc.data, app.categories]);
+  // A final timesheet's flags were reviewed when it was closed: don't keep asking for them.
+  const reviewed = !!flags?.final;
 
   const change = latest && previous && previous.totalPay > 0 ? (latest.totalPay - previous.totalPay) / previous.totalPay : null;
   const trend = useMemo(() => [...byPeriod].slice(0, 8).reverse(), [byPeriod]);
@@ -140,10 +142,10 @@ export function HomePage() {
             <StatCard icon={Users} label="Employees paid" value={latest ? String(latest.employeeCount) : "—"} sub={latest ? (latest.customLabel || latest.filename) : undefined} testid="stat-employees" />
             <StatCard
               icon={Flag}
-              label="Flags to review"
+              label={reviewed ? "Flags (reviewed)" : "Flags to review"}
               value={flags ? String(flags.flagged + flags.warnings) : latestDoc.isLoading ? "…" : "—"}
-              sub={flags ? (flags.flagged + flags.warnings === 0 ? "All clear on the latest period" : `${flags.flagged} flagged day${flags.flagged === 1 ? "" : "s"} · ${flags.warnings} warning${flags.warnings === 1 ? "" : "s"}`) : "In the latest period"}
-              tone={flags && flags.flagged + flags.warnings > 0 ? "warn" : flags ? "ok" : undefined}
+              sub={flags ? (flags.flagged + flags.warnings === 0 ? "All clear on the latest period" : `${flags.flagged} flagged day${flags.flagged === 1 ? "" : "s"} · ${flags.warnings} warning${flags.warnings === 1 ? "" : "s"}${reviewed ? " · period is final" : ""}`) : "In the latest period"}
+              tone={flags && !reviewed && flags.flagged + flags.warnings > 0 ? "warn" : flags ? "ok" : undefined}
               onClick={latest ? () => navigate(`/timesheet/${latest.id}`) : undefined}
               testid="stat-flags"
             />
