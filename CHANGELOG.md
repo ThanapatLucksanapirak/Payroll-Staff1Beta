@@ -6,7 +6,7 @@ Settings → About, next to the matching update.
 Add an entry with every pull request: a `## YYYY-MM-DD · Title (#PR)` heading and a
 few short bullets written for the people who use the app, not for developers.
 
-## 2026-11-26 · Photo gallery and face match set-up (#43)
+## 2026-11-26 · Photo gallery and face match set-up (#44)
 - Employees → Photos: see every punch photo at the location, newest first, or one person's photos. The camera button next to each employee opens their photos.
 - Face match set-up: print the consent notice for an employee to sign, record that they signed it, then pick three clear photos of them as reference photos. The app checks each one shows only them and looks like the same person.
 - Delete someone's face data at any time (optionally with all their punch photos). It's also deleted when you remove the employee, and automatically after they haven't punched for a while (Settings → Locations & rules → Face data, default one year).
