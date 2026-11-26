@@ -19,6 +19,12 @@ The standard settings are exactly how the roles worked before. "Reset to standar
 - **Pay hidden**: amounts show as "—" everywhere. The server itself sends 0 for every rate, amount and total, so nothing leaks through the browser. Exports and timesheet editing switch off with it (you can't save a timesheet whose rates you can't see).
 - **Export** and **See reports** hide the buttons and the Reports page. Someone who can see pay can still read the numbers on screen, so think of export as a convenience switch, not a security boundary.
 - **Manage employees** lets a manager add people and set PINs at their own locations (kiosk devices and the manager PIN stay with owners and admins).
+
+## Looking up employee PINs (owners)
+
+Owners can press **Show PINs** on the Employees page and re-enter their password to see the time clock PINs at that location. They hide again after 2 minutes, and every look-up is written to Settings → Activity ("employee.pins-viewed"). Administrators, managers and everyone else can only set a new PIN.
+
+How it's kept safe: each PIN is still stored as a salted scrypt hash for signing in, plus an encrypted copy (AES-256-GCM, tied to the location and employee) for look-ups. The encryption key is in `DATA_DIR/config.json` on the server (or the `PIN_KEY` environment variable), never in the database, backups or offsite copies. So a stolen database or backup file doesn't reveal PINs; someone with the server's data folder could. PINs set before this feature have no encrypted copy and show "Set a new one to see it". After restoring a backup onto a different server, PINs keep working on the kiosk but can't be shown until they are set again.
 - Location limits on a user still apply on top of all of this.
 
 For developers: a POLICY rule in `server/access.ts` can name a `perm`; for managers and viewers the permission then decides. Rules without one keep their role need. Routes whose path mentions `schedul…` or `approv…` (writes) or starts with `/report` (reads) also need that area's permission automatically.

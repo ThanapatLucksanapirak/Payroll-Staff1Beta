@@ -60,3 +60,10 @@ input { -webkit-user-select: text; user-select: text; }
 
 @keyframes kiosk-countdown { from { transform: scaleX(1); } to { transform: scaleX(0); } }
 .kiosk-countdown { transform-origin: left; animation-name: kiosk-countdown; animation-timing-function: linear; animation-fill-mode: forwards; }
+
+/* App-like on phones: no double-tap zoom, and form fields at least 16px on
+   touch screens so iOS doesn't zoom in on focus (see lib/noZoom.ts). */
+html { touch-action: manipulation; -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+@media (pointer: coarse) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]), textarea, select { font-size: max(16px, 1em) !important; }
+}

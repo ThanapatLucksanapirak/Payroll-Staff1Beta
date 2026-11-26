@@ -18,6 +18,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { PayrollChecklistDialog } from "@/components/timeclock/PayrollChecklist";
+import { InstallHint } from "@/components/InstallHint";
 import { AccessNotices } from "@/components/AccessNotices";
 import { cn } from "@/lib/utils";
 import { HomeLaborTiles } from "@/components/schedule/Labor";
@@ -83,6 +84,7 @@ export function HomePage() {
         actions={editable && <Button onClick={() => newTimesheet()} data-testid="button-new-timesheet"><Plus /> New timesheet</Button>}
       />
 
+      <InstallHint />
       <AccessNotices />
 
       {/* Quick actions */}

@@ -6,6 +6,13 @@ Settings → About, next to the matching update.
 Add an entry with every pull request: a `## YYYY-MM-DD · Title (#PR)` heading and a
 few short bullets written for the people who use the app, not for developers.
 
+## 2026-11-26 · Kiosk and app polish from feedback (#PR)
+- Live: each person who is clocked in has Clock out and Cancel clock-in, for when the kiosk went offline or someone clocked in by mistake.
+- With photos on, the time clock checks for a face: a blocked or covered camera, or nobody in view, stops the punch and says "Face not detected".
+- Settings → Locations: kiosk options, stations, break reminder, auto clock-out and the employee portal now save with the one Save changes button, which lists what's unsaved.
+- Owners can show employee PINs on the Employees page after re-entering their password. PINs set before this update need to be set again to be shown.
+- On phones the app no longer zooms on pinch, double-tap or when you tap a text box. On iPhone Safari, a tip explains Add to Home Screen to open it full screen.
+
 ## 2026-11-26 · About page with version history (#15)
 - Settings → About shows the installed version, when it was installed and when it last checked for updates.
 - Version history lists every update with notes on what changed.
