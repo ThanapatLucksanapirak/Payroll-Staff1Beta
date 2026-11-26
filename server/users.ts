@@ -50,7 +50,13 @@ export interface TwoFactorState {
   enabledAt: string | null;
   /** Bumped to forget every "remembered" device. */
   deviceVersion: number;
+  /** How the second step works: a code from an authenticator app, or a code emailed to notificationEmail. */
+  method?: "app" | "email";
+  /** The last emailed code (hashed), for sign-in or for turning email codes on. */
+  emailCode?: EmailCodeState | null;
 }
+
+export interface EmailCodeState { hash: string; purpose: "login" | "setup"; sentAt: string; exp: number; tries: number }
 
 export type PublicUser = Omit<UserRecord, "passwordHash" | "sessionVersion" | "twoFactor"> & { twoFactorEnabled: boolean };
 
@@ -79,6 +85,10 @@ const recordSchema = z.object({
     recovery: z.array(z.string()).default([]),
     enabledAt: z.string().nullable().default(null),
     deviceVersion: z.number().int().default(0),
+    method: z.enum(["app", "email"]).default("app").catch("app"),
+    emailCode: z.object({
+      hash: z.string(), purpose: z.enum(["login", "setup"]), sentAt: z.string(), exp: z.number(), tries: z.number().int().default(0),
+    }).nullable().default(null).catch(null),
   }).nullable().optional().catch(null),
 });
 
@@ -317,7 +327,16 @@ export async function updateUser(actor: Actor, id: string, raw: UpdateUserInput)
     if (patch.role) u.role = patch.role;
     if (patch.siteIds) u.siteIds = patch.siteIds;
     if (patch.active !== undefined) u.active = patch.active;
-    if (patch.notificationEmail !== undefined) u.notificationEmail = patch.notificationEmail;
+    if (patch.notificationEmail !== undefined && patch.notificationEmail !== (u.notificationEmail ?? "")) {
+      // Their sign-in codes go to this address: only they or an owner may change it.
+      if (actor && actor.id !== id && actor.role !== "owner" && u.twoFactor?.enabled && u.twoFactor.method === "email") {
+        throw new UserError("This person signs in with codes sent to this email. Only they or an owner can change it.", 403);
+      }
+      if (!patch.notificationEmail && u.twoFactor?.enabled && u.twoFactor.method === "email") {
+        throw new UserError("This person signs in with codes sent to this email, so it can't be empty. Turn off two-factor sign-in first.", 409);
+      }
+      u.notificationEmail = patch.notificationEmail;
+    }
     if (isAdmin(u)) u.siteIds = [];
     if (before.role === "owner" && before.active && !activeOwners(users).length) {
       throw new UserError("This is the last owner. Make someone else an owner first.", 409);
@@ -386,7 +405,12 @@ export async function updateProfile(id: string, patch: { displayName?: string; u
     }
     if (username) u.username = username;
     if (displayName !== undefined) u.displayName = displayName || u.username;
-    if (email !== undefined) u.notificationEmail = email;
+    if (email !== undefined) {
+      if (!email && u.twoFactor?.enabled && u.twoFactor.method === "email") {
+        throw new UserError("Your sign-in codes go to this email, so it can't be empty. Turn off two-factor sign-in first.", 409);
+      }
+      u.notificationEmail = email;
+    }
     return { ...u };
   });
 }

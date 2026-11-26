@@ -8,9 +8,12 @@
 //   session. Code attempts are rate limited like passwords.
 // - "Remember this device for 30 days" sets a signed cookie tied to the
 //   account's device version, so resetting 2FA or "forget devices" ends it.
+// - Or, instead of an app: a 6-digit code emailed to the account's notification
+//   email (needs Settings → Email). Codes last 10 minutes, are used once, allow
+//   5 tries, and are stored only as a keyed hash.
 // - Owners and administrators can be required to use it (off by default);
 //   an account that must use it but hasn't set it up enrolls during sign-in.
-import { createHash, createHmac, randomBytes } from "node:crypto";
+import { createHash, createHmac, randomBytes, randomInt } from "node:crypto";
 import type { Express, NextFunction, Request, Response } from "express";
 import { z } from "zod";
 import { db } from "./db";
@@ -20,6 +23,7 @@ import { actorOf, audit } from "./audit";
 import { loginThrottle, recordLogin, setSessionCookie, currentUser } from "./auth";
 import { safeEqual, verifyHash } from "./passwords";
 import { type TwoFactorState, type UserRecord, UserError, getUser, isAdmin, mutateUser, toPublic } from "./users";
+import { brandName, brandedHtml, emailReady, getEmailConfig, sendEmail } from "./email";
 
 // ── TOTP (RFC 6238 / RFC 4226) ───────────────────────────────────────────────
 export const STEP_SECONDS = 30;
@@ -130,8 +134,92 @@ export async function isRequiredFor(user: Pick<UserRecord, "role">) {
 }
 
 const emptyState = (): TwoFactorState => ({
-  enabled: false, secret: null, pendingSecret: null, pendingAt: null, lastStep: 0, recovery: [], enabledAt: null, deviceVersion: 0,
+  enabled: false, secret: null, pendingSecret: null, pendingAt: null, lastStep: 0, recovery: [], enabledAt: null, deviceVersion: 0, method: "app", emailCode: null,
 });
+
+// ── Email codes ──────────────────────────────────────────────────────────────
+export const EMAIL_CODE_MS = 10 * 60_000;
+const EMAIL_CODE_TRIES = 5;
+const RESEND_MS = 30_000;
+const hashEmailCode = (userId: string, code: string) => createHmac("sha256", getAuthSecret()).update(`payroll-email-code:${userId}:${code}`).digest("hex");
+
+/** j***@example.com */
+export function maskEmail(email: string): string {
+  const [name, domain] = email.split("@");
+  if (!domain) return "your email";
+  return `${name.slice(0, 1)}${"•".repeat(Math.max(2, Math.min(6, name.length - 1)))}@${domain}`;
+}
+
+/** Whether this account can get codes by email right now. */
+export async function emailCodesAvailable(user: Pick<UserRecord, "notificationEmail">): Promise<boolean> {
+  if (!user.notificationEmail) return false;
+  try { return emailReady(await getEmailConfig()); } catch { return false; }
+}
+
+/**
+ * Email a new 6-digit code (replacing any earlier one). Codes are never logged.
+ * Returns where it went, or why it couldn't be sent.
+ */
+export async function sendEmailCode(userId: string, purpose: "login" | "setup", now = Date.now()): Promise<{ ok: true; sentTo: string } | { ok: false; error: string; status?: number }> {
+  const user = await getUser(userId, { fresh: true });
+  if (!user?.notificationEmail) return { ok: false, error: "Add your email address under Account & password first." };
+  const last = user.twoFactor?.emailCode;
+  if (last && last.purpose === purpose && now - Date.parse(last.sentAt) < RESEND_MS) {
+    return { ok: false, error: "A code was just sent. Wait a few seconds before asking for another.", status: 429 };
+  }
+  const code = String(randomInt(0, 1_000_000)).padStart(6, "0");
+  await mutateUser(userId, (u) => {
+    const st = u.twoFactor ?? emptyState();
+    u.twoFactor = { ...st, emailCode: { hash: hashEmailCode(userId, code), purpose, sentAt: new Date(now).toISOString(), exp: now + EMAIL_CODE_MS, tries: 0 } };
+  });
+  const brand = await brandName();
+  const spaced = `${code.slice(0, 3)} ${code.slice(3)}`;
+  const what = purpose === "login" ? "sign in" : "turn on email codes";
+  const result = await sendEmail({
+    to: [user.notificationEmail],
+    subject: `${spaced} is your ${brand} code`,
+    text: `Your code to ${what} is ${spaced}.\n\nIt works for 10 minutes and only once. If you didn't try to ${what}, someone may know your password: change it under Account & password.`,
+    html: brandedHtml({
+      brand, preheader: `Your code is ${spaced}. It expires in 10 minutes.`,
+      heading: purpose === "login" ? "Your sign-in code" : "Confirm your email",
+      paragraphs: [`Hi ${user.displayName || user.username}, use this code to ${what}. It works for 10 minutes and only once.`],
+      code,
+      footer: `Didn't try to ${what}? Someone may know your password. Change it in ${brand} under Account & password. Never share this code.`,
+    }),
+  });
+  if (!result.ok) {
+    return { ok: false, error: "skipped" in result && result.skipped ? "Email isn't set up in this app, so codes can't be sent." : "We couldn't send the email. Try again in a minute." };
+  }
+  return { ok: true, sentTo: maskEmail(user.notificationEmail) };
+}
+
+/** Check an emailed code inside a user mutation. Used up on success; 5 tries. */
+function takeEmailCode(u: UserRecord, code: string, purpose: "login" | "setup", now: number): boolean {
+  const st = u.twoFactor;
+  const ec = st?.emailCode;
+  if (!st || !ec || ec.purpose !== purpose || ec.exp < now || ec.tries >= EMAIL_CODE_TRIES) return false;
+  const ok = /^\d{6}$/.test(code) && safeEqual(ec.hash, hashEmailCode(u.id, code));
+  u.twoFactor = { ...st, emailCode: ok ? null : { ...ec, tries: ec.tries + 1 } };
+  return ok;
+}
+
+/** Turn on email codes with the code from the setup email. Returns fresh recovery codes. */
+export async function confirmEmailEnrollment(userId: string, code: string, now = Date.now()): Promise<string[]> {
+  const { codes, hashes } = newRecoveryCodes();
+  const digits = code.replace(/\s/g, "");
+  // A wrong code must still be saved (it uses up a try), so don't throw inside the change.
+  const ok = await mutateUser(userId, (u) => {
+    if (!takeEmailCode(u, digits, "setup", now)) return false;
+    const st = u.twoFactor!;
+    u.twoFactor = {
+      ...st, enabled: true, method: "email", secret: null, pendingSecret: null, pendingAt: null, lastStep: 0,
+      recovery: hashes, enabledAt: new Date(now).toISOString(), deviceVersion: st.deviceVersion + 1, emailCode: null,
+    };
+    return true;
+  });
+  if (!ok) throw new UserError("That code didn't work, or it expired. Send a new one and use the newest email.", 400);
+  return codes;
+}
 
 // ── Account changes ──────────────────────────────────────────────────────────
 const PENDING_MS = 15 * 60_000;
@@ -157,7 +245,7 @@ export async function confirmEnrollment(userId: string, code: string, now = Date
     const step = matchTotp(st.pendingSecret, code, now, 0);
     if (step === null) throw new UserError("That code didn't match. Check the time on your phone and try the newest code.", 400);
     u.twoFactor = {
-      ...st, enabled: true, secret: st.pendingSecret, pendingSecret: null, pendingAt: null, lastStep: step,
+      ...st, enabled: true, method: "app", emailCode: null, secret: st.pendingSecret, pendingSecret: null, pendingAt: null, lastStep: step,
       recovery: hashes, enabledAt: new Date(now).toISOString(), deviceVersion: st.deviceVersion + 1,
     };
   });
@@ -168,12 +256,14 @@ export async function confirmEnrollment(userId: string, code: string, now = Date
  * Check a sign-in code: a 6-digit app code (never the same step twice) or an
  * unused recovery code (used up on success).
  */
-export async function useCode(userId: string, code: string, now = Date.now()): Promise<"app" | "recovery" | null> {
+export async function useCode(userId: string, code: string, now = Date.now()): Promise<"app" | "email" | "recovery" | null> {
   return mutateUser(userId, (u) => {
     const st = u.twoFactor;
-    if (!st?.enabled || !st.secret) return null;
+    if (!st?.enabled) return null;
     const digits = code.replace(/\s/g, "");
+    if (/^\d{6}$/.test(digits) && st.method === "email") return takeEmailCode(u, digits, "login", now) ? "email" : null;
     if (/^\d{6}$/.test(digits)) {
+      if (!st.secret) return null;
       const step = matchTotp(st.secret, digits, now, st.lastStep);
       if (step === null) return null;
       u.twoFactor = { ...st, lastStep: step };
@@ -291,10 +381,15 @@ function rememberDevice(req: Request, res: Response, user: UserRecord) {
  * Called after a correct password. Returns null when the session can be
  * issued now, or the second step the client must complete.
  */
-export async function loginStep(req: Request, user: UserRecord, remember: boolean): Promise<{ twoFactor: LoginStep; ticket: string } | null> {
+export async function loginStep(req: Request, user: UserRecord, remember: boolean): Promise<{ twoFactor: LoginStep; ticket: string; method?: "app" | "email"; sentTo?: string; emailError?: string } | null> {
   if (user.twoFactor?.enabled) {
     if (rememberedDevice(req, user)) return null;
-    return { twoFactor: "verify", ticket: issueTicket(user, "verify", remember) };
+    const ticket = issueTicket(user, "verify", remember);
+    if (user.twoFactor.method === "email") {
+      const sent = await sendEmailCode(user.id, "login").catch(() => ({ ok: false as const, error: "We couldn't send the email." }));
+      return sent.ok ? { twoFactor: "verify", ticket, method: "email", sentTo: sent.sentTo } : { twoFactor: "verify", ticket, method: "email", emailError: sent.error };
+    }
+    return { twoFactor: "verify", ticket, method: "app" };
   }
   if (await isRequiredFor(user)) return { twoFactor: "setup", ticket: issueTicket(user, "setup", remember) };
   return null;
@@ -302,7 +397,7 @@ export async function loginStep(req: Request, user: UserRecord, remember: boolea
 
 // ── Routes ───────────────────────────────────────────────────────────────────
 /** Paths (under /api) that work without a session: the second sign-in step. */
-export const TWO_FACTOR_PUBLIC = ["/auth/2fa/login/verify", "/auth/2fa/login/setup", "/auth/2fa/login/enable"];
+export const TWO_FACTOR_PUBLIC = ["/auth/2fa/login/verify", "/auth/2fa/login/setup", "/auth/2fa/login/enable", "/auth/2fa/login/resend"];
 
 type Handler = (req: Request, res: Response) => Promise<unknown>;
 const h = (fn: Handler) => (req: Request, res: Response, next: NextFunction) => { fn(req, res).catch(next); };
@@ -324,7 +419,7 @@ async function issuer() {
 /** Check the account password before a sensitive change (rate limited like sign-in). */
 async function checkPassword(req: Request, user: UserRecord, password: unknown) {
   const ip = req.ip ?? "unknown";
-  const blocked = loginThrottle(ip);
+  const blocked = loginThrottle(ip, req.res);
   if (blocked) throw new UserError(blocked, 429);
   const fresh = await getUser(user.id, { fresh: true });
   const ok = !!fresh && typeof password === "string" && !!password && (await verifyHash(password, fresh.passwordHash));
@@ -340,7 +435,7 @@ export function registerTwoFactorRoutes(app: Express) {
   // ── Sign-in, second step (public) ──────────────────────────────────────────
   app.post("/api/auth/2fa/login/verify", h(async (req, res) => {
     const ip = req.ip ?? "unknown";
-    const blocked = loginThrottle(ip);
+    const blocked = loginThrottle(ip, res);
     if (blocked) return res.status(429).json({ error: blocked });
     const body = z.object({ ticket: z.string().max(2000), code: codeSchema, rememberDevice: z.boolean().optional() }).parse(req.body);
     const t = await ticketUser(body.ticket, "verify");
@@ -350,15 +445,30 @@ export function registerTwoFactorRoutes(app: Express) {
     recordLogin(ip, !!used);
     if (!used) {
       audit({ userId: t.user.id, userName: t.user.username, ip, action: "auth.login-failed", detail: "wrong two-factor code" });
-      return res.status(401).json({ error: "That code didn't work. Use the newest code from your app, or a recovery code." });
+      return res.status(401).json({ error: t.user.twoFactor?.method === "email" ? "That code didn't work. Use the code in the newest email, or a recovery code." : "That code didn't work. Use the newest code from your app, or a recovery code." });
     }
     ticketTries.delete(t.nonce);
     const user = (await getUser(t.user.id, { fresh: true })) ?? t.user;
     const { expiresAt } = setSessionCookie(req, res, user, { days: await sessionDays(), remember: t.remember });
     if (body.rememberDevice) rememberDevice(req, res, user);
     const left = user.twoFactor?.recovery.length ?? 0;
-    audit({ ...actorOf(req, res, user), action: "auth.login", target: `user:${user.id}`, detail: used === "recovery" ? `two-factor (recovery code, ${left} left)` : "two-factor" });
+    audit({ ...actorOf(req, res, user), action: "auth.login", target: `user:${user.id}`, detail: used === "recovery" ? `two-factor (recovery code, ${left} left)` : used === "email" ? "two-factor (email code)" : "two-factor" });
     res.json({ user: toPublic(user), expiresAt, recoveryCodesLeft: used === "recovery" ? left : undefined });
+  }));
+
+  /** Email codes: send another one (a few times per sign-in). */
+  app.post("/api/auth/2fa/login/resend", h(async (req, res) => {
+    const ip = req.ip ?? "unknown";
+    const blocked = loginThrottle(ip);
+    if (blocked) return res.status(429).json({ error: blocked });
+    const { ticket } = z.object({ ticket: z.string().max(2000) }).parse(req.body);
+    const t = await ticketUser(ticket, "verify");
+    if (!t) return res.status(401).json({ error: expired, expired: true });
+    if (t.user.twoFactor?.method !== "email") return res.status(400).json({ error: "This account uses an authenticator app." });
+    countTry(t.nonce); // resends count against the ticket's tries too
+    const sent = await sendEmailCode(t.user.id, "login");
+    if (!sent.ok) return res.status(sent.status ?? 503).json({ error: sent.error });
+    res.json({ sentTo: sent.sentTo });
   }));
 
   // Required but not set up yet: enroll during sign-in.
@@ -372,7 +482,7 @@ export function registerTwoFactorRoutes(app: Express) {
 
   app.post("/api/auth/2fa/login/enable", h(async (req, res) => {
     const ip = req.ip ?? "unknown";
-    const blocked = loginThrottle(ip);
+    const blocked = loginThrottle(ip, res);
     if (blocked) return res.status(429).json({ error: blocked });
     const body = z.object({ ticket: z.string().max(2000), code: codeSchema }).parse(req.body);
     const t = await ticketUser(body.ticket, "setup");
@@ -394,6 +504,9 @@ export function registerTwoFactorRoutes(app: Express) {
     const u = (await getUser(me(res).id, { fresh: true })) ?? me(res);
     const policy = await getPolicy();
     res.json({
+      method: u.twoFactor?.enabled ? (u.twoFactor.method ?? "app") : null,
+      emailAvailable: await emailCodesAvailable(u),
+      email: u.notificationEmail ? maskEmail(u.notificationEmail) : null,
       enabled: !!u.twoFactor?.enabled,
       enabledAt: u.twoFactor?.enabledAt ?? null,
       recoveryCodesLeft: u.twoFactor?.enabled ? u.twoFactor.recovery.length : 0,
@@ -407,6 +520,24 @@ export function registerTwoFactorRoutes(app: Express) {
     await checkPassword(req, u, req.body?.password);
     const { secret } = await beginEnrollment(u.id);
     res.json({ secret, otpauthUrl: otpauthUrl(secret, u.username, await issuer()) });
+  }));
+
+  /** Email codes instead of an app: send a code to the account's notification email. */
+  app.post("/api/auth/2fa/email/setup", h(async (req, res) => {
+    const u = me(res);
+    await checkPassword(req, u, req.body?.password);
+    if (!(await emailCodesAvailable(u))) return res.status(409).json({ error: u.notificationEmail ? "Email isn't set up in this app yet. An owner can set it up in Settings → Email." : "Add your email address above first." });
+    const sent = await sendEmailCode(u.id, "setup");
+    if (!sent.ok) return res.status(sent.status ?? 503).json({ error: sent.error });
+    res.json({ sentTo: sent.sentTo });
+  }));
+
+  app.post("/api/auth/2fa/email/enable", h(async (req, res) => {
+    const u = me(res);
+    const { code } = z.object({ code: codeSchema }).parse(req.body);
+    const codes = await confirmEmailEnrollment(u.id, code);
+    audit({ ...actorOf(req, res), action: "user.2fa-enable", target: `user:${u.id}`, detail: "email codes" });
+    res.json({ enabled: true, recoveryCodes: codes });
   }));
 
   app.post("/api/auth/2fa/enable", h(async (req, res) => {
