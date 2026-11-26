@@ -6,6 +6,14 @@ Settings → About, next to the matching update.
 Add an entry with every pull request: a `## YYYY-MM-DD · Title (#PR)` heading and a
 few short bullets written for the people who use the app, not for developers.
 
+## 2026-11-26 · Small safety checks (#PRNUM)
+- Pay extras: a holiday on a date that doesn't exist (like 2026-02-30) is refused instead of saved.
+- Locations: an unknown time zone is refused, so a typo can't shift every time at a location.
+- Settings → Activity now lists when an employee is added, changed or removed, and when a PIN is set or cleared (never the PIN itself).
+- The sign-in page no longer shows the database's name or technical errors to people who aren't signed in.
+- The local database file and its backup copies can only be read by the app's own server account.
+- Emailing PDFs or restoring a backup that is too large now says what was too large and the size limit.
+
 ## 2026-11-26 · Time clock lockout and camera polish (#42)
 - The wrong-PIN countdown shows the right time from the very first second, isn't thrown off if someone changes the tablet's clock, and comes back if the page is reloaded during a lockout.
 - The lockout message now says that each lockout in a row lasts longer (1 minute, then 2, then 4, up to 15 minutes). This was already how it worked.
