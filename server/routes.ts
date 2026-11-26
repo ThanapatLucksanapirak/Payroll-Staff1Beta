@@ -28,6 +28,7 @@ import { invalidateDeviceCache, kioskHostGuard, registerKioskRoutes, registerTim
 import { registerScheduleRoutes } from "./schedule";
 import { registerTimeclockRoutes } from "./timeclock";
 import { registerKioskFeatureAdminRoutes } from "./kioskFeatures";
+import { registerFaceRoutes } from "./faceData";
 import { registerAndroidRoutes } from "./android";
 import { registerPayRoutes } from "./pay";
 import { registerPermissionRoutes } from "./permissions";
@@ -574,6 +575,7 @@ export function registerRoutes(app: Express) {
   registerScheduleRoutes(app); // schedule, time off, late alerts, labor vs. sales, forecast
   registerTimeclockRoutes(app); // auto clock-out, fix punches, approvals, overtime watch, pre-payroll checklist
   registerKioskFeatureAdminRoutes(app); // kiosk extras: stations, shift notes, fix requests, punch photos
+  registerFaceRoutes(app); // face recognition: consent, reference photos, photo gallery
   registerPortalAdminRoutes(app); // employee portal on/off per location
 
   // ── Errors ──────────────────────────────────────────────────────────────────

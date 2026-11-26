@@ -87,7 +87,7 @@ test("device and location options are normalised", () => {
   assert.equal(normalizeDeviceOptions({ idleSeconds: 9999, loginMode: "nope" }).idleSeconds, 120);
   assert.equal(normalizeDeviceOptions({ loginMode: "nope" }).loginMode, "site");
   const c = normalizeSiteConfig({ stations: [" Sushi  bar ", "sushi bar", "", "Kitchen"], breakReminderHours: 5.1, photoRetentionDays: 0 });
-  assert.deepEqual(c, { stations: ["Sushi bar", "Kitchen"], breakReminderHours: 5, photoRetentionDays: 90 });
+  assert.deepEqual(c, { stations: ["Sushi bar", "Kitchen"], breakReminderHours: 5, photoRetentionDays: 90, faceRetentionDays: 365 });
   assert.equal(normalizeSiteConfig({ breakReminderHours: -1 }).breakReminderHours, null);
   assert.equal(matchStation(c.stations, "kitchen"), "Kitchen");
   assert.equal(matchStation(c.stations, "Bar"), null);

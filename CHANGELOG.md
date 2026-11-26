@@ -6,6 +6,12 @@ Settings → About, next to the matching update.
 Add an entry with every pull request: a `## YYYY-MM-DD · Title (#PR)` heading and a
 few short bullets written for the people who use the app, not for developers.
 
+## 2026-11-26 · Photo gallery and face match set-up (#43)
+- Employees → Photos: see every punch photo at the location, newest first, or one person's photos. The camera button next to each employee opens their photos.
+- Face match set-up: print the consent notice for an employee to sign, record that they signed it, then pick three clear photos of them as reference photos. The app checks each one shows only them and looks like the same person.
+- Delete someone's face data at any time (optionally with all their punch photos). It's also deleted when you remove the employee, and automatically after they haven't punched for a while (Settings → Locations & rules → Face data, default one year).
+- Face data stays on your server, encrypted, and is never in backups. Turning face match on at the time clock comes in the next update.
+
 ## 2026-11-26 · New timesheet, time clock and backup fixes (#41)
 - New timesheet → Start blank: the window now closes once the timesheet is created, and a quick double tap no longer makes two of them. If creating fails, the reason shows in the window.
 - A timesheet that arrives already finalized (for example, from another app through the API) now gets the same pay snapshot and advance repayments as one you finalize yourself.

@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "wouter";
 import { useQuery } from "@tanstack/react-query";
-import { AlertTriangle, Dices, Download, Eye, EyeOff, KeyRound, Loader2, Pencil, Plus, Search, Trash2, UserRound } from "lucide-react";
+import { AlertTriangle, Camera, Dices, Download, Eye, EyeOff, Images, KeyRound, Loader2, Pencil, Plus, Search, Trash2, UserRound } from "lucide-react";
 import { useApp } from "@/context/AppData";
 import { api, errorMessage, queryClient } from "@/lib/api";
-import { can, isAdmin } from "@/lib/roles";
+import { can, canEdit, isAdmin } from "@/lib/roles";
 import { useToast } from "@/hooks/use-toast";
 import { useConfirm } from "@/components/ConfirmDialog";
 import { SiteDot } from "@/components/AppShell";
@@ -21,6 +21,7 @@ import { Field } from "@/components/workspace/fields";
 import { cn } from "@/lib/utils";
 import { YtdPanel } from "@/components/pay/YtdPanel";
 import { PortalSettingsCard } from "@/components/settings/PortalSettings";
+import { EmployeePhotosDialog, FaceBadge, SitePhotosDialog, useFaceSummaries } from "@/components/face/FacePhotos";
 
 export interface EmployeeRow { id: string; name: string; role: string; active: boolean; hasPin: boolean; pinViewable?: boolean; createdAt: string; updatedAt: string }
 
@@ -43,6 +44,12 @@ export function EmployeesPage() {
   // Only owners and administrators manage the employee list (the server enforces this too).
   const admin = can(app.user, "employees.manage"); // add and edit people and PINs
   const settingsAdmin = isAdmin(app.user);
+  // Punch photos and face match: editors see photos (as on Live); face match set-up follows "employees.manage".
+  const seesPhotos = canEdit(app.user) && site.timeSource !== "square";
+  const faces = useFaceSummaries(site.id, seesPhotos);
+  const faceOf = useMemo(() => new Map((faces.data ?? []).map((f) => [f.employeeId, f])), [faces.data]);
+  const [photosFor, setPhotosFor] = useState<EmployeeRow | null>(null);
+  const [allPhotos, setAllPhotos] = useState(false);
   const key = ["/api/sites", site.id, "employees"];
   const q = useQuery<EmployeeRow[]>({ queryKey: key });
   const [editing, setEditing] = useState<EmployeeRow | "new" | null>(null);
@@ -99,8 +106,9 @@ export function EmployeesPage() {
         title="Employees"
         titleTestId="text-page-title"
         subtitle={<span className="inline-flex flex-wrap items-center gap-x-1.5"><SiteDot color={site.color} />{site.name}<span aria-hidden>·</span>{q.data ? `${activeCount} employee${activeCount === 1 ? "" : "s"}` : "Your staff"}</span>}
-        actions={(admin || owner) && (
+        actions={(admin || owner || seesPhotos) && (
           <>
+            {seesPhotos && <Button variant="ghost" onClick={() => setAllPhotos(true)} data-testid="button-all-photos"><Images /> Photos</Button>}
             {owner && (pins
               ? <Button variant="ghost" onClick={() => setPins(null)} data-testid="button-hide-pins"><EyeOff /> Hide PINs</Button>
               : <Button variant="ghost" onClick={() => setAskPins(true)} data-testid="button-show-pins"><Eye /> Show PINs</Button>)}
@@ -188,11 +196,13 @@ export function EmployeesPage() {
                   <p className="truncate text-xs text-muted-foreground">{e.role || "—"}</p>
                 </div>
                 {!e.active && <Badge variant="secondary">Inactive</Badge>}
+                {seesPhotos && <span className="hidden sm:contents"><FaceBadge summary={faceOf.get(e.id)} /></span>}
                 {pins && e.hasPin ? (
                   pins[e.id]
                     ? <span className="rounded-lg bg-foreground/[0.05] px-2.5 py-1 font-mono text-[15px] font-semibold tracking-[0.2em]" data-testid={`text-pin-${e.id}`}>{pins[e.id]}</span>
                     : <span className="max-w-[11rem] text-right text-xs text-muted-foreground" data-testid={`text-pin-hidden-${e.id}`}>Set before PINs could be shown. Set a new one to see it.</span>
                 ) : e.hasPin ? <Badge variant="success" title="PIN set"><KeyRound /><span className="sr-only sm:not-sr-only">PIN set</span></Badge> : <Badge variant="warning">No PIN</Badge>}
+                {seesPhotos && <Button variant="ghost" size="icon-sm" className="text-muted-foreground" aria-label={`Photos and face match: ${e.name}`} title="Photos and face match" onClick={() => setPhotosFor(e)} data-testid={`button-photos-${e.id}`}><Camera /></Button>}
                 {admin && (
                   <>
                     <Button variant="ghost" size="icon-sm" className="text-muted-foreground" aria-label={`Edit ${e.name}`} onClick={() => setEditing(e)} data-testid={`button-edit-employee-${e.id}`}><Pencil /></Button>
@@ -211,6 +221,8 @@ export function EmployeesPage() {
 
       {editing && <EmployeeDialog siteId={site.id} employee={editing === "new" ? null : editing} onClose={() => setEditing(null)} />}
       {importing && <ImportNamesDialog siteId={site.id} onClose={() => setImporting(false)} />}
+      {photosFor && <EmployeePhotosDialog siteId={site.id} employee={photosFor} tz={site.rules.timezone} canManage={admin} onClose={() => setPhotosFor(null)} />}
+      {allPhotos && <SitePhotosDialog siteId={site.id} employees={q.data ?? []} tz={site.rules.timezone} onClose={() => setAllPhotos(false)} onOpenEmployee={(e) => { const row = (q.data ?? []).find((x) => x.id === e.id); if (row) { setAllPhotos(false); setPhotosFor(row); } }} />}
       {askPins && <ShowPinsDialog siteId={site.id} onClose={() => setAskPins(false)} onShown={(p) => { setPins(p); setAskPins(false); }} />}
     </Page>
   );
