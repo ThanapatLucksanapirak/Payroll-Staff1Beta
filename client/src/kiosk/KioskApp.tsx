@@ -455,7 +455,7 @@ function PinScreen({ tz, employee, heading, error, shake, maxLength = 6, idleMs,
         ) : (
           <>
             <BigClock tz={tz} />
-            <p className="mt-4 text-xl font-medium text-stone-700 [text-wrap:balance] sm:mt-6 sm:text-2xl lg:mt-10">Enter your PIN to clock in or out</p>
+            <p className="kiosk-prompt mt-4 text-xl font-medium text-stone-700 [text-wrap:balance] sm:mt-6 sm:text-2xl lg:mt-10">Enter your PIN to clock in or out</p>
           </>
         )}
       </div>

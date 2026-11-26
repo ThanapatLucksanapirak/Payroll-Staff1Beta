@@ -16,10 +16,13 @@ html, body { height: 100%; overflow: hidden; overscroll-behavior: none; }
   .kiosk-key { width: 4.25rem; height: 4.25rem; font-size: 2rem; }
   .kiosk-clock-big { font-size: 3.75rem; line-height: 1; }
 }
-@media (max-height: 600px) and (max-width: 639px) {
-  .kiosk-key { width: 3.75rem; height: 3.75rem; font-size: 1.75rem; }
-  .kiosk-clock-big { font-size: 3rem; }
-  .kiosk-clock-big + .kiosk-date { display: none; } /* the date is the first thing to go on the smallest screens */
+/* Very short screens (iPhone SE, small phones in landscape): no date, 56px keys. */
+@media (max-height: 640px) and (max-width: 1023px) {
+  .kiosk-key { width: 3.5rem; height: 3.5rem; font-size: 1.625rem; }
+  .kiosk-tap.kiosk-key { min-height: 3.5rem; }
+  .kiosk-clock-big { font-size: 2.75rem; line-height: 1; }
+  .kiosk-prompt { margin-top: 0.5rem; font-size: 1rem; line-height: 1.35; }
+  .kiosk-date { display: none; } /* the date is the first thing to go on the smallest screens */
 }
 body {
   margin: 0;
