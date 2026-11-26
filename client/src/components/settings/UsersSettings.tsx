@@ -94,7 +94,7 @@ export function UsersSettings() {
                     <tr key={u.id} className="border-b last:border-0" data-testid={`row-user-${u.username}`}>
                       <td className="px-4 py-2.5">
                         <p className="font-medium">{u.displayName || u.username}{self && <span className="ml-1.5 text-xs font-normal text-muted-foreground">(you)</span>}</p>
-                        <p className="text-xs text-muted-foreground">{u.username}{u.notificationEmail ? ` · ${u.notificationEmail}` : ""}</p>
+                        <p className="text-xs text-muted-foreground">Signs in as <span className="font-mono">{u.username}</span>{u.notificationEmail ? ` · ${u.notificationEmail}` : ""}</p>
                       </td>
                       <td className="px-4 py-2.5">
                         <div className="flex flex-wrap items-center gap-1">
@@ -193,7 +193,8 @@ function UserDialog({ user, open, onClose, onSaved, lastOwner }: { user: Session
       if (self) await app.refresh();
       onSaved();
       onClose();
-      toast({ title: isNew ? "User added" : "User updated" });
+      const signIn = body.username;
+      toast({ title: isNew ? "User added" : "User updated", description: isNew || signIn !== user?.username ? `${self ? "You" : "They"} sign in as "${signIn}".` : undefined });
     } catch (e) {
       toast({ title: "Couldn't save", description: errorMessage(e), variant: "destructive" });
     } finally { setBusy(false); }
@@ -210,8 +211,8 @@ function UserDialog({ user, open, onClose, onSaved, lastOwner }: { user: Session
         </DialogHeader>
         <form className="space-y-3" onSubmit={(e) => { e.preventDefault(); if (valid) void save(); }}>
           <div className="grid gap-3 sm:grid-cols-2">
-            <Field label="Name"><Input value={displayName} maxLength={100} onChange={(e) => setDisplayName(e.target.value)} placeholder="Full name" data-testid="input-user-name" /></Field>
-            <Field label="Username"><Input value={username} maxLength={64} autoCapitalize="none" spellCheck={false} onChange={(e) => setUsername(e.target.value)} data-testid="input-user-username" /></Field>
+            <Field label="Sign-in username" hint="Typed on the sign-in screen."><Input value={username} maxLength={64} autoCapitalize="none" spellCheck={false} autoComplete="off" onChange={(e) => setUsername(e.target.value)} data-testid="input-user-username" /></Field>
+            <Field label="Display name" hint="Shown in the app. Not for sign-in."><Input value={displayName} maxLength={100} autoComplete="off" onChange={(e) => setDisplayName(e.target.value)} placeholder="Full name" data-testid="input-user-name" /></Field>
           </div>
           {isNew && <Field label="Password" hint={`At least ${MIN} characters. Share it with them privately.`}><Input type="password" autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} data-testid="input-user-password" /></Field>}
           <Field label="Role" hint={roleLocked ? (self ? "You can't change your own role." : "This is the last owner. Make someone else an owner first.") : ROLE_HELP[role]}>
@@ -261,7 +262,7 @@ function ResetPasswordDialog({ user, onClose }: { user: SessionUser | null; onCl
     setBusy(true);
     try {
       await api("POST", `/api/users/${user.id}/password`, { password });
-      toast({ title: "Password reset", description: `${user.displayName || user.username} has been signed out everywhere and can sign in with the new password.` });
+      toast({ title: "Password reset", description: `Sign in as "${user.username}" with the new password. ${user.displayName || user.username} has been signed out everywhere.` });
       onClose();
     } catch (e) {
       toast({ title: "Couldn't reset the password", description: errorMessage(e), variant: "destructive" });

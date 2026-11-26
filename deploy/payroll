@@ -513,17 +513,29 @@ admin_list() {
 cmd_admin() {
   local sub="${1:-}" user="" pw="" pw2="" rc=0 out
   shift || true
-  case "$sub" in create|reset-password) ;; disable-2fa) ;; list) admin_list; return $? ;; *) die "Usage: sudo payroll admin list|create|reset-password|disable-2fa [--username NAME]" ;; esac
+  local from="" to=""
+  case "$sub" in create|reset-password|disable-2fa|rename) ;; list) admin_list; return $? ;; *) die "Usage: sudo payroll admin list|create|reset-password|disable-2fa [--username NAME]  or  admin rename --from OLD --to NEW" ;; esac
   while (( $# )); do
     case "$1" in
       --username) [[ $# -ge 2 ]] || die "--username needs a value."; user="$2"; shift ;;
       --username=*) user="${1#--username=}" ;;
+      --from) [[ $# -ge 2 ]] || die "--from needs a value."; from="$2"; shift ;;
+      --from=*) from="${1#--from=}" ;;
+      --to) [[ $# -ge 2 ]] || die "--to needs a value."; to="$2"; shift ;;
+      --to=*) to="${1#--to=}" ;;
       *) die "Unknown option: $1" ;;
     esac
     shift
   done
   [[ -f "$PAYROLL_CURRENT/dist/index.cjs" ]] || die "The app is not installed yet."
   if [[ $sub == disable-2fa ]]; then admin_disable_2fa "$user"; return $?; fi
+  if [[ $sub == rename ]]; then
+    grep -q -- "admin rename" "$PAYROLL_CURRENT/dist/index.cjs" 2>/dev/null || die "This version of the app can't rename accounts yet. Update it first: sudo payroll update"
+    ask from "Current username" ""
+    ask to "New username" ""
+    [[ -n "$from" && -n "$to" ]] || die "Give both --from OLD and --to NEW."
+    admin_simple rename --from "$from" --to "$to"; return $?
+  fi
 
   # Older builds have no admin CLI: running them with arguments would just start a second server.
   if ! grep -q -- "--password-stdin" "$PAYROLL_CURRENT/dist/index.cjs" 2>/dev/null; then
@@ -561,6 +573,23 @@ cmd_admin() {
 }
 
 # Turn off two-factor sign-in for an account (lost phone and recovery codes).
+# Run `admin <args>` in the app as the payroll user and show its output.
+admin_simple() {
+  local rc=0 out
+  # shellcheck disable=SC1090
+  out="$( set -a; . "$PAYROLL_ENV_FILE"; set +a; cd "$PAYROLL_CURRENT" \
+          && as_payroll timeout 60 "$(node_bin)" dist/index.cjs admin "$@" 2>&1 )" || rc=$?
+  if [[ $rc == 0 ]]; then
+    printf '%s\n' "$out"
+    # The running app caches accounts for a few seconds; restart so a rename applies at once.
+    if [[ "$1" != list ]] && has_systemd && systemctl is-active -q payroll.service; then systemctl restart payroll.service; wait_healthy 60 || warn "The app is slow to come back; check: payroll status"; fi
+    return 0
+  fi
+  warn "The app could not do that (exit $rc):"
+  printf '%s\n' "$out" | tail -n 8 | sed 's/^/      /' >&2
+  return 1
+}
+
 admin_disable_2fa() {
   local user="$1" rc=0 out
   if ! grep -q -- "disable-2fa" "$PAYROLL_CURRENT/dist/index.cjs" 2>/dev/null; then
@@ -723,6 +752,7 @@ cmd_help() {
   t "Server"
   h "start | stop | restart" "Control the app service"
   h "admin create|reset-password" "Administrator account  [--username NAME]"
+  h "admin rename" "Change a sign-in username  --from OLD --to NEW"
   h "admin list" "Show every account's exact username and status"
   h "admin disable-2fa" "Turn off two-factor sign-in for an account  [--username NAME]"
   h "tunnel setup|status|remove" "Cloudflare Tunnel for access from anywhere"

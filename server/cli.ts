@@ -8,7 +8,7 @@
 // They use the same DATA_DIR and database settings as the server.
 import { initDatabase, closeDatabase } from "./db";
 import { clearSetupCode } from "./auth";
-import { ROLE_LABELS, UserError, createUser, findUserByName, listUsers, setUserPassword } from "./users";
+import { ROLE_LABELS, UserError, createUser, findUserByName, listUsers, setUserPassword, updateProfile } from "./users";
 import { audit, flushAudit } from "./audit";
 import { disableTwoFactor } from "./twofactor";
 import { z } from "zod";
@@ -25,8 +25,10 @@ const USAGE = `Usage:
       Create an owner account (works before or after first-run setup).
   admin reset-password --username NAME --password-stdin
       Set a new password, re-activate the account and sign it out everywhere.
+  admin rename --from OLD --to NEW
+      Change an account's sign-in username (password and sessions unchanged).
   admin list
-      List user accounts.
+      List user accounts: username, role, status, 2FA, display name.
   admin disable-2fa --username NAME
       Turn off two-factor sign-in for an account (lost phone and recovery codes).
 
@@ -97,6 +99,17 @@ export async function runAdminCli(args: string[], io: CliIO = defaultIO()): Prom
       audit({ ...cliActor, action: "user.password", target: `user:${user.id}`, detail: `${user.username}: password reset (command line)` });
       await flushAudit();
       io.out(`Password for "${user.username}" updated. All of its sessions were signed out.`);
+      return 0;
+    }
+    if (cmd === "rename") {
+      const from = str(flags.from), to = str(flags.to);
+      if (!from || !to) throw new UserError("--from and --to are required.");
+      const user = await findUserByName(from);
+      if (!user) throw new UserError(`No account named "${from}". Use \`admin list\` to see accounts.`);
+      const updated = await updateProfile(user.id, { username: to });
+      audit({ ...cliActor, action: "user.update", target: `user:${user.id}`, detail: `username ${user.username} → ${updated.username} (command line)` });
+      await flushAudit();
+      io.out(`Renamed "${user.username}" to "${updated.username}". Sign in with "${updated.username}" and the same password.`);
       return 0;
     }
     if (cmd === "disable-2fa") {
