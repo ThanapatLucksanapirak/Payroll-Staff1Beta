@@ -28,6 +28,7 @@ import { invalidateDeviceCache, kioskHostGuard, registerKioskRoutes, registerTim
 import { registerScheduleRoutes } from "./schedule";
 import { registerTimeclockRoutes } from "./timeclock";
 import { registerKioskFeatureAdminRoutes } from "./kioskFeatures";
+import { registerAndroidRoutes } from "./android";
 import { registerPayRoutes } from "./pay";
 import { registerPermissionRoutes } from "./permissions";
 import { TWO_FACTOR_PUBLIC, registerTwoFactorRoutes } from "./twofactor";
@@ -170,6 +171,7 @@ export function registerRoutes(app: Express) {
   // /live checks its own short-lived ticket (EventSource cannot send headers).
   const PUBLIC = new Set(["/health", "/auth/status", "/auth/login", "/auth/setup", "/auth/logout", "/live", "/email/google/callback", ...TWO_FACTOR_PUBLIC]);
   app.use(kioskHostGuard()); // KIOSK_HOST: serve only the kiosk on that hostname
+  registerAndroidRoutes(app); // /.well-known/assetlinks.json for the Android Time Clock app
   // Never cache API responses (payroll data) in browsers or at the Cloudflare edge.
   app.use("/api", (_req, res, next) => { res.setHeader("Cache-Control", "no-store"); next(); });
   // /api/kiosk/*: device-token auth (a custom header, so not exposed to CSRF), never the admin session

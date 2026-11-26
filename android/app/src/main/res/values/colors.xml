@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Shijiri brand (brand/BRAND.md): splash and system bars match the kiosk page background -->
+    <color name="background">#FAFAF9</color>
+    <!-- Plum, behind the adaptive launcher icon -->
+    <color name="launcher_background">#7A295E</color>
+</resources>

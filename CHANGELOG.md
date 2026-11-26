@@ -6,6 +6,10 @@ Settings → About, next to the matching update.
 Add an entry with every pull request: a `## YYYY-MM-DD · Title (#PR)` heading and a
 few short bullets written for the people who use the app, not for developers.
 
+## 2026-11-26 · Time Clock app for Android (#21)
+- The kiosk can be installed as an Android app from Google Play. It opens straight to the time clock, full screen, with no zooming.
+- `sudo payroll android fingerprint ...` links the app to your kiosk address.
+
 ## 2026-11-26 · About page with version history (#15)
 - Settings → About shows the installed version, when it was installed and when it last checked for updates.
 - Version history lists every update with notes on what changed.
