@@ -10,6 +10,8 @@ import { db } from "./db";
 
 export const BACKUP_DIR = path.resolve(process.env.BACKUP_DIR || path.join(DATA_DIR, "backups"));
 const KEEP = Math.max(1, Number.parseInt(process.env.BACKUP_KEEP || "", 10) || 30);
+/** Safety copies made just before a restore are pruned on their own, so many restores never push out real backups. */
+const KEEP_PRE_RESTORE = 10;
 const DAY = 86_400_000;
 const NAME = /^payroll-(\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2})(?:-(manual|auto|pre-restore))?\.(json\.gz|db)$/;
 
@@ -34,7 +36,7 @@ export function runBackup(reason: "auto" | "manual" | "pre-restore" = "manual"):
   if (running) return running;
   running = (async () => {
     const store = await db();
-    fs.mkdirSync(BACKUP_DIR, { recursive: true });
+    fs.mkdirSync(BACKUP_DIR, { recursive: true, mode: 0o700 });
     // One name per backup: two backups in the same second (e.g. several restores
     // in a row) take the next free second instead of overwriting each other.
     let t = Date.now();
@@ -97,11 +99,23 @@ export function readBackup(name: string): any {
 
 function prune() {
   for (const kind of ["export", "database"] as const) {
-    const list = listBackups().filter((b) => b.kind === kind);
-    for (const b of list.slice(KEEP)) {
-      try { fs.unlinkSync(path.join(BACKUP_DIR, b.name)); } catch { /* ignore */ }
+    for (const preRestore of [false, true]) {
+      const list = listBackups().filter((b) => b.kind === kind && (b.reason === "pre-restore") === preRestore);
+      for (const b of list.slice(preRestore ? KEEP_PRE_RESTORE : KEEP)) {
+        try { fs.unlinkSync(path.join(BACKUP_DIR, b.name)); } catch { /* ignore */ }
+      }
     }
   }
+}
+
+/** Backups made before file modes were tightened are 0644: make the folder and its files private (best effort). */
+export function hardenBackupFiles() {
+  try {
+    fs.chmodSync(BACKUP_DIR, 0o700);
+    for (const name of fs.readdirSync(BACKUP_DIR)) {
+      try { fs.chmodSync(path.join(BACKUP_DIR, name), 0o600); } catch { /* ignore */ }
+    }
+  } catch { /* no backups yet, or a file system without modes */ }
 }
 
 let timer: NodeJS.Timeout | null = null;

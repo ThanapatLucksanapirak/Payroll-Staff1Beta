@@ -83,7 +83,9 @@ export interface SwitchResult { health: DatabaseHealth; copied: { settings: numb
 
 export async function switchDatabase(cfg: DatabaseConfig, opts: { copyData: boolean }): Promise<SwitchResult> {
   const next = createStore(cfg);
-  await next.init().catch(() => undefined);
+  let openError: string | null = null;
+  await next.init().catch((err) => { openError = err?.message ?? String(err); });
+  if (openError && cfg.kind === "sqlite") { next.close(); throw new StoreError(`Couldn't open a database at that path: ${openError}`, 400); }
   const health = await next.health();
   if (!health.ok) { next.close(); throw new StoreError(health.error ?? "Could not connect to the database.", 400); }
 

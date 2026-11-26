@@ -6,6 +6,17 @@ Settings → About, next to the matching update.
 Add an entry with every pull request: a `## YYYY-MM-DD · Title (#PR)` heading and a
 few short bullets written for the people who use the app, not for developers.
 
+## 2026-11-28 · Small fixes to face data, backups and sign-in (#99)
+- The face consent notice now says what is protected: face templates are encrypted, photos are stored on your server with restricted file access, and none of it is in backups.
+- Recording consent or adding reference photos for someone whose face data can't be read is now refused until you delete their face data, instead of overwriting it.
+- Deleting face data together with punch photos now clears the photo marker on those punches, so Live no longer asks for photos that are gone. The photo gallery now shows at most the number of photos asked for per page.
+- Older backups and the activity log files are made private (owner-only) when the app starts.
+- Safety copies made before a restore are now kept separately (the 10 newest), so many restores can't push out your daily and manual backups.
+- An empty database file now stops the app with a clear message instead of starting a blank database. A database made by a newer version of the app logs a warning.
+- Switching to a database path that can't be opened now says why instead of showing a technical error.
+- Owners (and admins, for accounts other than the owner) can clear someone's sign-in lock from Settings → Users.
+- Downloading a backup uses less memory on big databases.
+
 ## 2026-11-27 · Face data is kept through a database switch or restore (#47)
 - Switching to another database, or restoring an older backup, no longer lets the daily clean-up delete saved face data. Face data isn't in backups, so before this it couldn't be got back after switching back.
 - The clean-up now skips a location when the database in use doesn't have it, has no employees there, or has no punches there within the face data retention period.

@@ -128,6 +128,8 @@ export interface DataStore {
   updatePunch(id: string, patch: PunchPatch): Promise<Punch | null>;
   deletePunch(id: string): Promise<boolean>;
   allPunches(): Promise<Punch[]>;
+  /** All punches (oldest first) a page at a time, so a big export doesn't hold them all in memory. */
+  punchPages?(): AsyncGenerator<Punch[]>;
   /** Write a consistent snapshot of the database to a file, if the store supports it. */
   snapshotTo?(file: string): Promise<void>;
   health(): Promise<DatabaseHealth>;

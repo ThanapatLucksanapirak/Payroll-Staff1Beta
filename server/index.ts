@@ -5,7 +5,8 @@ import { purgeTrash, registerRoutes } from "./routes";
 import { serveStatic } from "./static";
 import { closeDatabase, initDatabase } from "./db";
 import { announceSetupCode } from "./auth";
-import { scheduleBackups, stopBackups } from "./backup";
+import { hardenBackupFiles, scheduleBackups, stopBackups } from "./backup";
+import { hardenAuditFiles } from "./audit";
 import { securityHeaders } from "./security";
 import { runAdminCliAndExit } from "./cli";
 import { endLiveStreams } from "./live";
@@ -74,6 +75,8 @@ process.on("SIGINT", () => shutdown("SIGINT"));
   // `node dist/index.cjs admin ...`: operator commands, no web server.
   if (process.argv[2] === "admin") return runAdminCliAndExit(process.argv.slice(3));
   await initDatabase();
+  hardenBackupFiles();
+  hardenAuditFiles();
   registerRoutes(app);
   if (process.env.NODE_ENV === "production") serveStatic(app);
   else {

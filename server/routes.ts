@@ -212,10 +212,10 @@ async function restoreFrom(raw: unknown, opts: { allowEmpty?: boolean } = {}) {
 
 /**
  * Send `{...head, list1: [...], list2: [...]}` as JSON, one item at a time,
- * waiting for the socket to drain, so no full-size JSON string is built. The rows
- * themselves are still in memory (the store loads them first).
+ * waiting for the socket to drain, so no full-size JSON string is built. A list may be a page-by-page async iterable; the other rows
+ * are still in memory (the store loads them first).
  */
-async function streamJson(res: Response, head: Record<string, unknown>, lists: Record<string, unknown[]>) {
+async function streamJson(res: Response, head: Record<string, unknown>, lists: Record<string, unknown[] | AsyncIterable<unknown[]>>) {
   res.status(200).setHeader("Content-Type", "application/json; charset=utf-8");
   const write = (chunk: string) => new Promise<void>((resolve, reject) => {
     if (res.destroyed) return reject(new Error("client went away"));
@@ -231,7 +231,9 @@ async function streamJson(res: Response, head: Record<string, unknown>, lists: R
     await add(JSON.stringify(head).slice(0, -1));
     for (const [name, items] of Object.entries(lists)) {
       await add(`,${JSON.stringify(name)}:[`);
-      for (let i = 0; i < items.length; i++) await add((i ? "," : "") + JSON.stringify(items[i]));
+      let n = 0;
+      const pages: AsyncIterable<unknown[]> = Array.isArray(items) ? (async function* () { yield items; })() : items;
+      for await (const page of pages) for (const item of page) await add((n++ ? "," : "") + JSON.stringify(item));
       await add("]");
     }
     res.end(buf + "}");
@@ -551,7 +553,8 @@ export function registerRoutes(app: Express) {
     const secret = (k: string) => k === "password_hash" || k === USERS_KEY || k.startsWith("square_token:") || k.startsWith("kiosk_manager_pin:") || k === "square_access_token" || k.startsWith("email:");
     const all = await store.allSettings();
     const timesheets = await store.allTimesheets();
-    const punches = await store.allPunches();
+    // Punches are read a page at a time where the store can (the biggest list).
+    const punches = store.punchPages ? store.punchPages() : await store.allPunches();
     // Serialized row by row: one JSON.stringify of the whole database added a
     // full-size string (and its copies) on top of the loaded rows.
     await streamJson(res, { app: "payroll-admin", version: 2, exportedAt: new Date().toISOString() }, {
