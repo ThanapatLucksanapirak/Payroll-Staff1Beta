@@ -9,6 +9,7 @@ few short bullets written for the people who use the app, not for developers.
 ## 2026-11-26 · Safer restores, Square pulls and Supabase backups (#40)
 - Restore: if any time clock punch in the file can't be read, nothing is restored and you're told how many are bad. Before, those punches were skipped, so a damaged file could wipe out punches.
 - Restore: a backup with no timesheets or no punches (for example, one that was edited) no longer silently deletes all of yours. The app says what would be deleted and asks first.
+- Restore: a file with timesheets that aren't from this app (no id) is refused, so it can't replace your timesheets with blank ones.
 - Restore: a damaged, cut-off or wrong file gets a plain message instead of a technical error. The result says how many settings the file had, and says "kept as they were" when the file has no punches.
 - Restore: several restores in a row each keep their own "before restore" backup instead of overwriting the previous one.
 - Square: when Square is busy ("too many requests") or briefly down, the app waits and tries again. A garbled reply from Square now shows an error instead of looking like "no timecards". Timecards with unreadable times are skipped with a warning, a timecard is never counted twice, and a very long period says when it was cut short.

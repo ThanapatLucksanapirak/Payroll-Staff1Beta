@@ -235,3 +235,14 @@ test("damaged or foreign files get a plain message", async () => {
   assert.equal(edited.status, 400);
   assert.match(edited.body.error, /damaged or was edited/);
 });
+
+test("a timesheet without an id refuses the whole restore", async () => {
+  const snap = (await call("GET", "/api/backup")).body;
+  const n = (await call("GET", "/api/timesheets")).body.length;
+  const r = await call("POST", "/api/backup/restore", { ...snap, timesheets: [{ nonsense: true }] });
+  assert.equal(r.status, 400);
+  assert.match(r.body.error, /1 of 1 timesheets in that file have no id/);
+  const mixed = await call("POST", "/api/backup/restore", { ...snap, timesheets: [...snap.timesheets, { filename: "x" }] });
+  assert.equal(mixed.status, 400);
+  assert.equal((await call("GET", "/api/timesheets")).body.length, n, "nothing changed");
+});

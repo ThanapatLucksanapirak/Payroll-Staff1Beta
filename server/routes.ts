@@ -146,6 +146,12 @@ async function restoreFrom(raw: unknown, opts: { allowEmpty?: boolean } = {}) {
   if (!Array.isArray(r0?.settings) || !Array.isArray(r0?.timesheets) || !r0.settings.length) {
     throw Object.assign(new Error("That file isn't a complete backup (it has no settings or timesheets list), so nothing was restored."), { status: 400 });
   }
+  // Every timesheet in a real backup has its id. One without (e.g. {"nonsense":true}) would
+  // restore as a blank row in place of the real ones: refuse the whole file instead.
+  const noId = body.timesheets.filter((t: any) => typeof t.id !== "string" || !t.id.trim()).length;
+  if (noId) {
+    throw Object.assign(new Error(`Nothing was restored: ${noId} of ${body.timesheets.length} timesheets in that file have no id, so the file isn't a backup from this app or was edited. Your current data is unchanged.`), { status: 400 });
+  }
   const hasPunches = !!raw && typeof raw === "object" && Array.isArray((raw as any).punches);
   const punches: Punch[] = [];
   let badPunches = 0;
