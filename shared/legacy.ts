@@ -125,8 +125,9 @@ export function rowToDoc(row: StoredRow, ctx: { defaultSiteId: string; rules: Si
     source: meta?.source ?? (row.csv_data ? "csv" : "manual"),
     status: meta?.status === "final" ? "final" : "draft",
     notes: typeof meta?.notes === "string" ? meta.notes : "",
-    periodStart: toIso(row.period_start) || "",
-    periodEnd: toIso(row.period_end) || "",
+    // The pay period set for the timesheet, if any (not the stored columns, which follow the shifts too).
+    periodStart: isDay(meta?.periodStart) && isDay(meta?.periodEnd) ? meta.periodStart : "",
+    periodEnd: isDay(meta?.periodStart) && isDay(meta?.periodEnd) ? meta.periodEnd : "",
     rules: rules.success ? rules.data : ctx.rules,
     shifts,
     employees,
@@ -134,8 +135,15 @@ export function rowToDoc(row: StoredRow, ctx: { defaultSiteId: string; rules: Si
   };
 }
 
+const isDay = (v: unknown): v is string => typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v);
+
 export function docToMeta(doc: TimesheetDoc) {
-  return { version: 2, siteId: doc.siteId, source: doc.source, status: doc.status, notes: doc.notes, rules: doc.rules, shifts: doc.shifts, ...(doc.payExtras ? { payExtras: doc.payExtras } : {}) };
+  return {
+    version: 2, siteId: doc.siteId, source: doc.source, status: doc.status, notes: doc.notes, rules: doc.rules, shifts: doc.shifts,
+    // The pay period set for the timesheet (the range pulled, or typed in Details). Empty: the first to last shift.
+    ...(isDay(doc.periodStart) && isDay(doc.periodEnd) && doc.periodStart <= doc.periodEnd ? { periodStart: doc.periodStart, periodEnd: doc.periodEnd } : {}),
+    ...(doc.payExtras ? { payExtras: doc.payExtras } : {}),
+  };
 }
 
 export { shiftsToCsv };

@@ -232,10 +232,22 @@ export function applyPayExtras(result: AnalysisResult, input: ExtrasInput): Anal
 }
 
 /** The whole calculation for a timesheet: the engine, then the extras. Used by the workspace and the server. */
-export function computeTimesheet(doc: Pick<TimesheetDoc, "shifts" | "employees" | "manualEmployees" | "rules" | "payExtras"> & Partial<Pick<TimesheetDoc, "status" | "paidResult">>, categories: Category[]): AnalysisResult {
+export function computeTimesheet(doc: Pick<TimesheetDoc, "shifts" | "employees" | "manualEmployees" | "rules" | "payExtras"> & Partial<Pick<TimesheetDoc, "status" | "paidResult" | "periodStart" | "periodEnd">>, categories: Category[]): AnalysisResult {
   const base = computePayroll({ shifts: doc.shifts, employees: doc.employees, manualEmployees: doc.manualEmployees, categories, rules: doc.rules });
-  const result = applyPayExtras(base, { employees: doc.employees, manualEmployees: doc.manualEmployees, rules: doc.rules, payExtras: doc.payExtras });
+  const result = withPeriod(applyPayExtras(base, { employees: doc.employees, manualEmployees: doc.manualEmployees, rules: doc.rules, payExtras: doc.payExtras }), doc.periodStart, doc.periodEnd);
   return doc.status === "final" && doc.paidResult ? asPaid(result, doc.paidResult) : result;
+}
+
+/**
+ * The pay period: the range set on the timesheet (for example the days pulled
+ * from Square), widened to take in any shift outside it. Without one, the first
+ * to the last shift.
+ */
+export function withPeriod(result: AnalysisResult, start?: string, end?: string): AnalysisResult {
+  if (!start || !end || start > end) return result;
+  const periodStart = result.periodStart && result.periodStart < start ? result.periodStart : start;
+  const periodEnd = result.periodEnd && result.periodEnd > end ? result.periodEnd : end;
+  return { ...result, periodStart, periodEnd };
 }
 
 /**

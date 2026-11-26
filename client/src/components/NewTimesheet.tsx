@@ -29,7 +29,7 @@ export function NewTimesheetProvider({ children }: { children: ReactNode }) {
   const create = async (r: ImportResult) => {
     let profile: EmployeeConfig[] = [];
     if (app.prefs.autoApplySavedRates) profile = await api<EmployeeConfig[]>("GET", `/api/sites/${site.id}/wages`).catch(() => []);
-    const doc = newDoc(site, r.shifts, { source: r.source, filename: r.filename, label: r.label, profile });
+    const doc = newDoc(site, r.shifts, { source: r.source, filename: r.filename, label: r.label, profile, period: r.period });
     const created = await api<TimesheetSummary & { removedByRetention?: number }>("POST", "/api/timesheets", { doc });
     void queryClient.invalidateQueries({ queryKey: ["/api/timesheets"] });
     const matched = profile.length ? doc.employees.filter((e) => e.fullDayRate || e.hourlyRate || e.categoryId !== "custom").length : 0;

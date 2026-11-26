@@ -244,3 +244,13 @@ test("new PDF prefs: defaults and validation", () => {
   // A bad logo never wipes out the other prefs
   assert.equal(prefsSchema.parse({ businessName: "X", pdfLogoDataUrl: 42 }).businessName, "X");
 });
+
+test("a draft says so on every page; a final one doesn't", () => {
+  for (const build of [buildPayrollPdf, buildSummaryPdf, buildPayStatementsPdf]) {
+    const draft = build(opts({ draft: true }));
+    const text = pdfStrings(draft);
+    assert.ok(text.includes("DRAFT, not final"), `${build.name}: draft footer`);
+    assert.equal(text.split("DRAFT, not final").length - 1, draft.getNumberOfPages(), `${build.name}: on every page`);
+    assert.ok(!pdfStrings(build(opts())).includes("DRAFT"), `${build.name}: final has no draft mark`);
+  }
+});

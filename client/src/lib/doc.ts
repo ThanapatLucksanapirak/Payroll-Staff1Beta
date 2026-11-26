@@ -37,7 +37,7 @@ export function applyProfile(current: EmployeeConfig[], profile: EmployeeConfig[
   return { employees, matched };
 }
 
-export function newDoc(site: Site, shifts: Shift[], opts: { source: string; filename: string; label?: string; profile?: EmployeeConfig[] }): TimesheetDoc {
+export function newDoc(site: Site, shifts: Shift[], opts: { source: string; filename: string; label?: string; profile?: EmployeeConfig[]; period?: { start: string; end: string } }): TimesheetDoc {
   return {
     siteId: site.id,
     label: opts.label ?? "",
@@ -45,13 +45,18 @@ export function newDoc(site: Site, shifts: Shift[], opts: { source: string; file
     source: opts.source,
     status: "draft",
     notes: "",
-    periodStart: "",
-    periodEnd: "",
+    periodStart: opts.period?.start ?? "",
+    periodEnd: opts.period?.end ?? "",
     rules: site.rules,
     shifts,
     employees: syncEmployees(shifts, [], site, opts.profile),
     manualEmployees: [],
   };
+}
+
+/** What "Mark as final" does, for its confirm dialog (same wording everywhere). */
+export function finalizeDescription(isOwner: boolean): string {
+  return `This locks the timesheet, records any advance repayments and puts the pay statements in the staff portal. ${isOwner ? "You can reopen it later." : "Only an owner can reopen it."} Then use Export to download or email the PDFs, or publish it to your accountant.`;
 }
 
 export function uid(prefix = "x") {

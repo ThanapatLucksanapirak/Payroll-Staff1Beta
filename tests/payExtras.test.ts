@@ -343,3 +343,25 @@ test("accounting journal balances, to the cent", () => {
   assert.equal(rows[0], "Journal No,Date,Account,Debit,Credit,Memo");
   assert.ok(rows[1].startsWith("PAY-20260111,11/01/2026,Wages expense,"));
 });
+
+test("pay period: the pulled day range wins over the first and last shift, and is kept on save", () => {
+  const shifts: Shift[] = [{ id: "a", employee: "Ana", date: "2026-11-10", start: 600, end: 1080, breakMinutes: 0, role: "", source: "manual", note: "" }];
+  const doc = timesheetDocSchema.parse({ siteId: "s", rules: DEFAULT_RULES, shifts, employees: [], manualEmployees: [], periodStart: "2026-11-09", periodEnd: "2026-11-22" });
+  const r = computeTimesheet(doc, []);
+  assert.equal(r.periodStart, "2026-11-09");
+  assert.equal(r.periodEnd, "2026-11-22");
+  // A shift outside the range widens it; no range means first to last shift.
+  const wider = computeTimesheet({ ...doc, shifts: [...shifts, { ...shifts[0], id: "b", date: "2026-11-24" }] }, []);
+  assert.equal(wider.periodEnd, "2026-11-24");
+  assert.equal(computeTimesheet({ ...doc, periodStart: "", periodEnd: "" }, []).periodStart, "2026-11-10");
+  // Saved in the timesheet's meta and read back.
+  const meta = docToMeta(doc);
+  assert.equal((meta as any).periodStart, "2026-11-09");
+  const back = rowToDoc({ id: "t", site_id: "s", filename: "x", custom_label: null, period_start: "2026-11-10", period_end: "2026-11-22", meta_json: meta, csv_data: null, wages_json: [], manual_employees_json: [], result_json: null } as any, { defaultSiteId: "s", rules: DEFAULT_RULES });
+  assert.equal(back.periodStart, "2026-11-09");
+  assert.equal(back.periodEnd, "2026-11-22");
+  // From after To is never kept or used.
+  const bad = { ...doc, periodStart: "2026-11-22", periodEnd: "2026-11-09" };
+  assert.equal((docToMeta(bad) as any).periodStart, undefined);
+  assert.equal(computeTimesheet(bad, []).periodStart, "2026-11-10");
+});

@@ -14,6 +14,14 @@ few short bullets written for the people who use the app, not for developers.
 - The time clock fits the screen on phones and tablets, with a smaller keypad on short phones, so the PIN screen no longer scrolls.
 - Date and time boxes (for example Arrive before and Stay until, and From and To in New timesheet) are now the same size as other boxes on iPhone and iPad and stay inside their card.
 
+## 2026-11-26 · Mark as final and Export side by side (#27)
+- On a timesheet, Mark as final and Export are now two buttons next to each other at the top, on phones and iPads too.
+- The order is clear: on a draft, Mark as final is the main button and Export says you're downloading a draft. Once it's final, Export becomes the main button.
+- PDFs exported from a draft have a faint DRAFT across each page and "DRAFT, not final" in the footer, and the file names end in DRAFT.
+- Email PDFs is in the Export menu, with the same preview and confirm step. It's greyed out with the reason until the timesheet is final.
+- In the email preview, tapping Open payroll no longer blanks the preview. Links work once the email is sent.
+- Timesheets pulled from Square or the time clock keep the day range you picked as their pay period (for example Nov 9 – Nov 22), even if nobody worked on the first day. It's used in the header, the PDFs and email subjects, and you can change it in Details.
+
 ## 2026-11-26 · New Shijiri look (#24)
 - A new Shijiri logo, colours and sign-in page, shared by the admin app, time clock, staff portal and emails.
 - Easier to use on phones: timesheets, schedule, settings and the two-factor notice fit small screens.
