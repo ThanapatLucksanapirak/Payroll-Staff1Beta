@@ -8,7 +8,9 @@
 //   DATA_DIR/face-data/<siteId>/<employeeId>/refs/<id>.jpg reference photos
 // Deleting someone's face data removes the whole folder. Face data is deleted
 // when the employee is removed, and by a daily clean-up once they haven't
-// punched for the location's face data retention period.
+// punched for the location's face data retention period. The clean-up never
+// treats a database switch or an older backup as people leaving (see
+// purgeExpiredFaceData).
 import { createCipheriv, createDecipheriv, hkdfSync, randomBytes, randomUUID } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
@@ -404,7 +406,36 @@ async function deleteAlertsFor(siteId: string, employeeId: string) {
 }
 
 // ── Retention ────────────────────────────────────────────────────────────────
-/** Delete face data for people who were removed, or haven't punched for the retention period. */
+/**
+ * Someone with face data who isn't in the location's employee list is only
+ * deleted after this many days. Removing an employee deletes their face data
+ * straight away (see startFaceHousekeeping), so this only covers face data the
+ * database doesn't know about: usually a database switch or a restore of an
+ * older backup. Face data isn't in backups, so deleting it then would lose it
+ * for good when the owner switches back.
+ */
+export const FACE_MISSING_GRACE_DAYS = 30;
+const missingFile = (siteId: string, employeeId: string) => path.join(personDir(siteId, employeeId), "missing-since");
+
+function missingSince(siteId: string, employeeId: string, nowMs: number): number {
+  try {
+    const t = Date.parse(fs.readFileSync(missingFile(siteId, employeeId), "utf8").trim());
+    if (Number.isFinite(t) && t <= nowMs) return t;
+  } catch { /* not marked yet */ }
+  try { fs.writeFileSync(missingFile(siteId, employeeId), new Date(nowMs).toISOString(), { mode: 0o600 }); } catch { /* folder gone */ }
+  return nowMs;
+}
+function clearMissing(siteId: string, employeeId: string) {
+  try { fs.unlinkSync(missingFile(siteId, employeeId)); } catch { /* not marked */ }
+}
+
+/**
+ * Delete face data for people who were removed, or haven't punched for the
+ * retention period. Nothing is deleted when the database in use doesn't look
+ * like this location's real records (no location, no employees, or no punches
+ * at all within the retention period), because that's what a database switch
+ * or an older backup looks like, not people leaving.
+ */
 export async function purgeExpiredFaceData(nowMs = Date.now()): Promise<number> {
   let sites: string[] = [];
   try { sites = fs.readdirSync(faceRoot()).filter((s) => SAFE_ID.test(s)); } catch { return 0; }
@@ -413,22 +444,34 @@ export async function purgeExpiredFaceData(nowMs = Date.now()): Promise<number> 
   for (const siteId of sites) {
     const people = peopleWithData(siteId);
     if (!people.length) continue;
-    const known = (await settings.getSite(siteId)) ? new Set((await listEmployees(siteId)).map((e) => e.id)) : new Set<string>();
+    if (!(await settings.getSite(siteId))) { console.warn(`[face] clean-up skipped for location ${siteId}: it isn't in the database in use, so its face data is kept`); continue; }
+    const employees = await listEmployees(siteId);
+    if (!employees.length) { console.warn(`[face] clean-up skipped for location ${siteId}: the database in use has no employees there, so its face data is kept`); continue; }
+    const known = new Set(employees.map((e) => e.id));
     const { faceRetentionDays } = await getSiteConfig(siteId);
     const cutoff = nowMs - faceRetentionDays * DAY;
+    const from = new Date(cutoff).toISOString();
+    const siteActive = (await store.listPunches({ siteId, from, limit: 1 })).length > 0;
     for (const employeeId of people) {
-      let expired = !known.has(employeeId);
-      if (!expired) {
-        const p = readProfile(siteId, employeeId);
-        const lastSet = Math.max(0, ...[p.consentAt, ...p.refs.map((r) => r.addedAt)].map((x) => (x ? Date.parse(x) || 0 : 0)));
-        if (lastSet < cutoff) {
-          const recent = await store.listPunches({ siteId, employeeId, from: new Date(cutoff).toISOString(), limit: 1 });
-          expired = recent.length === 0;
+      let expired = false;
+      if (!known.has(employeeId)) {
+        expired = nowMs - missingSince(siteId, employeeId, nowMs) >= FACE_MISSING_GRACE_DAYS * DAY;
+      } else {
+        clearMissing(siteId, employeeId);
+        // No punches at all here in the retention period means the records are
+        // old or missing, not that this person stopped working: keep it.
+        if (siteActive) {
+          const p = readProfile(siteId, employeeId);
+          const lastSet = Math.max(0, ...[p.consentAt, ...p.refs.map((r) => r.addedAt)].map((x) => (x ? Date.parse(x) || 0 : 0)));
+          if (lastSet < cutoff) {
+            const recent = await store.listPunches({ siteId, employeeId, from, limit: 1 });
+            expired = recent.length === 0;
+          }
         }
       }
       if (expired) {
         await deleteFaceData(siteId, employeeId);
-        audit({ userId: null, userName: "System", ip: "", action: "face.retention-delete", target: `site:${siteId}`, detail: `employee ${employeeId}` });
+        audit({ userId: null, userName: "System", ip: "", action: "face.retention-delete", target: `site:${siteId}`, detail: `employee ${employeeId}${known.has(employeeId) ? "" : " (not in the employee list)"}` });
         removed++;
       }
     }

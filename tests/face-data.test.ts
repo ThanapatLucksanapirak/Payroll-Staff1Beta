@@ -310,6 +310,53 @@ test("retention: removed employees and people who stopped punching", async () =>
   assert.equal(await purgeExpiredFaceData(Date.now() + 200 * 86_400_000), 0, "inside the 365-day default");
   assert.equal((await A("PUT", `/api/sites/${siteId}/kiosk-config`, { faceRetentionDays: 10 })).status, 400, "at least 30 days");
   assert.equal((await A("PUT", `/api/sites/${siteId}/kiosk-config`, { faceRetentionDays: 90 })).body.faceRetentionDays, 90);
-  assert.equal(await purgeExpiredFaceData(Date.now() + 100 * 86_400_000), 1);
+  // Nobody at the location punched in those 90 days: that's an old or empty database, not Ana leaving
+  const later = Date.now() + 100 * 86_400_000;
+  assert.equal(await purgeExpiredFaceData(later), 0, "kept while the location has no recent punches at all");
+  // Someone else did punch then, so the location is in use and Ana's data goes
+  const { db: store } = await import("../server/db");
+  const at = new Date(later - 5 * 86_400_000).toISOString();
+  await (await store()).insertPunch({ id: randomUUID(), siteId, employeeId: cara, employeeName: "Cara Diaz", type: "in", at, source: "kiosk", deviceId: null, note: "", createdAt: at, editedAt: null, edits: [] });
+  assert.equal(await purgeExpiredFaceData(later), 1);
   assert.equal((await A("GET", url(ana))).body.consentAt, null);
+});
+
+test("database switch or older backup: face data isn't purged", async () => {
+  const { purgeExpiredFaceData, FACE_MISSING_GRACE_DAYS } = await import("../server/faceData");
+  const url = (id: string) => `/api/sites/${siteId}/employees/${id}/face`;
+  const dee = (await A("POST", `/api/sites/${siteId}/employees`, { name: "Dee Park", pin: "2468" })).body.id;
+  await A("POST", `${url(dee)}/consent`, { confirm: true });
+  const faceDir = (site: string, id: string) => path.join(dir, "face-data", site, id);
+  assert.ok(fs.existsSync(path.join(faceDir(siteId, dee), "profile.enc")));
+  const day = 86_400_000;
+  const now = Date.now();
+  const far = now + 2000 * day;
+
+  // A location the database in use doesn't have, and one with no employees (a switch to an empty database)
+  fs.cpSync(faceDir(siteId, dee), faceDir("not-in-this-db", dee), { recursive: true });
+  fs.cpSync(faceDir(siteId, dee), faceDir(site2, dee), { recursive: true });
+  assert.equal(await purgeExpiredFaceData(far), 0);
+  assert.ok(fs.existsSync(faceDir("not-in-this-db", dee)), "location missing: kept");
+  assert.ok(fs.existsSync(faceDir(site2, dee)), "no employees there: kept");
+
+  // Someone not in the employee list (an older backup without them): kept for the grace period, then deleted
+  const ghost = "not-an-employee-1";
+  fs.cpSync(faceDir(siteId, dee), faceDir(siteId, ghost), { recursive: true });
+  assert.equal(await purgeExpiredFaceData(now), 0, "first seen missing: only marked");
+  assert.ok(fs.existsSync(path.join(faceDir(siteId, ghost), "missing-since")));
+  assert.equal(await purgeExpiredFaceData(now + (FACE_MISSING_GRACE_DAYS - 1) * day), 0, "inside the grace period");
+  assert.ok(fs.existsSync(faceDir(siteId, ghost)));
+  assert.equal(await purgeExpiredFaceData(now + (FACE_MISSING_GRACE_DAYS + 1) * day), 1, "deleted after the grace period");
+  assert.equal(fs.existsSync(faceDir(siteId, ghost)), false);
+  assert.equal(fs.existsSync(path.join(faceDir(siteId, dee), "missing-since")), false, "people in the list are never marked");
+  assert.ok(fs.existsSync(path.join(faceDir(siteId, dee), "profile.enc")), "Dee's own data is untouched");
+
+  // Back in the list (switched back): the mark is cleared and the clock starts over
+  fs.cpSync(faceDir(siteId, dee), faceDir(siteId, ghost), { recursive: true });
+  fs.writeFileSync(path.join(faceDir(siteId, dee), "missing-since"), new Date(now - 100 * day).toISOString());
+  await purgeExpiredFaceData(now);
+  assert.equal(fs.existsSync(path.join(faceDir(siteId, dee), "missing-since")), false);
+  fs.rmSync(faceDir(siteId, ghost), { recursive: true, force: true });
+  fs.rmSync(path.join(dir, "face-data", "not-in-this-db"), { recursive: true, force: true });
+  fs.rmSync(faceDir(site2, dee), { recursive: true, force: true });
 });
