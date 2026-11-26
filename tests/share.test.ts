@@ -199,6 +199,14 @@ test("an oversize PDF gets the friendly message, and failed sends don't count to
   resetShareLimit();
 });
 
+test("finalizing again (even at the same moment) is logged once", async () => {
+  const count = async () => ((await call("GET", "/api/audit?limit=200", undefined, "owner")).text.match(/timesheet\.finalize/g) ?? []).length;
+  const before = await count();
+  const rs = await Promise.all([1, 2, 3].map(() => call("PATCH", `/api/timesheets/${ts}`, { status: "final" }, "owner")));
+  assert.ok(rs.every((r) => r.status === 200));
+  assert.equal(await count(), before, "already final: nothing new logged");
+});
+
 test("a failed send says so", async () => {
   failSend = "down";
   try {

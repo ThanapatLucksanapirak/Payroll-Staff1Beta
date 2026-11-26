@@ -259,7 +259,7 @@ export function auditTrail() {
     const json = res.json.bind(res);
     res.json = (b: unknown) => { body = b; return json(b); };
     res.on("finish", () => {
-      if (res.statusCode >= 400) return;
+      if (res.statusCode >= 400 || res.locals.skipAudit) return;
       try {
         audit({
           ...actorOf(req, res),
