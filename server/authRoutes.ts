@@ -39,7 +39,7 @@ export function registerAuthRoutes(app: Express) {
 
   app.post("/api/auth/login", h(async (req, res) => {
     const ip = req.ip ?? "unknown";
-    const blocked = loginThrottle(ip);
+    const blocked = loginThrottle(ip, res);
     if (blocked) return res.status(429).json({ error: blocked });
     const { username, password, remember } = z.object({
       username: z.string().max(100).default(""),
@@ -62,7 +62,7 @@ export function registerAuthRoutes(app: Express) {
 
   app.post("/api/auth/setup", h(async (req, res) => {
     const ip = req.ip ?? "unknown";
-    const blocked = loginThrottle(ip);
+    const blocked = loginThrottle(ip, res);
     if (blocked) return res.status(429).json({ error: blocked });
     if (!(await setupRequired())) return res.status(409).json({ error: "This app is already set up. Sign in instead." });
     const body = z.object({
@@ -124,7 +124,7 @@ export function registerAuthRoutes(app: Express) {
       if (fresh && body.notificationEmail !== (fresh.notificationEmail ?? "")) {
         if (!body.password) return res.status(400).json({ error: "Enter your password to change your notification email." });
         const ip = req.ip ?? "unknown";
-        const blocked = loginThrottle(ip);
+        const blocked = loginThrottle(ip, res);
         if (blocked) return res.status(429).json({ error: blocked });
         const ok = await verifyHash(body.password, fresh.passwordHash);
         recordLogin(ip, ok);

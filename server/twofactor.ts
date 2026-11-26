@@ -419,7 +419,7 @@ async function issuer() {
 /** Check the account password before a sensitive change (rate limited like sign-in). */
 async function checkPassword(req: Request, user: UserRecord, password: unknown) {
   const ip = req.ip ?? "unknown";
-  const blocked = loginThrottle(ip);
+  const blocked = loginThrottle(ip, req.res);
   if (blocked) throw new UserError(blocked, 429);
   const fresh = await getUser(user.id, { fresh: true });
   const ok = !!fresh && typeof password === "string" && !!password && (await verifyHash(password, fresh.passwordHash));
@@ -435,7 +435,7 @@ export function registerTwoFactorRoutes(app: Express) {
   // ── Sign-in, second step (public) ──────────────────────────────────────────
   app.post("/api/auth/2fa/login/verify", h(async (req, res) => {
     const ip = req.ip ?? "unknown";
-    const blocked = loginThrottle(ip);
+    const blocked = loginThrottle(ip, res);
     if (blocked) return res.status(429).json({ error: blocked });
     const body = z.object({ ticket: z.string().max(2000), code: codeSchema, rememberDevice: z.boolean().optional() }).parse(req.body);
     const t = await ticketUser(body.ticket, "verify");
@@ -482,7 +482,7 @@ export function registerTwoFactorRoutes(app: Express) {
 
   app.post("/api/auth/2fa/login/enable", h(async (req, res) => {
     const ip = req.ip ?? "unknown";
-    const blocked = loginThrottle(ip);
+    const blocked = loginThrottle(ip, res);
     if (blocked) return res.status(429).json({ error: blocked });
     const body = z.object({ ticket: z.string().max(2000), code: codeSchema }).parse(req.body);
     const t = await ticketUser(body.ticket, "setup");

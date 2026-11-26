@@ -194,9 +194,39 @@ function prune(now = Date.now()) {
 }
 setInterval(prune, 5 * 60_000).unref();
 
-export function loginThrottle(ip: string): string | null {
+// Checks still running count against the limit too, so parallel guesses can't
+// all slip past before the first failure is recorded. A reservation lasts until
+// the response closes (or PENDING_MS, as a backstop).
+const PENDING_MS = 30_000;
+const pending = new Map<string, Map<symbol, number>>();
+const inFlight = (ip: string, now: number) => {
+  const m = pending.get(ip);
+  if (!m) return 0;
+  for (const [k, exp] of m) if (exp <= now) m.delete(k);
+  if (!m.size) pending.delete(ip);
+  return m.size;
+};
+
+/**
+ * Returns an error when this address must wait. Pass the response so the check
+ * counts as in flight until it finishes; record the outcome with recordLogin.
+ */
+export function loginThrottle(ip: string, res?: { once(event: "close", fn: () => void): unknown }): string | null {
+  const now = Date.now();
   const a = attempts.get(ip);
-  if (a && a.until > Date.now() && a.n >= MAX_TRIES) return `Too many attempts. Try again in ${Math.ceil((a.until - Date.now()) / 60000)} minute(s).`;
+  const failed = a && a.until > now ? a.n : 0;
+  if (failed + inFlight(ip, now) >= MAX_TRIES) {
+    const until = a && a.until > now ? a.until : now + 60_000;
+    return `Too many attempts. Try again in ${Math.ceil((until - now) / 60000)} minute(s).`;
+  }
+  if (res) {
+    if (pending.size > 10_000) for (const k of [...pending.keys()]) inFlight(k, now);
+    const token = Symbol();
+    const m = pending.get(ip) ?? new Map<symbol, number>();
+    m.set(token, now + PENDING_MS);
+    pending.set(ip, m);
+    res.once("close", () => { m.delete(token); if (!m.size && pending.get(ip) === m) pending.delete(ip); });
+  }
   return null;
 }
 export function recordLogin(ip: string, ok: boolean) {
