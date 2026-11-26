@@ -4,7 +4,7 @@
 @tailwind utilities;
 
 /*
- * Design tokens: Shijiri. Calm, warm neutrals with one plum accent (see DESIGN.md).
+ * Design tokens: Shijiri. Calm, warm neutrals with one Payroll-orange accent (see DESIGN.md).
  * All colours are HSL triplets so Tailwind can apply alpha (`bg-primary/10`).
  */
 @layer base {
@@ -12,48 +12,48 @@
     --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Segoe UI Variable", "Segoe UI", system-ui, Roboto, "Helvetica Neue", Arial, sans-serif;
     --font-mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, monospace;
     --font-serif: ui-serif, Georgia, serif;
-    --font-display: "Young Serif", ui-serif, Georgia, serif;   /* Shijiri: wordmark + big headings, never figures */
+    --font-display: "Poppins", var(--font-sans);   /* brand face (SemiBold 600): big headings and greetings */
 
     /* Surfaces — warm "rice paper" neutrals (Shijiri) */
     --background: 30 20% 98%;           /* #fbfaf9 canvas */
-    --foreground: 330 6% 12%;           /* #201d1f */
+    --foreground: 25 10% 11%;  /* #1f1b18 */
     --card: 0 0% 100%;
-    --card-foreground: 330 6% 12%;
+    --card-foreground: 25 10% 11%;
     --card-border: 30 9% 89%;           /* #e6e3e0 */
     --popover: 0 0% 100%;
-    --popover-foreground: 330 6% 12%;
+    --popover-foreground: 25 10% 11%;
     --popover-border: 30 8% 87%;
     --sidebar: 30 14% 96%;              /* #f6f5f3 */
-    --sidebar-foreground: 330 6% 12%;
+    --sidebar-foreground: 25 10% 11%;
     --sidebar-border: 30 9% 89%;
-    --sidebar-accent: 322 32% 92%;      /* #f1e3ec plum-tinted active nav */
-    --sidebar-accent-foreground: 321 50% 24%; /* #5c1f47, 9.0:1 on the tint */
-    --sidebar-primary: 321 50% 32%;
+    --sidebar-accent: 22 90% 95%;  /* #fdf0e8 orange-tinted active nav */
+    --sidebar-accent-foreground: 17 79% 30%;  /* #8a3010, 7.9:1 on the tint */
+    --sidebar-primary: 17 88% 40%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-ring: 321 50% 40%;
+    --sidebar-ring: 21 90% 48%;
     --segment: 0 0% 100%;
 
-    /* Brand — Shijiri Plum #7a295e (white text 9.1:1) */
-    --primary: 321 50% 32%;
+    /* Brand: Payroll orange, deepened from the logo #fe5721 so white text passes */
+    --primary: 17 88% 40%;  /* #c2410c deep Payroll orange: white text 5.2:1 */
     --primary-foreground: 0 0% 100%;
     --secondary: 30 9% 94%;
-    --secondary-foreground: 330 6% 12%;
+    --secondary-foreground: 25 10% 11%;
     --muted: 30 9% 94%;
-    --muted-foreground: 330 4% 40%;     /* #6a6266 — 5.9:1 white, 5.4:1 sidebar */
+    --muted-foreground: 25 5% 40%;  /* #6b6561, 5.8:1 on white */
     --accent: 30 9% 93%;
-    --accent-foreground: 330 6% 12%;
+    --accent-foreground: 25 10% 11%;
     --destructive: 355 100% 42%;        /* #d70015 */
     --destructive-foreground: 0 0% 100%;
     --border: 30 9% 89%;
     --input: 30 6% 82%;
-    --ring: 321 50% 40%;                /* #99346f, used at /35 for the halo */
+    --ring: 21 90% 48%;  /* #ea580c, used at /35 for the halo */
     --radius: 0.75rem;
 
-    /* Shijiri brand moments only (sign-in panel, portal band): ink, rice, tonal mark, muted line */
-    --brand-ink: 322 38% 13%;           /* #2e1525 */
-    --brand-rice: 36 45% 94%;           /* #f7f1e9, 15:1 on ink */
-    --brand-tonal: 318 37% 20%;         /* #45203a */
-    --brand-muted: 338 18% 82%;         /* #d9c9cf, 10.6:1 on ink */
+    /* Brand moments only (sign-in panel, portal band): ink, rice, tonal mark, muted line */
+    --brand-ink: 26 15% 9%;  /* #1b1714 warm ink */
+    --brand-rice: 36 50% 97%;  /* #fbf8f4, 18:1 on ink */
+    --brand-tonal: 27 14% 14%;  /* #29231f */
+    --brand-muted: 28 12% 76%;  /* #c9c1ba, 10:1 on ink */
 
     /* Status palette (unchanged hues; neutral warmed) */
     --success: 136 59% 32%;
@@ -62,51 +62,51 @@
     --warning-soft: 40 100% 93%;
     --danger: 355 80% 44%;
     --danger-soft: 354 100% 96%;
-    --neutral: 330 4% 40%;
+    --neutral: 25 5% 40%;
     --neutral-soft: 30 9% 93%;
     --info: 211 100% 42%;
     --info-soft: 211 100% 96%;
 
-    --chart-1: 215 22% 42%;             /* slate: data, never the brand plum */
+    --chart-1: 215 22% 42%;             /* slate: data, never the brand orange */
     --chart-2: 136 50% 42%;
     --chart-3: 33 100% 48%;
-    --chart-4: 214 70% 52%;             /* was 280 purple: too close to brand */
+    --chart-4: 214 70% 52%;             /* blue */
     --chart-5: 190 70% 38%;
   }
 
   .dark {
-    --background: 320 6% 7%;            /* #131112 */
+    --background: 25 8% 7%;  /* #131110 */
     --foreground: 30 12% 95%;
-    --card: 320 4% 11%;                 /* #1d1b1c */
+    --card: 25 6% 11%;  /* #1e1b19 */
     --card-foreground: 30 12% 95%;
-    --card-border: 320 4% 18%;
-    --popover: 320 4% 13%;
+    --card-border: 25 5% 18%;
+    --popover: 25 5% 13%;
     --popover-foreground: 30 12% 95%;
-    --popover-border: 320 4% 22%;
-    --sidebar: 320 5% 9%;
+    --popover-border: 25 5% 22%;
+    --sidebar: 25 7% 9%;
     --sidebar-foreground: 30 10% 93%;
-    --sidebar-border: 320 4% 16%;
-    --sidebar-accent: 321 22% 20%;      /* #3e2836 */
-    --sidebar-accent-foreground: 320 50% 86%;
-    --sidebar-primary: 320 34% 72%;
-    --sidebar-primary-foreground: 322 38% 13%;
-    --sidebar-ring: 320 34% 72%;
-    --segment: 320 4% 28%;
+    --sidebar-border: 25 5% 16%;
+    --sidebar-accent: 20 38% 16%;  /* #38251a */
+    --sidebar-accent-foreground: 22 95% 80%;
+    --sidebar-primary: 15 99% 56%;
+    --sidebar-primary-foreground: 26 15% 9%;
+    --sidebar-ring: 15 99% 56%;
+    --segment: 25 5% 28%;
 
-    /* Plum Light #d09fc0 with ink text: 7.5:1 on the fill, 7.7:1 as text on cards */
-    --primary: 320 34% 72%;
-    --primary-foreground: 322 38% 13%;  /* #2e1525 — NOT white in dark mode */
-    --secondary: 320 4% 18%;
+    /* The logo orange #fe5721 itself, with ink text (5.6:1 on the fill) */
+    --primary: 15 99% 56%;
+    --primary-foreground: 26 15% 9%;  /* #1b1714 ink, NOT white in dark mode */
+    --secondary: 25 5% 18%;
     --secondary-foreground: 30 10% 93%;
-    --muted: 320 4% 16%;
-    --muted-foreground: 330 4% 66%;     /* #aca5a8 — 7.1:1 on card */
-    --accent: 320 4% 19%;
+    --muted: 25 5% 16%;
+    --muted-foreground: 25 5% 66%;  /* #aaa59f, 7:1 on card */
+    --accent: 25 5% 19%;
     --accent-foreground: 30 12% 95%;
     --destructive: 3 100% 62%;
     --destructive-foreground: 0 0% 100%;
-    --border: 320 4% 19%;
-    --input: 320 4% 26%;
-    --ring: 320 34% 82%;
+    --border: 25 5% 19%;
+    --input: 25 5% 26%;
+    --ring: 15 99% 66%;
 
     --success: 135 55% 58%;
     --success-soft: 135 35% 16%;
@@ -114,8 +114,8 @@
     --warning-soft: 35 50% 15%;
     --danger: 3 100% 68%;
     --danger-soft: 355 45% 17%;
-    --neutral: 330 4% 66%;
-    --neutral-soft: 320 4% 18%;
+    --neutral: 25 5% 66%;
+    --neutral-soft: 25 5% 18%;
     --info: 211 100% 68%;
     --info-soft: 211 50% 17%;
 
