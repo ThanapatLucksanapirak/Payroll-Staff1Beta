@@ -8,7 +8,7 @@ import { api, errorMessage, session } from "@/lib/api";
 import { BrandPanel } from "@/components/BrandPanel";
 import { TwoFactorStep } from "@/components/TwoFactorLogin";
 
-export function LoginPage({ appName, setupRequired, legacyAdmin, dbError, onDone }: { appName: string; setupRequired: boolean; legacyAdmin?: boolean; dbError?: string | null; onDone: () => void }) {
+export function LoginPage({ appName, setupRequired, dbError, onDone }: { appName: string; setupRequired: boolean; dbError?: string | null; onDone: () => void }) {
   const [username, setUsername] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [password, setPassword] = useState("");
@@ -82,7 +82,8 @@ export function LoginPage({ appName, setupRequired, legacyAdmin, dbError, onDone
               <Label htmlFor="username" className={labelCls}>Username</Label>
               <Input id="username" className={fieldCls} autoFocus={!setupRequired} autoComplete="username" autoCapitalize="none" spellCheck={false} value={username} onChange={(e) => setUsername(e.target.value)} placeholder={setupRequired ? "e.g. alex" : undefined} data-testid="input-username" />
               {setupRequired && <p className="mt-[7px] text-[12.5px] leading-[18px] text-muted-foreground">You'll use this to sign in. Your name above is what others see.</p>}
-              {!setupRequired && legacyAdmin && <p className="mt-[7px] text-[12.5px] leading-[18px] text-muted-foreground">Used one shared password before? Your username is <span className="font-mono text-[12px]">admin</span>.</p>}
+              {/* Shown only after a failed sign-in, and the same on every install, so it says nothing about which accounts exist. */}
+              {!setupRequired && error && <p className="mt-[7px] text-[12.5px] leading-[18px] text-muted-foreground" data-testid="text-username-hint">Check your username. Older installs that used one shared password sign in as <span className="font-mono text-[12px]">admin</span>.</p>}
             </div>
             <div>
               <Label htmlFor="pw" className={labelCls}>{setupRequired ? "New password" : "Password"}</Label>

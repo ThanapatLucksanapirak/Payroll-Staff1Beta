@@ -9,7 +9,7 @@ few short bullets written for the people who use the app, not for developers.
 ## 2026-11-26 · Clearer first steps, part 3 (#31)
 - Export menu: each download says what it's for, and a toast confirms the file downloaded (with a reminder when the timesheet is still a draft). The manager summary file is named "_manager_summary".
 - Check before export: "Review flagged days" opens the Payroll tab at the first flagged day.
-- Sign-in: hints for the username, the setup code and a forgotten password. People who used the old shared password are told their username is admin.
+- Sign-in: hints for the username, the setup code and a forgotten password. After a failed sign-in, a note says older installs that used one shared password sign in as admin.
 - Time clock: a wrong PIN says how many tries are left before the clock locks. After clocking in, the screen says to enter the PIN again for a break or to clock out. Add device is off while hours come from Square, with a note why.
 - Settings → Users marks your own sign-in as "Now (you)". Home shows "Flags (reviewed)" on a final timesheet. The staff portal header shows your full name.
 

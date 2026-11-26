@@ -52,9 +52,7 @@ export function registerAuthRoutes(app: Express) {
     let appName = "Shijiri Payroll";
     try { appName = (await settings.getPrefs()).appName; } catch { /* db down */ }
     const user = currentUser(res);
-    // Installs upgraded from the one shared password have an "admin" account: only then is the sign-in hint about it useful.
-    const legacyAdmin = user ? false : await listUsers().then((l) => l.some((u) => u.username === "admin")).catch(() => false);
-    res.json({ setupRequired: await setupRequired().catch(() => false), authenticated: !!user, appName, db: dbStatus(), user: user ? toPublic(user) : null, legacyAdmin });
+    res.json({ setupRequired: await setupRequired().catch(() => false), authenticated: !!user, appName, db: dbStatus(), user: user ? toPublic(user) : null });
   }));
 
   app.post("/api/auth/login", h(async (req, res) => {
