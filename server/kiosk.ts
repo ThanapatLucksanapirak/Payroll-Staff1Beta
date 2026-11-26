@@ -504,11 +504,12 @@ export function registerKioskRoutes(app: Express) {
     }
     // Photos on: a live punch must come with a photo that shows a face. The
     // server checks the face (server/faceCheck.ts), so it's the same on every
-    // device. A punch queued while offline is still accepted without one (or
-    // without a face), flagged "No face", so a punch saved on the tablet is never
-    // lost. The server decides what counts as offline: only an `at` more than 2
-    // minutes old. A fresher `at` is treated as live, so sending one can't skip
-    // the check.
+    // device. A punch queued while offline is still accepted, so a punch saved on
+    // the tablet is never lost, but it's flagged for a manager: face "missing"
+    // when it has no photo (Live: "No photo") or its photo shows no face ("No
+    // face"), and "unchecked" when the check couldn't run ("Not checked"). The
+    // server decides what counts as offline: only an `at` more than 2 minutes
+    // old. A fresher `at` is treated as live, so sending one can't skip the check.
     const queuedOffline = !!body.at && at < now - 2 * 60_000;
     if (options.photo && !queuedOffline && !body.photo) {
       return res.status(422).json({ error: "Face not detected. This time clock takes a photo with each punch: show your face to the camera and try again.", code: "photo" });

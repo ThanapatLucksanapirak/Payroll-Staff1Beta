@@ -56,12 +56,15 @@ export function PunchPhoto({ punch, canView, label }: { punch: Punch; canView: b
   );
 }
 
-/** "No face" (or "Not checked") badge for a kiosk punch saved offline that a manager should check. */
+/** "No photo", "No face" or "Not checked" badge for a kiosk punch saved offline that a manager should check. */
 export function NoFaceBadge({ punch }: { punch: Punch }) {
   if (punch.meta?.face === "unchecked") {
     return <Badge variant="warning" className="shrink-0" title="Saved offline; the face check wasn't working when it arrived" data-testid={`badge-not-checked-${punch.id}`}>Not checked</Badge>;
   }
   if (punch.meta?.face !== "missing") return null;
+  if (punch.meta.photo !== "saved") {
+    return <Badge variant="warning" className="shrink-0" title="Saved offline without a photo, so it couldn't be checked for a face" data-testid={`badge-no-photo-${punch.id}`}>No photo</Badge>;
+  }
   return <Badge variant="warning" className="shrink-0" title="Saved offline; no face was found in the photo" data-testid={`badge-no-face-${punch.id}`}>No face</Badge>;
 }
 
