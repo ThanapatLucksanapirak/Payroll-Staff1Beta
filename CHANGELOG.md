@@ -6,7 +6,7 @@ Settings → About, next to the matching update.
 Add an entry with every pull request: a `## YYYY-MM-DD · Title (#PR)` heading and a
 few short bullets written for the people who use the app, not for developers.
 
-## 2026-11-26 · "No photo" tag for offline punches without a photo (#PRNUM)
+## 2026-11-26 · "No photo" tag for offline punches without a photo (#39)
 - On Live, a punch saved on a tablet while it was offline and sent without a photo now says "No photo" instead of "No face". "No face" is only for a photo that shows no face.
 
 ## 2026-11-26 · Your server checks punch photos for a face (#37)
