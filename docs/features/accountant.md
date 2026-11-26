@@ -24,5 +24,5 @@
 ## Email sign-in codes (two-step verification)
 - Settings → Security → Two-step verification → **Email me codes** (needs email set up and a notification email on your account). Or **Use an app** for authenticator codes as before.
 - At sign-in, after the password, a 6-digit code is emailed. It expires in 10 minutes, allows 5 tries, and **Send a new code** waits 30 seconds between sends. Recovery codes still work.
-- Only an owner can change the notification email of someone who uses email codes, and it can't be cleared while they're on.
+- Changing your own notification email asks for your password. Only an owner can change the notification email of someone else who uses email codes, and it can't be cleared while they're on.
 - Marking a timesheet **Final** does not email anyone. Only **Publish** does.

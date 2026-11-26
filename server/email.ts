@@ -160,7 +160,8 @@ export async function sendEmail(msg: OutgoingEmail): Promise<SendResult> {
     return { ok: true, sent: to.length };
   } catch (err) {
     const error = cleanError(err, cfg);
-    console.error(`[email] could not send "${msg.subject}": ${error}`);
+    // Never log the subject: sign-in code emails carry the code in it.
+    console.error(`[email] could not send an email to ${to.length} recipient${to.length === 1 ? "" : "s"}: ${error}`);
     await recordStatus(false, error).catch(() => undefined);
     return { ok: false, error };
   }

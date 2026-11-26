@@ -19,7 +19,9 @@ export function SecuritySettings() {
   const [displayName, setDisplayName] = useState(app.user.displayName);
   const [email, setEmail] = useState(app.user.notificationEmail ?? "");
   const emailOk = !email.trim() || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
-  const profileChanged = displayName.trim() !== app.user.displayName || email.trim() !== (app.user.notificationEmail ?? "");
+  const emailChanged = email.trim() !== (app.user.notificationEmail ?? "");
+  const profileChanged = displayName.trim() !== app.user.displayName || emailChanged;
+  const [emailPw, setEmailPw] = useState("");
   const [current, setCurrent] = useState("");
   const [next, setNext] = useState("");
   const [confirmPw, setConfirmPw] = useState("");
@@ -40,7 +42,8 @@ export function SecuritySettings() {
 
   const saveProfile = async () => {
     try {
-      await api("PUT", "/api/auth/profile", { displayName: displayName.trim(), notificationEmail: email.trim() });
+      await api("PUT", "/api/auth/profile", { displayName: displayName.trim(), notificationEmail: email.trim(), ...(emailChanged ? { password: emailPw } : {}) });
+      setEmailPw("");
       await app.refresh();
       toast({ title: "Saved" });
     } catch (e) { toast({ title: "Couldn't save", description: errorMessage(e), variant: "destructive" }); }
@@ -59,7 +62,12 @@ export function SecuritySettings() {
           <Field label="Notification email" className="w-full sm:w-72" hint={!emailOk ? <span className="text-destructive">Enter a valid email address</span> : app.user.role === "accountant" ? "You get an email here when payroll is published." : "Optional. Where the app sends you emails."}>
             <Input type="email" inputMode="email" autoCapitalize="none" spellCheck={false} maxLength={200} value={email} onChange={(e) => setEmail(e.target.value)} placeholder="name@example.com" data-testid="input-profile-email" />
           </Field>
-          <Button type="submit" variant="outline" disabled={!profileChanged || !displayName.trim() || !emailOk} data-testid="button-profile-save">Save</Button>
+          {emailChanged && (
+            <Field label="Your password" className="w-full sm:w-56" hint="Needed to change your email.">
+              <Input type="password" autoComplete="current-password" value={emailPw} onChange={(e) => setEmailPw(e.target.value)} data-testid="input-profile-email-password" />
+            </Field>
+          )}
+          <Button type="submit" variant="outline" disabled={!profileChanged || !displayName.trim() || !emailOk || (emailChanged && !emailPw)} data-testid="button-profile-save">Save</Button>
         </form>
       </Section>
       <Section title="Change password" description="Changing it signs out every other device.">

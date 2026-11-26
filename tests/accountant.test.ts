@@ -268,7 +268,10 @@ test("accountants limited to a location only see that location's payroll and ema
 test("people set their own notification email; admins set others'", async () => {
   const bad = await call("PUT", "/api/auth/profile", { notificationEmail: "not an email" }, "acct");
   assert.equal(bad.status, 400);
-  const ok = await call("PUT", "/api/auth/profile", { notificationEmail: "books@example.com" }, "acct");
+  // Changing the email needs the password (codes and notices go there).
+  assert.equal((await call("PUT", "/api/auth/profile", { notificationEmail: "books@example.com" }, "acct")).status, 400);
+  assert.equal((await call("PUT", "/api/auth/profile", { notificationEmail: "books@example.com", password: "wrong" }, "acct")).status, 400);
+  const ok = await call("PUT", "/api/auth/profile", { notificationEmail: "books@example.com", password: "acct password" }, "acct");
   assert.equal(ok.status, 200);
   assert.equal(ok.body.notificationEmail, "books@example.com");
   assert.equal(ok.body.displayName, "acct", "display name unchanged");
@@ -357,7 +360,7 @@ test("emails come from Shijiri Payroll Service by default and look branded", asy
 
 test("an accountant turns on email codes and signs in with one", async () => {
   sent.length = 0;
-  await call("PUT", "/api/auth/profile", { notificationEmail: "dana@example.com" }, "acct");
+  assert.equal((await call("PUT", "/api/auth/profile", { notificationEmail: "dana@example.com", password: "acct password" }, "acct")).status, 200);
   const st = await call("GET", "/api/auth/2fa", undefined, "acct");
   assert.equal(st.body.emailAvailable, true);
   assert.equal(st.body.email, "d•••@example.com");
@@ -378,7 +381,12 @@ test("an accountant turns on email codes and signs in with one", async () => {
   assert.equal((await call("POST", "/api/auth/2fa/email/enable", { code }, "acct")).status, 400, "a code works once");
   assert.equal((await call("GET", "/api/auth/2fa", undefined, "acct")).body.method, "email");
   // The email can't be removed while it's used for codes.
-  assert.equal((await call("PUT", "/api/auth/profile", { notificationEmail: "" }, "acct")).status, 409);
+  assert.equal((await call("PUT", "/api/auth/profile", { notificationEmail: "" }, "acct")).status, 400, "password needed");
+  assert.equal((await call("PUT", "/api/auth/profile", { notificationEmail: "", password: "acct password" }, "acct")).status, 409);
+  // A session alone can't move the codes to another address.
+  assert.equal((await call("PUT", "/api/auth/profile", { notificationEmail: "evil@example.com" }, "acct")).status, 400);
+  // The same email again needs no password.
+  assert.equal((await call("PUT", "/api/auth/profile", { notificationEmail: "dana@example.com", displayName: "Dana" }, "acct")).status, 200);
 
   // Sign in: password, then the emailed code.
   const login = await call("POST", "/api/auth/login", { username: "acct", password: "acct password" });
@@ -411,6 +419,22 @@ test("emailed codes allow 5 tries and expire", async () => {
   await tf.sendEmailCode(u.id, "login", t0 + 60_000);
   const fresh = lastCode();
   assert.equal(await tf.useCode(u.id, fresh, t0 + 60_000 + tf.EMAIL_CODE_MS + 1), null, "expired");
+});
+
+test("a failed code email never logs the code", async () => {
+  const users = await import("../server/users");
+  const tf = await import("../server/twofactor");
+  const u = (await users.listUsers({ fresh: true })).find((x) => x.username === "acct")!;
+  const logs: string[] = [];
+  const orig = console.error;
+  console.error = (...a: unknown[]) => { logs.push(a.map(String).join(" ")); };
+  failSend = "Server down";
+  try {
+    const r = await tf.sendEmailCode(u.id, "login", Date.now() + 10 * 60_000);
+    assert.equal(r.ok, false);
+  } finally { failSend = null; console.error = orig; }
+  assert.ok(logs.some((l) => l.includes("[email] could not send")), logs.join("\n"));
+  assert.ok(!logs.some((l) => /\d{3} \d{3}/.test(l)), "no code in the log");
 });
 
 test("only an owner can change the email of someone using email codes", async () => {
