@@ -28,7 +28,8 @@ punch") and a 320-pixel JPEG is taken at the moment they tap.
 **A punch needs a face in the photo.** Before sending, the kiosk checks the
 picture on the tablet itself (MediaPipe's BlazeFace model, served by this app
 from `/face/`; nothing leaves the device). The punch is stopped, with a message
-on screen, when:
+on screen, when (the model must be at least 70% sure, on two frames a moment
+apart):
 
 - the camera is blocked (permission denied): "Camera blocked…";
 - there is no camera or it stopped: "Camera not available…";
@@ -40,7 +41,8 @@ is in view. The server also refuses a live punch without a photo. Punches saved
 on the tablet while it was offline are still accepted without one, so they are
 never lost; they show the "no photo" icon on Live. If a tablet's camera breaks, add the punches on Live or turn
 photos off for that device. On a very old tablet that can't run the face model,
-the covered/black check still applies.
+the covered/black check still applies. The face check runs on the tablet; the
+server checks that a photo came with the punch, not what is in it.
 
 - Photos are files on the server: `DATA_DIR/punch-photos/<location>/<punch>.jpg`
   (set `PUNCH_PHOTO_DIR` to move them).

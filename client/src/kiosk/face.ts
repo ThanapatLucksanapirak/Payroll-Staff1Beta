@@ -15,6 +15,13 @@ export type FaceResult =
 
 let detector: Promise<FaceDetector | null> | null = null;
 
+/**
+ * How sure the model must be that it sees a face. Real faces score about 0.95;
+ * patterns and objects that only look a bit like one (e.g. Chrome's fake
+ * test camera) score 0.3 to 0.6, so 0.5 let them through. 0.7 leaves room for real faces in poor light.
+ */
+const MIN_SCORE = 0.7;
+
 /** Load the detector once (shared by every check). Resolves to null when it can't run here. */
 export function loadFaceDetector(): Promise<FaceDetector | null> {
   if (detector) return detector;
@@ -26,7 +33,7 @@ export function loadFaceDetector(): Promise<FaceDetector | null> {
       const name = simd ? "vision_wasm_internal" : "vision_wasm_nosimd_internal";
       return await vision.FaceDetector.createFromOptions(
         { wasmLoaderPath: `/face/${name}.js`, wasmBinaryPath: `/face/${name}.wasm` },
-        { baseOptions: { modelAssetPath: "/face/blaze_face_short_range.tflite", delegate: "CPU" }, runningMode: "IMAGE", minDetectionConfidence: 0.5 },
+        { baseOptions: { modelAssetPath: "/face/blaze_face_short_range.tflite", delegate: "CPU" }, runningMode: "IMAGE", minDetectionConfidence: MIN_SCORE },
       );
     } catch (err) {
       console.warn("[kiosk] face detector unavailable; using the covered-camera check only", err);
@@ -63,10 +70,12 @@ export async function checkFace(canvas: HTMLCanvasElement): Promise<FaceResult> 
   if (!d) return { ok: true }; // detector can't run on this device: the covered check above still applies
   try {
     const r = d.detect(canvas);
-    return r.detections.length > 0 ? { ok: true } : { ok: false, reason: "no_face" };
+    const face = r.detections.some((x) => (x.categories?.[0]?.score ?? 0) >= MIN_SCORE);
+    return face ? { ok: true } : { ok: false, reason: "no_face" };
   } catch (err) {
+    // The detector runs here but failed on this frame: don't let the punch through.
     console.warn("[kiosk] face check failed", err);
-    return { ok: true };
+    return { ok: false, reason: "no_frame" };
   }
 }
 

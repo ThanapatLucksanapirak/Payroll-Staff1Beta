@@ -121,6 +121,11 @@ export function useCamera(active: boolean) {
     if (!canvas) return { ok: false, message: FACE_MESSAGES.no_frame };
     const face = await checkFace(canvas);
     if (!face.ok) return { ok: false, message: FACE_MESSAGES[face.reason] };
+    // Confirm on a second frame a moment later, so one lucky frame isn't enough.
+    await new Promise((r) => setTimeout(r, 150));
+    const again = frame();
+    const second = again ? await checkFace(again) : ({ ok: false, reason: "no_frame" } as const);
+    if (!second.ok) return { ok: false, message: FACE_MESSAGES[second.reason] };
     try {
       const url = canvas.toDataURL("image/jpeg", QUALITY);
       return url.startsWith("data:image/jpeg") ? { ok: true, photo: url } : { ok: false, message: FACE_MESSAGES.no_frame };
