@@ -18,6 +18,7 @@ export function SecuritySettings() {
   const confirm = useConfirm();
   const [displayName, setDisplayName] = useState(app.user.displayName);
   const [username, setUsername] = useState(app.user.username);
+  const canRename = isAdmin(app.user); // only owners and administrators can change a sign-in username
   const [email, setEmail] = useState(app.user.notificationEmail ?? "");
   const emailOk = !email.trim() || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
   const [current, setCurrent] = useState("");
@@ -42,7 +43,7 @@ export function SecuritySettings() {
   const saveProfile = async () => {
     const u = username.trim();
     try {
-      await api("PUT", "/api/auth/profile", { username: u, displayName: displayName.trim(), notificationEmail: email.trim() });
+      await api("PUT", "/api/auth/profile", { ...(canRename ? { username: u } : {}), displayName: displayName.trim(), notificationEmail: email.trim() });
       await app.refresh();
       toast({ title: "Saved", description: u !== app.user.username ? `From now on, sign in as "${u}".` : undefined });
     } catch (e) { toast({ title: "Couldn't save", description: errorMessage(e), variant: "destructive" }); }
@@ -57,7 +58,7 @@ export function SecuritySettings() {
     <div className="space-y-5">
       <Section title="Your account" description={`You sign in as "${app.user.username}" · ${ROLE_LABELS[app.user.role]}`}>
         <form className="grid gap-3 sm:grid-cols-2 items-start" onSubmit={(e) => { e.preventDefault(); if (profileChanged && username.trim().length >= 2 && emailOk) void saveProfile(); }}>
-          <Field label="Sign-in username" hint="What you type on the sign-in screen."><Input value={username} maxLength={64} autoCapitalize="none" autoCorrect="off" spellCheck={false} autoComplete="username" onChange={(e) => setUsername(e.target.value)} data-testid="input-profile-username" /></Field>
+          <Field label="Sign-in username" hint={canRename ? "What you type on the sign-in screen." : "What you type on the sign-in screen. Ask an owner or administrator to change it."}><Input value={username} readOnly={!canRename} maxLength={64} autoCapitalize="none" autoCorrect="off" spellCheck={false} autoComplete="username" onChange={(e) => setUsername(e.target.value)} data-testid="input-profile-username" /></Field>
           <Field label="Display name" hint="Shown in the app and on reports. Not used to sign in."><Input value={displayName} maxLength={100} autoComplete="off" onChange={(e) => setDisplayName(e.target.value)} data-testid="input-profile-name" /></Field>
           <Field label="Notification email" className="sm:col-span-2" hint={!emailOk ? <span className="text-destructive">Enter a valid email address</span> : app.user.role === "accountant" ? "You get an email here when payroll is published." : "Optional. Where the app sends you emails."}>
             <Input type="email" inputMode="email" autoCapitalize="none" spellCheck={false} maxLength={200} value={email} onChange={(e) => setEmail(e.target.value)} placeholder="name@example.com" data-testid="input-profile-email" />

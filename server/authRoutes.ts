@@ -7,7 +7,7 @@ import { clearSessionCookie, clearSetupCode, currentUser, loginThrottle, recordL
 import { actorOf, audit, queryAudit } from "./audit";
 import {
   type UserRecord, ROLE_LABELS, bumpSessionVersion, createUser, createUserSchema, deleteUser, displayNameSchema, getUser, listUsers,
-  notificationEmailSchema, passwordSchema, setUserPassword, setupRequired, toPublic, updateProfile, updateUser, updateUserSchema, usernameSchema, authenticate,
+  isAdmin, notificationEmailSchema, passwordSchema, setUserPassword, setupRequired, toPublic, updateProfile, updateUser, updateUserSchema, usernameSchema, authenticate,
 } from "./users";
 import { verifyHash } from "./passwords";
 import { loginStep } from "./twofactor";
@@ -117,6 +117,10 @@ export function registerAuthRoutes(app: Express) {
   app.put("/api/auth/profile", h(async (req, res) => {
     const u = me(res);
     const body = z.object({ displayName: displayNameSchema.optional(), username: usernameSchema.optional(), notificationEmail: notificationEmailSchema.optional() }).parse(req.body ?? {});
+    // Only owners and administrators may change a sign-in username (their own included).
+    if (body.username !== undefined && body.username.trim().toLowerCase() !== u.username.toLowerCase() && !isAdmin(u)) {
+      return res.status(403).json({ error: "Only an owner or administrator can change a sign-in username." });
+    }
     const updated = await updateProfile(u.id, body);
     const what = [body.username && updated.username !== u.username ? `username ${u.username} → ${updated.username}` : "", body.displayName !== undefined ? "display name" : "", body.notificationEmail !== undefined ? "notification email" : ""].filter(Boolean).join("; ");
     audit({ ...actorOf(req, res, updated), action: "user.update", target: `user:${u.id}`, detail: what || "no changes" });
