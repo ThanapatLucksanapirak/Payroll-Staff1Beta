@@ -10,6 +10,9 @@ few short bullets written for the people who use the app, not for developers.
 - After too many wrong PINs, the time clock counts down to when it unlocks ("Try again in 0:57") instead of a fixed message, also after it goes back to the start screen, and then says "You can try again now."
 - On small phones, wrong-PIN messages and the name-then-PIN screen fit without scrolling.
 
+## 2026-11-26 · Face check works on the kiosk web address (#35)
+- On the time clock's own web address, the face check couldn't load, so every punch said "This tablet couldn't check for a face", on iPhone and iPad too. It loads now, and faces are recognized again.
+
 ## 2026-11-26 · Clearer camera messages on the time clock (#34)
 - When the camera has been denied for the time clock, the screen now says "Camera blocked" (with how to fix it) instead of "Camera not available", also on Android tablets.
 - The no-face messages all say the same thing: show your face to the camera and try again.
