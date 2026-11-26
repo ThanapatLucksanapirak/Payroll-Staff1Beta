@@ -9,7 +9,7 @@ import { downloadBlob, safeFilename } from "@/lib/doc";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { type HoursData, type Me, type ScheduleData, type StatementData, type StatementItem, type TimeOffItem, PortalError, call, useLoad } from "./api";
-import { clock, dayLabel, hm, minutesClock, money, range, shortDate } from "./format";
+import { clock, dayLabel, hm, hoursView, minutesClock, money, range, shortDate } from "./format";
 
 // ── Building blocks ──────────────────────────────────────────────────────────
 function Title({ children, sub }: { children: React.ReactNode; sub?: React.ReactNode }) {
@@ -94,13 +94,14 @@ export function HoursTab({ me }: { me: Me }) {
   // No time-clock days, but a finalized timesheet covers this period (hours from Square or a
   // spreadsheet): show those hours, so the page doesn't say zero next to a paid statement.
   const sheets = d?.timesheets ?? [];
-  const fromSheets = !!d && !d.days.length && sheets.length > 0;
-  const sheetMinutes = sheets.reduce((a, t) => a + t.minutes, 0);
+  const view = d ? hoursView(d, me.site.timeClock) : null;
+  const fromSheets = !!view?.fromSheets;
+  const sheetMinutes = view?.sheetMinutes ?? 0;
   return (
     <section data-testid="portal-hours">
       <Title sub={d ? range(d.period.start, d.period.end) : " "}>My hours</Title>
       <Segmented value={offset} onChange={setOffset} options={[{ id: 0, label: "This pay period" }, { id: -1, label: "Last period" }]} />
-      {!me.site.timeClock && <p className={`mb-4 ${NOTE}`}>{me.site.name} doesn't use the time clock, so hours may not show here.</p>}
+      {view?.noClockNote && <p className={`mb-4 ${NOTE}`} data-testid="portal-hours-no-clock">{me.site.name} doesn't use the time clock. Your hours show here once a pay period with them is closed, and on your pay statement under My pay.</p>}
       {q.error && !d ? <ErrorBox text={q.error} retry={q.reload} /> : !d || (q.loading && d.offset !== offset) ? <Loading /> : (
         <>
           <div className="mb-6 rounded-2xl border border-card-border bg-card px-5 py-5 shadow-card">

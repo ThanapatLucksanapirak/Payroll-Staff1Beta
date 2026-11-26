@@ -7,6 +7,7 @@ import { DEFAULT_RULES, employeeConfigSchema, type Shift } from "../shared/schem
 import { timesheetChecklist } from "../shared/payrollChecklist";
 import { defaultPayBasis, newDoc, syncEmployees } from "../client/src/lib/doc";
 import { site as makeSite } from "./pdf-fixture";
+import { hoursView } from "../client/src/portal/format";
 
 const site = makeSite();
 
@@ -44,4 +45,13 @@ test("flagged days: hourly staff are paid for the hours, and the checklist says 
   assert.match(item.detail, /Day rate: Ben Lee\. Open a day on the Payroll tab/);
   assert.match(item.detail, /Hourly: Ana Ruiz\. Hourly staff are paid for the hours worked/);
   assert.doesNotMatch(item.detail, /Decide how to pay/);
+});
+
+test("portal My hours: the no-time-clock note never sits above hours", () => {
+  const sheet = { minutes: 660 };
+  assert.deepEqual(hoursView({ days: [], timesheets: [sheet] }, false), { fromSheets: true, sheetMinutes: 660, noClockNote: false }, "statement hours shown, no note");
+  assert.equal(hoursView({ days: [], timesheets: [] }, false).noClockNote, true, "nothing to show: the note explains why");
+  assert.equal(hoursView({ days: [{}] }, false).noClockNote, false, "time-clock days shown (location switched to Square later)");
+  assert.equal(hoursView({ days: [] }, true).noClockNote, false, "uses the time clock: the empty text covers it");
+  assert.equal(hoursView({ days: [{}], timesheets: [sheet] }, true).fromSheets, false, "time-clock days win over statement hours");
 });
