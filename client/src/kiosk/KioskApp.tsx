@@ -397,13 +397,13 @@ function CameraPreview({ attach, status, faceSeen }: { attach: (el: HTMLVideoEle
   const broken = status === "blocked" || status === "unavailable";
   const warn = broken || faceSeen === false;
   return (
-    <div className={`pointer-events-none fixed bottom-4 left-4 z-40 flex items-center gap-3 rounded-2xl p-2 pr-4 shadow-lg ring-1 ${warn ? "bg-red-50 ring-red-300" : "bg-white/95 ring-neutral-200"}`} data-testid="kiosk-camera" data-status={status} data-face={faceSeen === null ? "" : faceSeen ? "yes" : "no"}>
+    <div className={`pointer-events-none fixed bottom-4 left-4 z-40 flex items-center gap-3 rounded-2xl p-2 pr-4 shadow-lg ring-1 ${warn ? "bg-red-50 ring-red-300" : "bg-white/95 ring-stone-200"}`} data-testid="kiosk-camera" data-status={status} data-face={faceSeen === null ? "" : faceSeen ? "yes" : "no"}>
       {broken ? (
         <span className="flex h-16 w-16 items-center justify-center rounded-xl bg-red-100 text-red-700"><CameraOff className="h-7 w-7" /></span>
       ) : (
-        <video ref={attach} className={`h-16 w-16 -scale-x-100 rounded-xl bg-neutral-200 object-cover ${faceSeen === false ? "ring-2 ring-red-400" : faceSeen ? "ring-2 ring-emerald-400" : ""}`} muted playsInline autoPlay />
+        <video ref={attach} className={`h-16 w-16 -scale-x-100 rounded-xl bg-stone-200 object-cover ${faceSeen === false ? "ring-2 ring-red-400" : faceSeen ? "ring-2 ring-emerald-400" : ""}`} muted playsInline autoPlay />
       )}
-      <span className={`text-sm font-medium ${warn ? "text-red-900" : "text-neutral-700"}`}>
+      <span className={`text-sm font-medium ${warn ? "text-red-900" : "text-stone-700"}`}>
         {status === "blocked" ? <>Camera blocked<br /><span className="font-normal">Punching needs the camera</span></>
           : status === "unavailable" ? <>Camera not available<br /><span className="font-normal">Punching needs the camera</span></>
           : faceSeen === false ? <>Face not detected<br /><span className="font-normal">Look at the camera</span></>

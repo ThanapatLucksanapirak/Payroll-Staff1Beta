@@ -288,7 +288,7 @@ export interface BrandedEmail {
 export function brandedHtml(e: BrandedEmail): string {
   const x = escapeHtml;
   // Every colour the email uses, in one place (light only). Text colours are
-  // at least 4.5:1 on the surfaces they sit on (#ffffff, #f2f2f7, C.panel).
+  // at least 4.5:1 on the surfaces they sit on (C.card, C.page, C.panel).
   const C = {
     // Shijiri: warm rice-paper page, plum accent (DESIGN.md → Emails).
     page: "#f4f1ee", card: "#ffffff", border: "#e6e2de",
@@ -322,11 +322,11 @@ ${e.preheader ? `<div style="display:none;max-height:0;overflow:hidden;opacity:0
 <tr><td style="padding:0 4px 18px"><table role="presentation" cellpadding="0" cellspacing="0"><tr>
 <td width="36" height="36" style="width:36px;height:36px;border-radius:10px;background:${C.tile};color:${C.tileText};font-family:Georgia,'Times New Roman',serif;font-size:20px;line-height:36px;font-weight:400;text-align:center;vertical-align:middle">${initial}</td>
 <td style="padding-left:10px;font-size:15px;font-weight:600;color:${C.text}">${x(e.brand)}</td></tr></table></td></tr>
-<tr><td style="background:#ffffff;border-radius:18px;padding:32px 28px;border:1px solid #e5e5ea">
-<h1 style="margin:0 0 14px;font-size:22px;line-height:28px;font-weight:700;color:#1d1d1f">${x(e.heading)}</h1>
+<tr><td style="background:${C.card};border-radius:18px;padding:32px 28px;border:1px solid ${C.border}">
+<h1 style="margin:0 0 14px;font-size:22px;line-height:28px;font-weight:700;color:${C.text}">${x(e.heading)}</h1>
 ${e.paragraphs.map(para).join("\n")}${code}${details}${button}
 </td></tr>
-<tr><td style="padding:18px 8px 0;font-size:12px;line-height:18px;color:#8e8e93;text-align:center">${x(e.footer ?? `Sent by ${e.brand}.`)}${NOTE_SLOT}</td></tr>
+<tr><td style="padding:18px 8px 0;font-size:12px;line-height:18px;color:${C.muted};text-align:center">${x(e.footer ?? `Sent by ${e.brand}.`)}${NOTE_SLOT}</td></tr>
 </table></td></tr></table></body></html>`;
 }
 
