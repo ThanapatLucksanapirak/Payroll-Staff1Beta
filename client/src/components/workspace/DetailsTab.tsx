@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { RotateCcw } from "lucide-react";
 import { useApp } from "@/context/AppData";
 import { useConfirm } from "@/components/ConfirmDialog";
+import { finalizeDescription } from "@/lib/doc";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -16,6 +17,16 @@ export function DetailsTab(p: WsProps) {
   const { doc, edit, locked, site } = p;
   const [showRules, setShowRules] = useState(false);
   const differs = JSON.stringify(doc.rules) !== JSON.stringify(site.rules);
+  // Pay period: typed here first, saved only when it makes sense (From on or before To).
+  const [period, setPeriod] = useState({ start: doc.periodStart, end: doc.periodEnd });
+  useEffect(() => { setPeriod({ start: doc.periodStart, end: doc.periodEnd }); }, [doc.periodStart, doc.periodEnd]);
+  const periodBad = !!period.start && !!period.end && period.start > period.end;
+  const setPeriodPart = (part: Partial<typeof period>) => {
+    const next = { ...period, ...part };
+    setPeriod(next);
+    if (next.start && next.end && next.start > next.end) return;
+    edit((d) => ({ ...d, periodStart: next.start, periodEnd: next.end }), "period");
+  };
 
   return (
     <div className="grid items-start gap-4 lg:grid-cols-[1fr_1.4fr]">
@@ -29,10 +40,20 @@ export function DetailsTab(p: WsProps) {
             </Select>
           </Field>
           <Field label="Status" hint={doc.status === "final" ? "Locked. An owner can reopen it from the banner above." : "Finalizing locks the timesheet and takes any advance repayments."}>
-            <Select value={doc.status} onValueChange={(v) => edit((d) => ({ ...d, status: v as any }))} disabled={doc.status === "final"}>
+            <Select value={doc.status} onValueChange={async (v) => {
+              if (v === "final" && !(await confirm({ title: "Mark this timesheet as final?", description: finalizeDescription(app.user.role === "owner"), confirmLabel: "Mark as final" }))) return;
+              edit((d) => ({ ...d, status: v as any }));
+            }} disabled={doc.status === "final"}>
               <SelectTrigger data-testid="select-details-status"><SelectValue /></SelectTrigger>
               <SelectContent><SelectItem value="draft">Draft — still editing</SelectItem><SelectItem value="final">Final — locked</SelectItem></SelectContent>
             </Select>
+          </Field>
+          <Field label="Pay period" hint={periodBad ? undefined : doc.periodStart && doc.periodEnd ? "Shown on the PDFs and in emails. Shifts outside it widen it." : "Not set: it runs from the first to the last shift."}>
+            <div className="grid gap-2 sm:grid-cols-2">
+              <Input type="date" aria-label="Pay period from" aria-invalid={periodBad || undefined} value={period.start} max={period.end || undefined} disabled={locked} onChange={(e) => setPeriodPart({ start: e.target.value })} data-testid="input-details-period-start" />
+              <Input type="date" aria-label="Pay period to" aria-invalid={periodBad || undefined} value={period.end} min={period.start || undefined} disabled={locked} onChange={(e) => setPeriodPart({ end: e.target.value })} data-testid="input-details-period-end" />
+            </div>
+            {periodBad && <p className="mt-1.5 text-xs text-destructive" role="alert" data-testid="text-period-error">"From" is after "To". Pick a From date on or before the To date. This isn't saved until it's fixed.</p>}
           </Field>
           <Field label="Notes"><Textarea rows={4} value={doc.notes} disabled={locked} onChange={(e) => edit((d) => ({ ...d, notes: e.target.value }), "notes")} placeholder="Anything to remember about this pay period" data-testid="input-details-notes" /></Field>
           <div className="space-y-0.5 border-t border-border/70 pt-3 text-xs text-muted-foreground">

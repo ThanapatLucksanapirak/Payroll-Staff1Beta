@@ -124,6 +124,7 @@ test("preview shows the email and sends nothing", async () => {
   assert.deepEqual(r.body.cc, ["hashi@example.com"]);
   assert.equal(r.body.replyTo, "hashi@example.com", "the accountant can reply to the sender");
   assert.match(r.body.subject, /^Payroll documents/);
+  assert.match(r.body.subject, /Jan 5, 2026 – Jan 11, 2026$/, "the subject uses the timesheet's pay period, not just the days with shifts");
   assert.deepEqual(r.body.attachments.map((a: any) => a.filename), ["Main Location Week 1 - Full report.pdf", "Main Location Week 1 - Pay statements.pdf"].map((n) => r.body.attachments[0].filename.startsWith("Main") ? n : n.replace(/^Main Location /, "")));
   assert.ok(r.body.html.includes("Hi &lt;b&gt;Dana&lt;/b&gt;"), "the message is escaped");
   assert.ok(!r.body.html.includes("<b>Dana"), "no raw HTML from the message");

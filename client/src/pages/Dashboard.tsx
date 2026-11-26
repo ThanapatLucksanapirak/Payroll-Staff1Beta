@@ -5,7 +5,7 @@ import { AlertTriangle, ArrowUpDown, CalendarRange, Tablet, Copy, Lock, LockOpen
 import type { Site, TimesheetSummary } from "@shared/schema";
 import { useApp } from "@/context/AppData";
 import { api, errorMessage, queryClient } from "@/lib/api";
-import { timeAgo } from "@/lib/doc";
+import { finalizeDescription, timeAgo } from "@/lib/doc";
 import { safeStorage } from "@/lib/storage";
 import { canEdit, isAccountant, isAdmin } from "@/lib/roles";
 import { useToast } from "@/hooks/use-toast";
@@ -99,7 +99,11 @@ export function Dashboard() {
       t={t}
       onRename={() => setRenaming(t)}
       onDuplicate={() => duplicate.mutate(t.id)}
-      onToggleFinal={() => (t.status === "final" ? setReopening(t) : patch.mutate({ id: t.id, body: { status: "final" } }))}
+      onToggleFinal={async () => {
+        if (t.status === "final") return setReopening(t);
+        const ok = await confirm({ title: `Mark “${t.customLabel || t.filename || "Untitled"}” as final?`, description: finalizeDescription(app.user.role === "owner"), confirmLabel: "Mark as final" });
+        if (ok) patch.mutate({ id: t.id, body: { status: "final" } });
+      }}
       onMove={(s) => patch.mutate({ id: t.id, body: { siteId: s.id } }, { onSuccess: () => toast({ title: `Moved to ${s.name}` }) })}
       onDelete={() => remove.mutate(t.id)}
     />

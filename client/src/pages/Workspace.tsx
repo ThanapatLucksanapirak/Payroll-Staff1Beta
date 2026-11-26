@@ -1,15 +1,16 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "wouter";
-import { AlertTriangle, Banknote, Mail, BookOpen, Check, ChevronLeft, Circle, CloudOff, Download, FileDown, FileSpreadsheet, FileText, Files, ListChecks, Loader2, Lock, Redo2, RefreshCw, Save, Table2, Undo2 } from "lucide-react";
+import { AlertTriangle, Banknote, Mail, BookOpen, Check, ChevronDown, ChevronLeft, Circle, CloudOff, Download, FileDown, FileSpreadsheet, FileText, Files, ListChecks, Loader2, Lock, Redo2, RefreshCw, Save, Table2, Undo2 } from "lucide-react";
 import { computePayroll } from "@shared/engine";
 import { computeTimesheet, journalCsv, ytdStatementMap } from "@shared/payExtras";
 import { useApp } from "@/context/AppData";
 import { useTimesheet, type SaveState } from "@/hooks/useTimesheet";
-import { downloadBlob, safeFilename, timeAgo } from "@/lib/doc";
+import { downloadBlob, finalizeDescription, safeFilename, timeAgo } from "@/lib/doc";
 import { shiftsToCsv } from "@shared/importers/csv";
 import { errorMessage } from "@/lib/api";
 import { can, canEdit, isAccountant, isAdmin } from "@/lib/roles";
 import { useToast } from "@/hooks/use-toast";
+import { useConfirm } from "@/components/ConfirmDialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -33,6 +34,7 @@ import { ShareDialog, type ReportKind } from "@/components/pay/ShareDialog";
 export function WorkspacePage({ id }: { id: string }) {
   const app = useApp();
   const { toast } = useToast();
+  const confirm = useConfirm();
   const readOnly = !canEdit(app.user);
   const accountant = isAccountant(app.user);
   const ts = useTimesheet(id, { autosave: app.prefs.autosave && !readOnly });
@@ -63,6 +65,14 @@ export function WorkspacePage({ id }: { id: string }) {
   useEffect(() => {
     if (finalizing.current && ts.saveState === "saved" && !ts.dirty) { finalizing.current = false; invalidatePay(doc?.siteId ?? app.site.id); void ts.reload(); }
   }, [ts.saveState, ts.dirty]); // eslint-disable-line react-hooks/exhaustive-deps
+  // "Mark as final" saves straight away (autosave on or off), once the edit has rendered.
+  const [finalRequested, setFinalRequested] = useState(false);
+  useEffect(() => {
+    if (finalRequested && doc?.status === "final") {
+      setFinalRequested(false);
+      void ts.save().then((ok) => { if (ok) toast({ title: "Marked as final", description: "It's locked. Use Export to download the PDFs or email them." }); });
+    }
+  }, [finalRequested, doc?.status]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (ts.loadError) {
     return (
@@ -88,24 +98,38 @@ export function WorkspacePage({ id }: { id: string }) {
   /** The same PDF as Export, as bytes (for emailing). */
   const makePdf = async (kind: ReportKind): Promise<ArrayBuffer> => {
     const pdf = await import("@/lib/pdf");
-    const o = { result, prefs: app.prefs, site, title: doc.label || `Payroll ${periodTitle}`, notes: doc.notes, ytd: ytd.data ? ytdStatementMap(ytd.data.rows, result) : undefined, ytdYear, cash: pay.settings.cash };
+    const o = { result, prefs: app.prefs, site, title: doc.label || `Payroll ${periodTitle}`, notes: doc.notes, ytd: ytd.data ? ytdStatementMap(ytd.data.rows, result) : undefined, ytdYear, cash: pay.settings.cash, draft: doc.status !== "final" };
     const build = kind === "summary" ? pdf.buildSummaryPdf : kind === "statements" ? pdf.buildPayStatementsPdf : kind === "payout" ? pdf.buildPayoutSheetPdf : pdf.buildPayrollPdf;
     return build(o).output("arraybuffer");
   };
-  const canShare = isAdmin(app.user) && doc.status === "final" && !ts.dirty;
+  const admin = isAdmin(app.user);
+  const canShare = admin && doc.status === "final" && !ts.dirty;
+  /** Why "Email PDFs…" is greyed out, if it is. */
+  const shareBlocked = doc.status !== "final" ? "Mark as final first" : ts.dirty ? "Save changes first" : null;
+  const canFinalize = !readOnly && doc.status === "draft";
+  const markFinal = async () => {
+    const ok = await confirm({
+      title: `Mark “${title}” as final?`,
+      description: finalizeDescription(app.user.role === "owner"),
+      confirmLabel: "Mark as final",
+    });
+    if (!ok) return;
+    ts.edit((d) => ({ ...d, status: "final" }));
+    setFinalRequested(true);
+  };
 
   const exportPdf = async (kind: "report" | "summary" | "statements" | "payout" = "report") => {
     try {
       const pdf = await import("@/lib/pdf");
       // YTD on statements: finalized timesheets of the year (other than this one) plus this one.
-      const o = { result, prefs: app.prefs, site, title: doc.label || `Payroll ${periodTitle}`, notes: doc.notes, ytd: ytd.data ? ytdStatementMap(ytd.data.rows, result) : undefined, ytdYear, cash: pay.settings.cash };
+      const o = { result, prefs: app.prefs, site, title: doc.label || `Payroll ${periodTitle}`, notes: doc.notes, ytd: ytd.data ? ytdStatementMap(ytd.data.rows, result) : undefined, ytdYear, cash: pay.settings.cash, draft: doc.status !== "final" };
       if (kind === "summary") pdf.downloadSummaryPdf({ ...o, fileBase: `${base}_summary` });
       else if (kind === "statements") pdf.downloadPayStatementsPdf({ ...o, fileBase: `${base}_pay_statements` });
       else if (kind === "payout") pdf.downloadPayoutSheetPdf({ ...o, fileBase: `${base}_payout` });
       else pdf.downloadPayrollPdf({ ...o, fileBase: `${base}_payroll` });
     } catch (e) { toast({ title: "PDF export failed", description: errorMessage(e), variant: "destructive" }); }
   };
-  const base = safeFilename(`${site.name} ${doc.label || result.periodStart || "payroll"}`);
+  const base = safeFilename(`${site.name} ${doc.label || result.periodStart || "payroll"}${doc.status === "final" ? "" : " DRAFT"}`);
 
   return (
     <div className="mx-auto max-w-[94rem] px-4 pb-16 sm:px-8">
@@ -115,14 +139,14 @@ export function WorkspacePage({ id }: { id: string }) {
           <ChevronLeft className="h-4 w-4" />Timesheets
         </Link>
         <div className="flex flex-wrap items-start gap-x-3 gap-y-2">
-          <div className="min-w-0 flex-1 max-sm:basis-full">
+          <div className="min-w-0 flex-1 max-sm:basis-full sm:min-w-[20rem]">
             <h1 className="flex items-center gap-x-2.5 text-[20px] font-bold leading-7 tracking-tight sm:text-[26px] sm:leading-8">
               <span className="line-clamp-1 break-all sm:break-words" data-testid="text-timesheet-title">{title}</span>
               {doc.status === "final" ? <Badge variant="success"><Lock />Final</Badge> : <Badge variant="secondary">Draft</Badge>}
             </h1>
             <p className="mt-1 flex flex-wrap items-center gap-x-1.5 text-[13px] text-muted-foreground"><span className="inline-flex items-center gap-1.5 whitespace-nowrap"><SiteDot color={site.color} />{site.name}</span><span aria-hidden className="hidden sm:inline">·</span><span className="basis-full whitespace-nowrap tabular sm:basis-auto">{periodTitle}</span></p>
           </div>
-          <div className="flex w-full items-center gap-1 sm:w-auto">
+          <div className="ml-auto flex w-full flex-wrap items-center gap-1 sm:w-auto">
             <SaveIndicator state={ts.saveState} error={ts.saveError} savedAt={ts.lastSavedAt} legacy={ts.legacy} />
             <div className="mx-1 hidden h-5 w-px bg-border sm:block" aria-hidden />
             <Tooltip><TooltipTrigger asChild><Button variant="ghost" size="icon" className="max-sm:h-10 max-sm:w-10" onClick={ts.undo} disabled={!ts.canUndo} aria-label="Undo" data-testid="button-undo"><Undo2 /></Button></TooltipTrigger><TooltipContent>Undo (Ctrl+Z)</TooltipContent></Tooltip>
@@ -130,25 +154,45 @@ export function WorkspacePage({ id }: { id: string }) {
             {!readOnly && (!app.prefs.autosave || ts.saveState === "error" || ts.legacy) && (
               <Button variant="outline" size="sm" className="max-sm:h-10" onClick={() => ts.save()} disabled={ts.saveState === "saving" || (!ts.dirty && !ts.legacy)} data-testid="button-save"><Save /> Save</Button>
             )}
-            {can(app.user, "export") && <DropdownMenu>
-              <DropdownMenuTrigger asChild><Button size="sm" className="ml-auto max-sm:h-10 max-sm:w-10 max-sm:px-0 sm:ml-1" aria-label="Export" data-testid="button-export"><Download /><span className="hidden sm:inline">Export</span></Button></DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-56">
-                {!accountant && <>
-                  <DropdownMenuItem onClick={() => setChecklist(true)} data-testid="button-payroll-checklist"><ListChecks />Check before export…</DropdownMenuItem>
+            {/* The two main actions, always visible with their labels: Mark as final, then Export. */}
+            <div className="ml-auto flex items-center gap-1.5 sm:ml-1">
+              {canFinalize && (
+                <Button size="sm" className="max-sm:h-10" onClick={() => void markFinal()} disabled={ts.saveState === "saving" || ts.saveState === "conflict"} data-testid="button-mark-final"><Lock />Mark as final</Button>
+              )}
+              {can(app.user, "export") && <DropdownMenu>
+                <DropdownMenuTrigger asChild><Button size="sm" variant={doc.status === "draft" ? "outline" : "default"} className="max-sm:h-10" data-testid="button-export"><Download />Export<ChevronDown className="-mr-0.5 opacity-70" /></Button></DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-64">
+                  {doc.status === "draft" && <>
+                    {/* Order of things: downloads work on a draft (to check it); emailing needs it final. */}
+                    <p className="px-2 py-1.5 text-xs leading-snug text-muted-foreground" data-testid="text-export-draft-note">
+                      <span className="font-medium text-foreground">This is a draft.</span> You can download it to check, but the numbers can still change. Mark it as final to lock it, email the PDFs and publish it.
+                    </p>
+                    {canFinalize && <DropdownMenuItem onClick={() => void markFinal()} data-testid="button-mark-final-menu"><Lock />Mark as final…</DropdownMenuItem>}
+                    <DropdownMenuSeparator />
+                  </>}
+                  {!accountant && <>
+                    <DropdownMenuItem onClick={() => setChecklist(true)} data-testid="button-payroll-checklist"><ListChecks />Check before export…</DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                  </>}
+                  <DropdownMenuLabel>{doc.status === "draft" ? "Download draft" : "Download"}</DropdownMenuLabel>
+                  <DropdownMenuItem onClick={() => exportPdf("report")} data-testid="button-export-pdf"><FileDown />Full report (PDF)</DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => exportPdf("summary")} data-testid="button-export-summary-pdf"><FileText />Manager summary (PDF)</DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => exportPdf("statements")} data-testid="button-export-statements-pdf"><Files />Pay statements (PDF)</DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => exportPdf("payout")} data-testid="button-export-payout-pdf"><Banknote />Pay-out sheet (PDF)</DropdownMenuItem>
                   <DropdownMenuSeparator />
-                </>}
-                <DropdownMenuLabel>Export</DropdownMenuLabel>
-                <DropdownMenuItem onClick={() => exportPdf("report")} data-testid="button-export-pdf"><FileDown />Full report (PDF)</DropdownMenuItem>
-                <DropdownMenuItem onClick={() => exportPdf("summary")} data-testid="button-export-summary-pdf"><FileText />Manager summary (PDF)</DropdownMenuItem>
-                <DropdownMenuItem onClick={() => exportPdf("statements")} data-testid="button-export-statements-pdf"><Files />Pay statements (PDF)</DropdownMenuItem>
-                <DropdownMenuItem onClick={() => exportPdf("payout")} data-testid="button-export-payout-pdf"><Banknote />Pay-out sheet (PDF)</DropdownMenuItem>
-                {canShare && <DropdownMenuItem onClick={() => setSharing(true)} data-testid="button-share-open"><Mail />Email PDFs…</DropdownMenuItem>}
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={async () => downloadBlob((await import("@/lib/pdf")).payrollSummaryCsv(result), `${base}_summary.csv`, "text/csv")} data-testid="button-export-csv"><FileSpreadsheet />Summary CSV</DropdownMenuItem>
-                <DropdownMenuItem onClick={() => downloadBlob(shiftsToCsv(doc.shifts), `${base}_shifts.csv`, "text/csv")} data-testid="button-export-shifts"><Table2 />Shifts CSV (re-importable)</DropdownMenuItem>
-                <DropdownMenuItem onClick={() => downloadBlob(journalCsv(result, pay.settings.accounts, { date: result.periodEnd || doc.periodEnd, memo: `Payroll ${site.name} ${periodTitle}` }), `${base}_journal.csv`, "text/csv")} data-testid="button-export-journal"><BookOpen />Accounting journal (CSV)</DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>}
+                  <DropdownMenuItem onClick={async () => downloadBlob((await import("@/lib/pdf")).payrollSummaryCsv(result), `${base}_summary.csv`, "text/csv")} data-testid="button-export-csv"><FileSpreadsheet />Summary CSV</DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => downloadBlob(shiftsToCsv(doc.shifts), `${base}_shifts.csv`, "text/csv")} data-testid="button-export-shifts"><Table2 />Shifts CSV (re-importable)</DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => downloadBlob(journalCsv(result, pay.settings.accounts, { date: result.periodEnd || doc.periodEnd, memo: `Payroll ${site.name} ${periodTitle}` }), `${base}_journal.csv`, "text/csv")} data-testid="button-export-journal"><BookOpen />Accounting journal (CSV)</DropdownMenuItem>
+                  {admin && <>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuLabel>Send</DropdownMenuLabel>
+                    <DropdownMenuItem onClick={() => setSharing(true)} disabled={!canShare} data-testid="button-share-open">
+                      <Mail /><span className="flex min-w-0 flex-col">Email PDFs…{shareBlocked && <span className="text-xs font-normal text-muted-foreground">{shareBlocked}</span>}</span>
+                    </DropdownMenuItem>
+                  </>}
+                </DropdownMenuContent>
+              </DropdownMenu>}
+            </div>
           </div>
         </div>
       </div>
@@ -175,7 +219,7 @@ export function WorkspacePage({ id }: { id: string }) {
             {app.user.role === "owner" && <Button size="sm" variant="tinted" onClick={() => setReopening(true)} data-testid="button-reopen">Reopen…</Button>}
           </div>
         )}
-        {doc.status === "final" && !ts.dirty && <PublishPanel id={id} title={title} onShare={canShare ? () => setSharing(true) : undefined} />}
+        {doc.status === "final" && !ts.dirty && <PublishPanel id={id} title={title} />}
         {canShare && <ShareDialog id={id} open={sharing} onOpenChange={setSharing} makePdf={makePdf} />}
         {ts.saveState === "error" && ts.saveError && /finalized|locked/i.test(ts.saveError) && (
           <div className="flex flex-wrap items-center gap-3 rounded-xl bg-warning-soft px-4 py-3 text-[13px]" role="alert">
