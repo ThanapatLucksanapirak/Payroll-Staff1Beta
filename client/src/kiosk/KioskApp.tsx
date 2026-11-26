@@ -9,6 +9,7 @@ import {
 import { type CameraStatus, useCamera } from "./camera";
 import { ACTION_STYLE, BigSecondary, duration, firstName, fmt, initials, timeOf, useIdle } from "./ui";
 import { Mark } from "@/components/Logo";
+import { AndroidAppButton, useAndroidAppDownload } from "./appDownload";
 import { type Confirm, type FixInput, BreakNudge, ConfirmScreen, FixRequestScreen, GuardScreen, MessageScreen, NoteScreen, StationScreen } from "./screens";
 
 const STATUS_TEXT: Record<ClockStatus, string> = { in: "Working", break: "On break", out: "Not clocked in" };
@@ -367,12 +368,15 @@ function BigClock({ tz, compact }: { tz: string; compact?: boolean }) {
 
 function TopBar({ state, online, pending, onInfo, onExitFullscreen }: { state: KioskState; online: boolean; pending: number; onInfo: () => void; onExitFullscreen: (exit: () => void) => void }) {
   const fs = useFullscreen();
+  // Hidden in full screen, so staff using the clock don't leave it by accident.
+  const apk = useAndroidAppDownload();
   return (
     <header className="flex items-center gap-3 px-5 pt-2 sm:px-8 sm:pt-4">
       <Mark className="h-[22px] w-auto shrink-0 text-[#7a295e]" aria-hidden />
       <span className="text-lg text-stone-600" aria-hidden>·</span>
       <span className="truncate text-lg font-semibold text-stone-800" data-testid="kiosk-location">{state.site.name}</span>
       <div className="-mr-4 ml-auto flex items-center gap-1">
+        {apk && !fs.active && <AndroidAppButton url={apk} className="mr-1" />}
         {(!online || pending > 0) && (
           <span className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-base font-semibold ${online ? "bg-stone-100 text-stone-700" : "bg-amber-100 text-amber-950"}`} data-testid="kiosk-offline">
             {!online && <WifiOff className="h-4 w-4" />}
@@ -594,8 +598,10 @@ function PairScreen({ notice, onPaired }: { notice: string | null; onPaired: () 
       onPaired();
     } catch (e) { setError((e as Error).message); } finally { setBusy(false); }
   };
+  const apk = useAndroidAppDownload();
   return (
     <Centered>
+      {apk && <div className="fixed right-4 top-3 z-10"><AndroidAppButton url={apk} /></div>}
       <div className="w-full max-w-md kiosk-fade-up">
         <h1 className="text-4xl font-display font-normal tracking-[-0.01em] text-stone-950">Set up this time clock</h1>
         <p className="mt-3 text-lg text-stone-700">In the admin app, open <b className="font-semibold text-stone-900">Settings → Locations → Time clock</b>, add a device, then open its pairing link here or type its code.</p>
