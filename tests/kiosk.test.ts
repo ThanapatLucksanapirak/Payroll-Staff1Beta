@@ -246,6 +246,10 @@ test("PIN attempts lock the device after repeated failures", async () => {
   assert.ok(Number(locked.headers.get("retry-after")) > 0);
   // Punching with a PIN is covered by the same lock
   assert.equal((await K("POST", "/api/kiosk/punch", { id: randomUUID(), type: "in", pin: "1234" }, t)).status, 429);
+  // A reloaded kiosk learns about the lock from its state, so the countdown comes back
+  const st = await K("GET", "/api/kiosk/state", undefined, t);
+  assert.ok(st.body.pinLockSeconds > 0 && st.body.pinLockSeconds <= 60, String(st.body.pinLockSeconds));
+  assert.equal((await K("GET", "/api/kiosk/state")).body.pinLockSeconds, 0, "other devices aren't locked");
   // Other devices are not affected
   assert.equal((await K("POST", "/api/kiosk/identify", { pin: "1234" })).status, 200);
 });

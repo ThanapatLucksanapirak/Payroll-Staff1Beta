@@ -6,6 +6,12 @@ Settings → About, next to the matching update.
 Add an entry with every pull request: a `## YYYY-MM-DD · Title (#PR)` heading and a
 few short bullets written for the people who use the app, not for developers.
 
+## 2026-11-26 · Time clock lockout and camera polish (#PRNUM)
+- The wrong-PIN countdown shows the right time from the very first second, isn't thrown off if someone changes the tablet's clock, and comes back if the page is reloaded during a lockout.
+- The lockout message now says that each lockout in a row lasts longer (1 minute, then 2, then 4, up to 15 minutes). This was already how it worked.
+- If camera access is taken away while the time clock is open, it now says "Camera blocked" (a manager can allow it again) instead of "Camera not available".
+- Admin app on iPhone and iPad: you can long-press a punch photo on Live to save it again.
+
 ## 2026-11-26 · New timesheet, time clock and backup fixes (#41)
 - New timesheet → Start blank: the window now closes once the timesheet is created, and a quick double tap no longer makes two of them. If creating fails, the reason shows in the window.
 - A timesheet that arrives already finalized (for example, from another app through the API) now gets the same pay snapshot and advance repayments as one you finalize yourself.

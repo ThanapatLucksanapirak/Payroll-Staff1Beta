@@ -52,7 +52,9 @@ export function useCamera(active: boolean) {
         if (cancelled) { stream.getTracks().forEach((t) => t.stop()); return; }
         streamRef.current = stream;
         // A camera unplugged or taken by another app ends the track.
-        for (const t of stream.getVideoTracks()) t.addEventListener("ended", () => { if (!cancelled) setStatus("unavailable"); });
+        // A camera that stops mid-session because access was taken away reads as
+        // "blocked" (a manager can fix it), not "not available".
+        for (const t of stream.getVideoTracks()) t.addEventListener("ended", () => { void cameraDenied().then((denied) => { if (!cancelled) setStatus(denied ? "blocked" : "unavailable"); }); });
         const v = videoRef.current;
         if (v) {
           v.srcObject = stream;

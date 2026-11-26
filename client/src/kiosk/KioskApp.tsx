@@ -17,6 +17,9 @@ const STATUS_DOT: Record<ClockStatus, string> = { in: "bg-emerald-600", break: "
 const DEFAULT_OPTIONS: KioskOptions = { photo: false, idleSeconds: 10, stations: [], breakReminderHours: null };
 
 /** Who is at the kiosk right now, and how they signed in. */
+/** Milliseconds on a clock that never jumps when the device's time is changed. */
+const monoNow = () => performance.now();
+
 interface Session { who: Identified; pin: string; offline: boolean }
 /** Just the session fields of a screen (so spreading it can't carry the old screen's kind). */
 const only = (s: Session): Session => ({ who: s.who, pin: s.pin, offline: s.offline });
@@ -44,11 +47,12 @@ export function KioskApp() {
   const [busy, setBusy] = useState(false);
   const [showInfo, setShowInfo] = useState(false);
   // Kept outside the screen so the countdown survives going back to the home screen when idle.
+  // On the monotonic clock (monoNow), so changing the tablet's time doesn't shorten or stretch it.
   const [lockedUntil, setLockedUntil] = useState<number | undefined>();
   useEffect(() => {
     if (!lockedUntil) return;
     // "You can try again now" stays up for half a minute after the lock ends, then the screen is back to normal.
-    const t = setTimeout(() => setLockedUntil(undefined), Math.max(0, lockedUntil - Date.now()) + 30_000);
+    const t = setTimeout(() => setLockedUntil(undefined), Math.max(0, lockedUntil - monoNow()) + 30_000);
     return () => clearTimeout(t);
   }, [lockedUntil]);
   /** The manager PIN entered to open settings (needed to unpair); cleared when settings close. */
@@ -86,6 +90,11 @@ export function KioskApp() {
       cache.set(s);
       setState(s);
       setOnline(true);
+      // After a reload the lock is only known to the server: show its countdown again.
+      if (s.pinLockSeconds && s.pinLockSeconds > 0) {
+        const until = monoNow() + s.pinLockSeconds * 1000;
+        setLockedUntil((cur) => (cur && Math.abs(cur - until) < 2000 ? cur : until));
+      }
     } catch (err) {
       const e = err as KioskError;
       if (e.code === "device") unpair("This time clock was removed from the admin app. Pair it again to continue.");
@@ -152,7 +161,7 @@ export function KioskApp() {
         });
         return;
       }
-      const lockedUntil = e.code === "locked" && Number(e.body?.retryAfter) > 0 ? Date.now() + Number(e.body.retryAfter) * 1000 : undefined;
+      const lockedUntil = e.code === "locked" && Number(e.body?.retryAfter) > 0 ? monoNow() + Number(e.body.retryAfter) * 1000 : undefined;
       setLockedUntil(lockedUntil);
       setScreen((s) => ({ k: "pin", employee: s.k === "pin" ? s.employee : employee, error: lockedUntil ? undefined : e.message, shake: Date.now() }));
     }
@@ -474,16 +483,17 @@ function CameraMirror({ attach, status, faceSeen }: CameraProps) {
 function PinScreen({ tz, employee, heading, error, shake, lockedUntil, maxLength = 6, idleMs, onSubmit, onBack }: { tz: string; employee?: RosterEmployee; heading?: { title: string; sub: string }; error?: string; shake?: number; lockedUntil?: number; maxLength?: number; idleMs: number; onSubmit: (pin: string) => Promise<void> | void; onBack?: () => void }) {
   const [pin, setPin] = useState("");
   // A live countdown while the clock is locked after wrong PINs, instead of a fixed "try again in 60 seconds".
-  const [tick, setTick] = useState(() => Date.now());
+  // The tick only re-renders each second; the time left is read fresh on every render, so
+  // the first frame of a new lock is already right (a stale tick showed 0:23 for a 20 s lock).
+  const [, setTick] = useState(0);
   useEffect(() => {
     if (!lockedUntil) return;
-    setTick(Date.now());
-    const t = setInterval(() => setTick(Date.now()), 1000);
+    const t = setInterval(() => setTick((n) => n + 1), 1000);
     return () => clearInterval(t);
   }, [lockedUntil]);
-  const lockLeft = lockedUntil ? Math.max(0, Math.ceil((lockedUntil - tick) / 1000)) : 0;
+  const lockLeft = lockedUntil ? Math.max(0, Math.ceil((lockedUntil - monoNow()) / 1000)) : 0;
   const unlocked = !!lockedUntil && lockLeft === 0;
-  if (lockedUntil) error = lockLeft > 0 ? `Too many wrong PINs. Try again in ${Math.floor(lockLeft / 60)}:${String(lockLeft % 60).padStart(2, "0")}` : "You can try again now.";
+  if (lockedUntil) error = lockLeft > 0 ? `Too many wrong PINs. Try again in ${Math.floor(lockLeft / 60)}:${String(lockLeft % 60).padStart(2, "0")}. Each lockout in a row lasts longer.` : "You can try again now.";
   const [busy, setBusy] = useState(false);
   useEffect(() => { if (shake) setPin(""); }, [shake]);
   useIdle(idleMs, () => { setPin(""); onBack?.(); }, [onBack]);

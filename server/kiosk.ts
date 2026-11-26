@@ -389,6 +389,8 @@ export function registerKioskRoutes(app: Express) {
       },
       options: { photo: options.photo, idleSeconds: options.idleSeconds, stations: options.stations ? config.stations : [], breakReminderHours: config.breakReminderHours },
       serverTime: new Date(now).toISOString(),
+      // Seconds until wrong-PIN lock ends, so a reloaded kiosk keeps showing the countdown.
+      pinLockSeconds: Math.ceil(pinLockedFor(device.id) / 1000),
       employees: employees.map((e) => {
         const st = clockState(byEmp.get(e.id) ?? [], now);
         return { id: e.id, name: e.name, role: e.role, status: st.status, since: st.since };

@@ -20,6 +20,8 @@ export interface KioskState {
   site: { id: string; name: string; color: string; timezone: string; loginMode: "pin" | "name_pin"; enabled: boolean; managerPinSet?: boolean };
   options?: KioskOptions;
   serverTime: string;
+  /** Seconds left on a wrong-PIN lock of this device (0 when not locked). */
+  pinLockSeconds?: number;
   employees: RosterEmployee[];
 }
 /** Today's numbers for the person at the kiosk (no pay). */
