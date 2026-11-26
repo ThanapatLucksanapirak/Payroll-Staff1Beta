@@ -10,6 +10,9 @@
    content area (.kiosk-scroll) scrolls, inside the fixed frame. */
 html, body { height: 100%; overflow: hidden; overscroll-behavior: none; }
 #root { height: 100%; height: 100dvh; overflow: hidden; }
+/* Edge to edge in the home-screen app (viewport-fit=cover): keep content clear of
+   the status bar, notch, rounded corners and home indicator. */
+.kiosk-safe { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left); }
 .kiosk-scroll { overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
 /* Short phone screens (portrait): a smaller keypad and clock so the PIN screen fits without scrolling. */
 @media (max-height: 760px) and (max-width: 639px) {

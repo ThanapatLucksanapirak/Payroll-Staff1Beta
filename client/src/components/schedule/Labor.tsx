@@ -18,10 +18,10 @@ import { SegmentedControl } from "@/components/ui/tabs";
 import { NumberInput } from "@/components/workspace/fields";
 import { cn } from "@/lib/utils";
 
-type LaborData = LaborReport & { square: { connected: boolean; ok: boolean; message: string | null }; missingRates: string[] };
+type LaborData = LaborReport & { square: { connected: boolean; ok: boolean; message: string | null }; missingRates: string[]; laborMessage?: string | null };
 interface ForecastData {
   start: string; end: string; paidSoFar: number; projected: number; remaining: number; actualHours: number;
-  scheduledHoursRemaining: number; hasSchedule: boolean; missingRates: string[]; basis: "punches" | "timesheets"; today: string;
+  scheduledHoursRemaining: number; hasSchedule: boolean; missingRates: string[]; basis: "punches" | "timesheets" | "square"; today: string;
 }
 
 const pctText = (p: number | null | undefined) => (p == null ? "—" : `${(p * 100).toFixed(1)}%`);
@@ -65,6 +65,8 @@ export function HomeLaborTiles() {
   const showForecast = !!f && (f.projected > 0 || f.hasSchedule);
   if (!showLabor && !showForecast) return null;
   const todayRow = l?.days.find((d) => d.date === today);
+  // Sales but no hours yet (no timesheet, punches or timecards counted): a 0.0% would read as free labor.
+  const noHours = !!l && l.totals.sales > 0 && l.totals.labor === 0;
 
   return (
     <section className="mb-8">
@@ -74,8 +76,10 @@ export function HomeLaborTiles() {
           <Tile
             icon={Percent}
             label="Labor vs. sales this week"
-            value={l!.totals.sales > 0 ? pctText(l!.totals.pct) : app.money(l!.totals.labor)}
-            sub={l!.totals.sales > 0
+            value={noHours ? "—" : l!.totals.sales > 0 ? pctText(l!.totals.pct) : app.money(l!.totals.labor)}
+            sub={noHours
+              ? `${app.money(l!.totals.sales)} sales. No hours counted yet this week.`
+              : l!.totals.sales > 0
               ? `${app.money(l!.totals.labor)} labor on ${app.money(l!.totals.sales)} sales${todayRow?.pct != null ? ` · today ${pctText(todayRow.pct)}` : ""}`
               : "Labor so far. Add sales to see the percentage."}
             badge={<EstimateBadge />}
@@ -144,7 +148,7 @@ export function LaborSection({ className }: { className?: string }) {
             <p className="mt-4 flex items-start gap-1.5 border-t border-border/70 pt-3 text-xs text-muted-foreground">
               <Info className="mt-px h-3.5 w-3.5 shrink-0" />
               <span>
-                {f.basis === "timesheets" ? "Earned so far comes from saved timesheets" : "Earned so far comes from time-clock punches"} at saved rates, plus the rest of the schedule. Bonuses, deductions and edits are not included.
+                {f.basis === "timesheets" ? "Earned so far comes from saved timesheets" : f.basis === "square" ? "Earned so far comes from saved timesheets and Square timecards" : "Earned so far comes from time-clock punches"} at saved rates, plus the rest of the schedule. Bonuses, deductions and edits are not included.
                 {!f.hasSchedule && <> No schedule yet for this period: <Link href="/schedule" className="font-medium text-primary hover:underline">build one</Link> to project the rest.</>}
                 {f.missingRates.length > 0 && <> {f.missingRates.length} {f.missingRates.length === 1 ? "person has" : "people have"} no saved rate ({f.missingRates.slice(0, 3).join(", ")}{f.missingRates.length > 3 ? "…" : ""}).</>}
               </span>
@@ -168,11 +172,11 @@ export function LaborSection({ className }: { className?: string }) {
           <p className="rounded-xl border border-card-border bg-card p-5 text-[13px] text-muted-foreground shadow-card">{errorMessage(labor.error)}</p>
         ) : l && (
           <div className="overflow-hidden rounded-xl border border-card-border bg-card shadow-card">
-            {l.square.message && (
-              <div className="flex items-start gap-2 border-b border-border/70 bg-warning-soft px-4 py-2.5 text-[13px] text-warning" role="status">
-                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" /><span>{l.square.message}</span>
+            {[l.square.message, l.laborMessage].filter(Boolean).map((m) => (
+              <div key={m} className="flex items-start gap-2 border-b border-border/70 bg-warning-soft px-4 py-2.5 text-[13px] text-warning" role="status">
+                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" /><span>{m}</span>
               </div>
-            )}
+            ))}
             <div className="grid grid-cols-3 divide-x divide-border/70 border-b border-border/70">
               <Stat label="Labor %" value={pctText(l.totals.pct)} />
               <Stat label="Labor" value={app.money(l.totals.labor)} />
@@ -196,7 +200,7 @@ export function LaborSection({ className }: { className?: string }) {
                       <td className="px-4 py-1.5"><SalesCell siteId={site.id} date={d.date} value={d.sales} source={d.salesSource} editable={editable && d.date <= today} squareOk={l.square.ok} /></td>
                       <td className="px-4 py-2 text-right tabular">
                         {d.labor ? app.money(d.labor) : "—"}
-                        {d.laborSource === "punches" && <span className="ml-1 text-[11px] text-muted-foreground" title="Estimated from punches at saved rates">est.</span>}
+                        {(d.laborSource === "punches" || d.laborSource === "square") && <span className="ml-1 text-[11px] text-muted-foreground" title={d.laborSource === "square" ? "Estimated from Square timecards at saved rates" : "Estimated from punches at saved rates"}>est.</span>}
                       </td>
                       <td className="px-4 py-2 text-right tabular">{d.hours ? d.hours.toFixed(1) : "—"}</td>
                       <td className={cn("px-4 py-2 text-right font-medium tabular", d.pct != null && d.pct > 0.35 && "text-warning")}>{pctText(d.pct)}</td>
@@ -206,7 +210,7 @@ export function LaborSection({ className }: { className?: string }) {
               </table>
             </div>
             <p className="border-t border-border/70 px-4 py-2.5 text-xs text-muted-foreground">
-              Labor comes from saved timesheets where there is one, otherwise from time-clock punches at saved rates (marked est.).
+              Labor comes from saved timesheets where there is one, otherwise from {site.timeSource === "square" ? "Square timecards" : "time-clock punches"} at saved rates (marked est.).
               Sales come from {l.square.connected && l.square.ok ? "Square (net of tax and tips) unless you type a number in" : "the numbers you type in"}.
               {l.missingRates.length > 0 && ` ${l.missingRates.length} ${l.missingRates.length === 1 ? "person has" : "people have"} no saved rate.`}
             </p>

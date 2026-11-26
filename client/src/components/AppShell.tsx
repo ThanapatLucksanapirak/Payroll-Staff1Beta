@@ -61,17 +61,20 @@ function Shell({ children }: { children: ReactNode }) {
       {/* Desktop sidebar */}
       <aside
         className={cn(
-          "hidden h-full shrink-0 flex-col border-r border-sidebar-border bg-sidebar/90 backdrop-blur-xl transition-[width] duration-200 md:flex",
-          collapsed ? "w-[4.25rem]" : "w-[15.5rem]",
+          "hidden h-full shrink-0 flex-col border-r border-sidebar-border bg-sidebar/90 pb-[env(safe-area-inset-bottom)] pl-[env(safe-area-inset-left)] pt-[env(safe-area-inset-top)] backdrop-blur-xl transition-[width] duration-200 md:flex",
+          collapsed ? "w-[calc(4.25rem+env(safe-area-inset-left))]" : "w-[calc(15.5rem+env(safe-area-inset-left))]",
         )}
         data-testid="sidebar"
       >
         <SidebarBody collapsed={collapsed} onToggleCollapsed={toggleCollapsed} onSearch={() => setPaletteOpen(true)} />
       </aside>
 
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+      {/* In the iPhone/iPad home-screen app the page runs edge to edge (viewport-fit=cover):
+          bars keep their background to the screen edge, and their content clears the status
+          bar, notch, rounded corners and home indicator. */}
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col md:pr-[env(safe-area-inset-right)] md:pt-[env(safe-area-inset-top)]">
         {/* Mobile top bar */}
-        <header className="glass z-40 shrink-0 flex h-14 items-center gap-1 border-b border-border/70 px-2 md:hidden">
+        <header className="glass z-40 shrink-0 flex h-[calc(3.5rem+env(safe-area-inset-top))] items-center gap-1 border-b border-border/70 pl-[max(0.5rem,env(safe-area-inset-left))] pr-[max(0.5rem,env(safe-area-inset-right))] pt-[env(safe-area-inset-top)] md:hidden">
           <Button variant="ghost" size="icon" className="h-10 w-10" aria-label="Open menu" onClick={() => setMenuOpen(true)} data-testid="button-mobile-menu"><Menu className="h-5 w-5" /></Button>
           <Link href="/" className="flex min-w-0 shrink-0 items-center gap-2 rounded-md p-1 focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/35" aria-label="Home" data-testid="link-home-mobile">
             <Brand compact />
@@ -80,11 +83,11 @@ function Shell({ children }: { children: ReactNode }) {
           <Button variant="ghost" size="icon" className="h-10 w-10" aria-label="Search" onClick={() => setPaletteOpen(true)} data-testid="button-mobile-search"><Search className="h-5 w-5" /></Button>
         </header>
 
-        <main id="main" ref={mainRef} className="min-h-0 flex-1 overflow-y-auto overscroll-contain pb-[calc(4.5rem+env(safe-area-inset-bottom))] md:pb-0" tabIndex={-1}>{children}</main>
+        <main id="main" ref={mainRef} className="min-h-0 flex-1 overflow-y-auto overscroll-contain pb-[calc(4.5rem+env(safe-area-inset-bottom))] pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)] md:px-0 md:pb-[env(safe-area-inset-bottom)]" tabIndex={-1}>{children}</main>
       </div>
 
       {/* Mobile bottom tab bar */}
-      <nav aria-label="Sections" className="glass fixed inset-x-0 bottom-0 z-40 border-t border-border/70 pb-[env(safe-area-inset-bottom)] md:hidden">
+      <nav aria-label="Sections" className="glass fixed inset-x-0 bottom-0 z-40 border-t border-border/70 pb-[env(safe-area-inset-bottom)] pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)] md:hidden">
         <ul className="mx-auto flex max-w-lg px-1">
           {visibleNav(user).filter((n) => n.tab).map((n) => {
             const active = n.isActive(loc);

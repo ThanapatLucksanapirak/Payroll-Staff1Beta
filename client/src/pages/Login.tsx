@@ -56,7 +56,7 @@ export function LoginPage({ appName, setupRequired, dbError, onDone }: { appName
       <BrandPanel />
 
       {/* Form side */}
-      <main className="flex flex-col px-5 pb-5 pt-7 min-[861px]:px-12 min-[861px]:py-8">
+      <main className="flex flex-col px-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] pt-7 min-[861px]:px-12 min-[861px]:py-8">
         <div className="mx-auto w-full max-w-[380px] min-[861px]:my-auto">
           <h1 className="font-display text-[30px] font-normal leading-[1.1] tracking-[-0.012em] min-[861px]:text-[36px]">{heading}</h1>
           <p className="mb-6 mt-2.5 text-[15px] leading-[22px] text-muted-foreground min-[861px]:mb-8">{lede}</p>

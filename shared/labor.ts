@@ -47,7 +47,7 @@ const missingRatesOf = (warnings: { message: string; employee?: string }[]) =>
 
 // ── Labor vs. sales ──────────────────────────────────────────────────────────
 export type SalesSource = "square" | "manual";
-export type LaborSource = "timesheet" | "punches";
+export type LaborSource = "timesheet" | "punches" | "square";
 
 export interface LaborDay {
   date: string;
@@ -81,8 +81,8 @@ export function mergeSales(square: Record<string, number>, manual: Record<string
 }
 
 /**
- * Join labor and sales by date. Saved timesheet days win over punch
- * estimates. The total percentage only counts days that have sales, so a
+ * Join labor and sales by date. Saved timesheet days win over estimates
+ * from punches or Square timecards. The total percentage only counts days that have sales, so a
  * missing sales entry does not inflate it.
  */
 export function laborReport(input: {
@@ -90,8 +90,11 @@ export function laborReport(input: {
   to: string;
   fromTimesheets: Record<string, DayCost>;
   fromPunches: Record<string, DayCost>;
+  /** Where the estimate in fromPunches came from: the app's time clock (default) or Square timecards. */
+  estimateSource?: "punches" | "square";
   sales: Record<string, { amount: number; source: SalesSource }>;
 }): LaborReport {
+  const est = input.estimateSource ?? "punches";
   const days: LaborDay[] = dateRange(input.from, input.to).map((date) => {
     const ts = input.fromTimesheets[date];
     const pu = input.fromPunches[date];
@@ -104,7 +107,7 @@ export function laborReport(input: {
       salesSource: s ? s.source : null,
       labor: cost,
       hours: labor ? round2(labor.hours) : 0,
-      laborSource: ts ? "timesheet" : pu ? "punches" : null,
+      laborSource: ts ? "timesheet" : pu ? est : null,
       pct: laborPercent(cost, s?.amount),
     };
   });
