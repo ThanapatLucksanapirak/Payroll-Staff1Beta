@@ -237,13 +237,45 @@ test("turning it off, or dropping below three reference photos, stops the check"
   assert.equal((await punch("break_end", "other-face.jpg")).status, 200);
 });
 
+test("face data that can't be read fails closed: refused live with an alert, flagged offline, shown to the owner", async () => {
+  const cara = (await A("POST", `/api/sites/${siteId}/employees`, { name: "Cara Diaz", pin: "8642" })).body.id;
+  // A damaged profile (or one encrypted with another server's key): it might have had face match on
+  const folder = path.join(dir, "face-data", siteId, cara);
+  fs.mkdirSync(folder, { recursive: true });
+  fs.writeFileSync(path.join(folder, "profile.enc"), "v1.AAAA.BBBB.CCCC");
+
+  const sum = (await A("GET", `/api/sites/${siteId}/face`)).body.find((x: any) => x.employeeId === cara);
+  assert.equal(sum?.unreadable, true, "the owner is told");
+  assert.equal((await A("GET", `/api/sites/${siteId}/employees/${cara}/face`)).body.unreadable, true);
+  assert.equal((await K("POST", "/api/kiosk/identify", { pin: "8642" })).body.facePhoto, true, "the kiosk takes a photo for her");
+
+  // Offline first (before any live punch), her own face doesn't matter: kept, flagged Not checked
+  const off = await punch("in", "face-2.jpg", { at: new Date(Date.now() - 10 * 60_000).toISOString() }, "8642");
+  assert.equal(off.status, 200, JSON.stringify(off.body));
+  assert.equal((await getPunch(off.body.punch.id))?.meta?.face, "unchecked");
+
+  // Live: refused, whoever's face it is, with an alert
+  const live = await punch("out", "other-face.jpg", {}, "8642");
+  assert.equal(live.status, 422);
+  assert.equal(live.body.reason, "unreadable");
+  assert.match(live.body.error, /ask a manager/i);
+  const alert = (await A("GET", `/api/sites/${siteId}/face-alerts`)).body.find((x: any) => x.employeeId === cara);
+  assert.equal(alert?.reason, "unreadable");
+  assert.equal(alert?.photo, true);
+
+  // Deleting the face data lets her punch normally again
+  assert.equal((await A("DELETE", `/api/sites/${siteId}/employees/${cara}/face`)).status, 200);
+  assert.equal((await punch("out", "other-face.jpg", {}, "8642")).status, 200);
+  assert.equal((await A("GET", `/api/sites/${siteId}/face`)).body.some((x: any) => x.employeeId === cara), false);
+});
+
 test("deleting face data with punch photos removes the alerts and their photos too", async () => {
   await A("PUT", `${faceUrl()}/required`, { required: true });
   assert.equal((await punch("out", "other-face.jpg")).status, 422);
-  const before = (await A("GET", `/api/sites/${siteId}/face-alerts`)).body;
+  const before = (await A("GET", `/api/sites/${siteId}/face-alerts`)).body.filter((x: any) => x.employeeId === ana);
   assert.equal(before.length, 5);
   await A("DELETE", `${faceUrl()}?punchPhotos=1`);
-  assert.deepEqual((await A("GET", `/api/sites/${siteId}/face-alerts`)).body, []);
+  assert.deepEqual((await A("GET", `/api/sites/${siteId}/face-alerts`)).body.filter((x: any) => x.employeeId === ana), []);
   await new Promise((r) => setTimeout(r, 50));
   assert.equal((await A("GET", `/api/sites/${siteId}/face-alerts/${before[0].id}/photo`)).status, 404);
   // And with no face data, Ana's punches are no longer checked

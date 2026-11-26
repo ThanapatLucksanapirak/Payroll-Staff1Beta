@@ -11,6 +11,7 @@ few short bullets written for the people who use the app, not for developers.
 - With it on, a punch is refused if the face doesn't match their reference photos. They're asked to try again or ask a manager, and Live shows it under "Face didn't match" with the photo, until you dismiss it.
 - A punch saved on the tablet while it was offline is never lost: if the face didn't match, it's kept and tagged "Face didn't match" on Live so you can check it.
 - Every time clock takes a photo of them, even one with photos turned off, so face match can't be skipped by using another tablet.
+- If someone's face data can't be read (for example, after the server's key changes), their punches are refused rather than let through unchecked, and Employees shows who needs face match set up again.
 - Photos: a removed employee's photos show their full name with "(removed)". Removing someone now says that their punch photos stay until the photo retention period, as pay records.
 
 ## 2026-11-26 · Photo gallery and face match set-up (#44)

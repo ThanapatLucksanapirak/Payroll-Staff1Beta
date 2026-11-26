@@ -127,6 +127,12 @@ export function EmployeesPage() {
           {settingsAdmin && <span className="shrink-0 pl-7 sm:pl-0"><Button asChild size="sm" variant="outline"><Link href="/settings/locations">Time clock settings</Link></Button></span>}
         </div>
       )}
+      {(faces.data ?? []).some((f) => f.unreadable) && (
+        <div className="mb-5 flex items-start gap-3 rounded-xl bg-destructive/10 px-4 py-3 text-[13px] text-destructive" role="alert" data-testid="banner-face-unreadable">
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+          <span>Face data for {(faces.data ?? []).filter((f) => f.unreadable).map((f) => (q.data ?? []).find((e) => e.id === f.employeeId)?.name ?? "a removed employee").join(", ")} can't be read (a damaged file, or the server's key changed). Their time clock punches are refused until you open them here, delete their face data and set face match up again.</span>
+        </div>
+      )}
       {noPin > 0 && (
         <div className="mb-5 flex flex-col gap-2.5 rounded-xl border border-card-border bg-card px-4 py-3 text-[13px] text-muted-foreground shadow-card sm:flex-row sm:items-center sm:gap-3" data-testid="banner-no-pin">
           <span className="flex min-w-0 flex-1 items-start gap-3"><KeyRound className="mt-0.5 h-4 w-4 shrink-0 text-warning" /><span>{noPin} employee{noPin === 1 ? " has" : "s have"} no PIN yet, so they can't use the time clock or the staff portal.{admin && " Give everyone a PIN at once, or edit someone to choose theirs."}</span></span>

@@ -59,6 +59,8 @@ export interface FaceSummary {
   refs: number;
   /** Face match required at the time clock. */
   required: boolean;
+  /** Their face data exists but can't be read (damaged, or the server's key changed). Their punches are refused until it's deleted. */
+  unreadable?: boolean;
 }
 
 /** One approved reference photo, as the admin app sees it. */
@@ -100,6 +102,8 @@ export interface FaceAlert {
   at: string;
   /** How far the face was from their closest reference photo (null when unknown). */
   distance: number | null;
+  /** "mismatch" (not their face) or "unreadable" (their face data couldn't be read). Missing on older alerts = mismatch. */
+  reason?: "mismatch" | "unreadable";
   deviceName: string;
   /** False once the photo has been deleted (retention or face data deletion). */
   photo: boolean;

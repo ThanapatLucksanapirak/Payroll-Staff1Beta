@@ -113,14 +113,29 @@ function sanitize(raw: any): FaceProfile {
 
 /** Someone's face data, or an empty profile when there is none (or it can't be read). */
 export function readProfile(siteId: string, employeeId: string): FaceProfile {
+  return readProfileState(siteId, employeeId).profile;
+}
+
+/**
+ * Someone's face data, and whether a profile exists but can't be read
+ * (damaged file, or the server's PIN key changed). An unreadable profile might
+ * have had face match on, so the time clock fails closed for that person.
+ */
+export function readProfileState(siteId: string, employeeId: string): { profile: FaceProfile; unreadable: boolean } {
   let enc: string;
-  try { enc = fs.readFileSync(profileFile(siteId, employeeId), "utf8"); } catch { return emptyProfile(); }
-  const json = decrypt(enc, `face:${siteId}:${employeeId}`);
-  if (json == null) {
-    console.error(`[face] face data for ${employeeId} at ${siteId} can't be read (the server's PIN key changed?); treating it as none`);
-    return emptyProfile();
+  try { enc = fs.readFileSync(profileFile(siteId, employeeId), "utf8"); } catch (err: any) {
+    if (err?.code === "ENOENT" || err?.code === "ENOTDIR") return { profile: emptyProfile(), unreadable: false };
+    console.error(`[face] face data for ${employeeId} at ${siteId} can't be read: ${err?.message ?? err}`);
+    return { profile: emptyProfile(), unreadable: true };
   }
-  try { return sanitize(JSON.parse(json)); } catch { return emptyProfile(); }
+  const json = decrypt(enc, `face:${siteId}:${employeeId}`);
+  let raw: unknown;
+  try { raw = json == null ? undefined : JSON.parse(json); } catch { raw = undefined; }
+  if (raw === undefined || !raw || typeof raw !== "object") {
+    console.error(`[face] face data for ${employeeId} at ${siteId} can't be read (damaged, or the server's PIN key changed). Their punches are refused until it's deleted and set up again.`);
+    return { profile: emptyProfile(), unreadable: true };
+  }
+  return { profile: sanitize(raw), unreadable: false };
 }
 
 function writeProfile(siteId: string, employeeId: string, p: FaceProfile) {
@@ -143,8 +158,8 @@ function withPerson<T>(siteId: string, employeeId: string, fn: () => Promise<T>)
   return next;
 }
 
-export function summaryOf(employeeId: string, p: FaceProfile): FaceSummary {
-  return { employeeId, consentAt: p.consentAt, consentBy: p.consentBy, refs: p.refs.length, required: p.required };
+export function summaryOf(employeeId: string, p: FaceProfile, unreadable = false): FaceSummary {
+  return { employeeId, consentAt: p.consentAt, consentBy: p.consentBy, refs: p.refs.length, required: p.required, ...(unreadable ? { unreadable: true } : {}) };
 }
 const refView = (r: FaceRef): FaceRefView => ({ id: r.id, punchId: r.punchId, takenAt: r.takenAt, addedAt: r.addedAt, addedBy: r.addedBy });
 
@@ -155,7 +170,10 @@ function peopleWithData(siteId: string): string[] {
 }
 
 export function faceSummaries(siteId: string): FaceSummary[] {
-  return peopleWithData(siteId).map((id) => summaryOf(id, readProfile(siteId, id))).filter((s) => s.consentAt || s.refs);
+  return peopleWithData(siteId).map((id) => {
+    const st = readProfileState(siteId, id);
+    return summaryOf(id, st.profile, st.unreadable);
+  }).filter((s) => s.consentAt || s.refs || s.unreadable);
 }
 
 // ── Changes ──────────────────────────────────────────────────────────────────
@@ -232,9 +250,10 @@ export function setRequired(siteId: string, employeeId: string, required: boolea
 }
 
 /** Face match at the time clock: the person's face templates when face match is on for them, else null. */
-export function requiredTemplates(siteId: string, employeeId: string): number[][] | null {
+export function requiredTemplates(siteId: string, employeeId: string): number[][] | "unreadable" | null {
   if (!SAFE_ID.test(siteId) || !SAFE_ID.test(employeeId)) return null;
-  const p = readProfile(siteId, employeeId);
+  const { profile: p, unreadable } = readProfileState(siteId, employeeId);
+  if (unreadable) return "unreadable"; // fail closed: it may have had face match on
   return p.required ? p.refs.map((r) => r.d) : null;
 }
 
@@ -482,10 +501,10 @@ export function registerFaceRoutes(app: Express) {
 
   app.get("/api/sites/:siteId/employees/:employeeId/face", h(async (req, res) => {
     const ctx = await personOr404(req, res); if (!ctx) return;
-    const p = readProfile(ctx.site.id, ctx.employee.id);
+    const { profile: p, unreadable } = readProfileState(ctx.site.id, ctx.employee.id);
     const { faceRetentionDays } = await getSiteConfig(ctx.site.id);
     res.json({
-      ...summaryOf(ctx.employee.id, p), refList: p.refs.map(refView).reverse(),
+      ...summaryOf(ctx.employee.id, p, unreadable), refList: p.refs.map(refView).reverse(),
       notice: faceConsentNotice(ctx.site.name, faceRetentionDays), retentionDays: faceRetentionDays,
     });
   }));

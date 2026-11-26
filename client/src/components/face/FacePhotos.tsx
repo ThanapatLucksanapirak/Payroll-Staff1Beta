@@ -269,6 +269,12 @@ function FaceMatchCard({ siteId, employee, tz, canManage }: { siteId: string; em
         </div>
       </div>
 
+      {d.unreadable && (
+        <p className="flex items-start gap-2 rounded-lg bg-destructive/10 px-3 py-2 text-[13px] text-destructive" role="alert" data-testid="text-face-unreadable">
+          <ScanFace className="mt-0.5 h-4 w-4 shrink-0" />
+          <span>{first}'s face data can't be read (the file is damaged, or the server's key changed). To be safe, their time clock punches are refused until you delete it below and set face match up again.</span>
+        </p>
+      )}
       {!d.consentAt ? (
         <div className="space-y-2.5 rounded-lg bg-foreground/[0.03] p-3 text-[13px]">
           <p className="flex items-start gap-2"><FileText className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" /><span>First, {first} reads and signs the consent notice. Face data is biometric data, which some US states (for example Illinois, Texas and Washington) only allow with written consent.</span></p>
@@ -320,7 +326,7 @@ function FaceMatchCard({ siteId, employee, tz, canManage }: { siteId: string; em
           </div>
         </>
       )}
-      {canManage && (d.consentAt || d.refs > 0) && (
+      {canManage && (d.consentAt || d.refs > 0 || d.unreadable) && (
         <div className="border-t border-border/70 pt-3">
           <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-destructive" onClick={() => setDeleting(true)} data-testid="button-delete-face"><Trash2 />Delete face data</Button>
         </div>
@@ -385,6 +391,7 @@ export function SitePhotosDialog({ siteId, employees, tz, onClose, onOpenEmploye
 /** Small "Face match" status badge for the employee list. */
 export function FaceBadge({ summary }: { summary?: FaceSummary }) {
   if (!summary) return null;
+  if (summary.unreadable) return <Badge variant="destructive" title="Face data can't be read: punches are refused until it's set up again"><ScanFace /><span className="sr-only sm:not-sr-only">Face data unreadable</span></Badge>;
   if (summary.required) return <Badge variant="success" title="Face match is on at the time clock"><ScanFace /><span className="sr-only sm:not-sr-only">Face match</span></Badge>;
   if (summary.consentAt && summary.refs < FACE_MIN_REFS) return <Badge variant="secondary" title={`${summary.refs} of ${FACE_MIN_REFS} reference photos`}><ScanFace /><span className="tabular">{summary.refs}/{FACE_MIN_REFS}</span></Badge>;
   if (summary.consentAt) return <Badge variant="secondary" title="Ready for face match"><ScanFace /><span className="sr-only sm:not-sr-only">Ready</span></Badge>;

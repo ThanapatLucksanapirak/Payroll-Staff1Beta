@@ -531,14 +531,27 @@ export function registerKioskRoutes(app: Express) {
     // refused and shown on Live as an alert, with its photo; one queued offline
     // is kept but flagged "Face didn't match". Their punches need a photo on
     // every device, even one with photos off (the kiosk takes one for them).
+    // Face data that can't be read fails closed: refused live (with an alert on
+    // Live), kept but flagged "Not checked" when queued offline.
+    if (templates === "unreadable") {
+      if (!queuedOffline) {
+        await recordFaceAlert(site.id, { employeeId: e.id, employeeName: e.name, type: body.type, at: new Date(at).toISOString(), distance: null, reason: "unreadable", deviceName: device.name }, photoBytes)
+          .catch((err) => console.error(`[face] could not record a face alert: ${err?.message ?? err}`));
+        return res.status(422).json({
+          error: "Face match isn't working for you right now. Ask a manager to add your punch.",
+          code: "photo", reason: "unreadable",
+        });
+      }
+      meta.face = "unchecked";
+    }
     if (takesPhoto && photoBytes) {
-      const face = await checkFaceJpeg(photoBytes, { descriptor: !!templates });
-      if (face.ok && templates) {
+      const face = await checkFaceJpeg(photoBytes, { descriptor: Array.isArray(templates) });
+      if (face.ok && Array.isArray(templates)) {
         const m = matchFace(face.descriptor, templates);
         if (m.distance != null) meta.faceMatch = m.distance;
         if (!m.match) {
           if (!queuedOffline) {
-            await recordFaceAlert(site.id, { employeeId: e.id, employeeName: e.name, type: body.type, at: new Date(at).toISOString(), distance: m.distance, deviceName: device.name }, photoBytes)
+            await recordFaceAlert(site.id, { employeeId: e.id, employeeName: e.name, type: body.type, at: new Date(at).toISOString(), distance: m.distance, reason: "mismatch", deviceName: device.name }, photoBytes)
               .catch((err) => console.error(`[face] could not record a face alert: ${err?.message ?? err}`));
             return res.status(422).json({
               error: "Face not recognized. Look straight at the camera and try again. If it keeps happening, ask a manager to add your punch.",

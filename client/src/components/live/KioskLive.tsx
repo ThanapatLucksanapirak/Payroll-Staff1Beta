@@ -122,7 +122,7 @@ export function FaceAlerts({ siteId, tz, editable }: { siteId: string; tz: strin
   const photo = (a: FaceAlert) => `/api/sites/${siteId}/face-alerts/${a.id}/photo`;
   return (
     <section data-testid="section-face-alerts">
-      <SectionLabel>Face didn't match<Badge variant="warning" className="ml-2 align-middle">{open_.length}</Badge></SectionLabel>
+      <SectionLabel>Face match refused<Badge variant="warning" className="ml-2 align-middle">{open_.length}</Badge></SectionLabel>
       <div className="overflow-hidden rounded-xl border border-card-border bg-card shadow-card">
         <ul className="divide-y divide-border/70" data-testid="list-face-alerts">
           {open_.map((a) => (
@@ -132,7 +132,7 @@ export function FaceAlerts({ siteId, tz, editable }: { siteId: string; tz: strin
                 : <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-foreground/[0.05] text-muted-foreground" title="Photo no longer kept"><CameraOff className="h-3.5 w-3.5" /></span>}
               <div className="min-w-0 flex-1 basis-48">
                 <p className="break-words"><b className="font-semibold">{a.employeeName}</b>'s PIN · {PUNCH_LABELS[a.type as PunchType] ?? a.type} refused at <b className="font-medium">{when(a.at, tz)}</b></p>
-                <p className="text-xs text-muted-foreground">The face didn't match their reference photos ({a.deviceName}). If it was them, add the punch.</p>
+                <p className="text-xs text-muted-foreground">{a.reason === "unreadable" ? `Their face data can't be read, so face match couldn't check (${a.deviceName}). Add the punch if it was them, then delete their face data and set it up again (Employees).` : `The face didn't match their reference photos (${a.deviceName}). If it was them, add the punch.`}</p>
               </div>
               {editable && <Button size="sm" variant="ghost" className="text-muted-foreground" onClick={() => void dismiss(a)} data-testid={`button-dismiss-alert-${a.id}`}><Check /> Dismiss</Button>}
             </li>
@@ -147,7 +147,9 @@ export function FaceAlerts({ siteId, tz, editable }: { siteId: string; tz: strin
               <DialogDescription className="break-words">{open.employeeName}'s PIN · {PUNCH_LABELS[open.type as PunchType] ?? open.type} at {when(open.at, tz)} · {open.deviceName}</DialogDescription>
             </DialogHeader>
             <img src={photo(open)} alt={`Photo of the refused punch for ${open.employeeName}`} className="w-full rounded-lg bg-foreground/[0.04]" />
-            <p className="text-sm text-muted-foreground">This face didn't match {open.employeeName}'s reference photos, so the punch wasn't saved. If it was them (new glasses, bad light), add the punch on Live and consider adding a newer reference photo.</p>
+            <p className="text-sm text-muted-foreground">{open.reason === "unreadable"
+              ? `${open.employeeName}'s face data can't be read (damaged, or the server's key changed), so the punch was refused. Add it if it was them, then in Employees delete their face data and set face match up again.`
+              : `This face didn't match ${open.employeeName}'s reference photos, so the punch wasn't saved. If it was them (new glasses, bad light), add the punch on Live and consider adding a newer reference photo.`}</p>
           </DialogContent>
         </Dialog>
       )}
