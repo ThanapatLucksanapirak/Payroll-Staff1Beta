@@ -91,12 +91,12 @@ export function SecuritySettings() {
         <div className="space-y-4">
           <div className="flex flex-wrap items-center gap-3">
             <p className="text-sm text-muted-foreground flex-1 min-w-[14rem]">Lost a phone or signed in on a shared computer? Sign out on every device at once.</p>
-            <Button variant="outline" onClick={() => void everywhere()} data-testid="button-sessions-signout-all"><MonitorSmartphone /> Sign out everywhere</Button>
+            <Button variant="outline" className="text-danger hover:text-danger" onClick={() => void everywhere()} data-testid="button-sessions-signout-all"><MonitorSmartphone /> Sign out everywhere</Button>
           </div>
           {isAdmin(app.user) && (
-            <div className="flex flex-wrap items-end gap-3">
-              <Field label="Stay signed in for (days)" hint="Applies to new sign-ins when “Keep me signed in” is checked" className="w-56"><NumberInput step="1" min={1} value={days} onChange={(n) => setDays(Math.max(1, Math.min(365, Math.round(n))))} /></Field>
-              <Button variant="outline" className="mb-5" disabled={days === app.prefs.sessionDays} onClick={async () => {
+            <div className="space-y-3 border-t border-border/70 pt-4">
+              <Field label="Stay signed in for (days)" hint="Applies to new sign-ins when “Keep me signed in” is checked" className="max-w-xs"><NumberInput step="1" min={1} value={days} onChange={(n) => setDays(Math.max(1, Math.min(365, Math.round(n))))} /></Field>
+              <Button variant="outline" disabled={days === app.prefs.sessionDays} onClick={async () => {
                 try { await api("PUT", "/api/prefs", { sessionDays: days }); await app.refresh(); toast({ title: "Saved" }); } catch (e) { toast({ title: "Couldn't save", description: errorMessage(e), variant: "destructive" }); }
               }}>Save</Button>
             </div>

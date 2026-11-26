@@ -110,7 +110,7 @@ export function TwoFactorSettings() {
                   : st.emailAvailable && <Button variant="outline" size="sm" onClick={() => setFlow({ step: "password", action: "enable-email" })}><Mail />Use email instead</Button>}
                 <Button variant="outline" size="sm" onClick={() => setFlow({ step: "password", action: "codes" })}><KeyRound />New recovery codes</Button>
                 <Button variant="outline" size="sm" onClick={() => void forget()}>Forget remembered devices</Button>
-                {!st.required && <Button variant="ghost" size="sm" className="text-destructive" onClick={() => setFlow({ step: "password", action: "disable" })} data-testid="button-2fa-disable">Turn off</Button>}
+                {!st.required && <Button variant="outline" size="sm" className="text-danger hover:text-danger" onClick={() => setFlow({ step: "password", action: "disable" })} data-testid="button-2fa-disable">Turn off</Button>}
               </div>
             ) : (
               <div className="flex flex-wrap gap-2">
@@ -127,6 +127,7 @@ export function TwoFactorSettings() {
               hint={st.enabled || st.policy.requireForAdmins ? "Those without it set it up the next time they sign in." : "Set it up for your own account first, so nobody gets locked out."}
               checked={st.policy.requireForAdmins}
               disabled={!st.enabled && !st.policy.requireForAdmins}
+              className="opacity-100 [&_button]:opacity-60"
               onChange={(v) => void setRequired(v)}
               testid="switch-2fa-required"
             />

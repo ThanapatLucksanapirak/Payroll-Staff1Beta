@@ -41,7 +41,7 @@ export function AutoClockOutSettings({ site }: { site: Site }) {
   };
 
   return (
-    <div className="space-y-3 rounded-xl border border-border/80 p-3" data-testid="settings-auto-clock-out">
+    <div className="space-y-3 border-t border-border/70 pt-4" data-testid="settings-auto-clock-out">
       <div className="flex items-start gap-3">
         <MoonStar className="mt-0.5 h-4 w-4 text-muted-foreground" />
         <div className="min-w-0 flex-1">

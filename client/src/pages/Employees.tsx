@@ -97,10 +97,12 @@ export function EmployeesPage() {
       />
 
       {site.timeSource === "square" && (
-        <div className="mb-5 flex flex-wrap items-center gap-3 rounded-xl bg-warning-soft px-4 py-3 text-[13px]" role="status">
-          <AlertTriangle className="h-4 w-4 shrink-0 text-warning" />
-          <span className="flex-1">The time clock is off at {site.name} (hours come from Square). You can still set up employees now.</span>
-          {settingsAdmin && <Button asChild size="sm" variant="outline"><Link href="/settings/locations">Time clock settings</Link></Button>}
+        <div className="mb-5 flex flex-col gap-2.5 rounded-xl bg-warning-soft px-4 py-3 text-[13px] sm:flex-row sm:items-center sm:gap-3" role="status">
+          <span className="flex min-w-0 flex-1 items-start gap-3">
+            <AlertTriangle className="mt-px h-4 w-4 shrink-0 text-warning" />
+            <span className="min-w-0 flex-1">The time clock is off at {site.name} (hours come from Square). You can still set up employees now.</span>
+          </span>
+          {settingsAdmin && <span className="shrink-0 pl-7 sm:pl-0"><Button asChild size="sm" variant="outline"><Link href="/settings/locations">Time clock settings</Link></Button></span>}
         </div>
       )}
       {noPin > 0 && (
@@ -291,8 +293,12 @@ function ImportNamesDialog({ siteId, onClose }: { siteId: string; onClose: () =>
             </div>
           )}
         <DialogFooter>
-          <Button variant="outline" onClick={onClose}>Cancel</Button>
-          <Button disabled={busy || !picked.length} onClick={run} data-testid="button-confirm-import-employees">{busy && <Loader2 className="animate-spin" />}Add {picked.length || ""}</Button>
+          {(q.data ?? []).length > 0 || q.isLoading ? (
+            <>
+              <Button variant="outline" onClick={onClose}>Cancel</Button>
+              <Button disabled={busy || !picked.length} onClick={run} data-testid="button-confirm-import-employees">{busy && <Loader2 className="animate-spin" />}Add {picked.length || ""}</Button>
+            </>
+          ) : <Button variant="outline" onClick={onClose}>Close</Button>}
         </DialogFooter>
       </DialogContent>
     </Dialog>

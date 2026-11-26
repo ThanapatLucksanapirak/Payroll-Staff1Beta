@@ -201,7 +201,7 @@ export function EmailSettings() {
                 </Field>
               )}
               {google ? (
-                <div className="space-y-3 rounded-xl border border-border/80 p-3">
+                <div className="space-y-3 border-t border-border/70 pt-4">
                   <p className="text-xs text-muted-foreground">One-time setup in Google Cloud: create an OAuth client (type "Web application"), add the redirect URI below, then paste its client ID and secret here.</p>
                   <Field label="Redirect URI (add this in Google Cloud)">
                     <div className="flex gap-2">
@@ -220,10 +220,10 @@ export function EmailSettings() {
                       <>
                         <span className="flex flex-1 items-center gap-2 text-sm" data-testid="text-google-connected"><CheckCircle2 className="h-4 w-4 text-success" />Connected as <span className="font-medium">{saved.googleAccount}</span></span>
                         <Button type="button" variant="outline" size="sm" disabled={!!busy || !canConnect} onClick={() => void connectGoogle()}>{busy === "google" ? <Loader2 className="animate-spin" /> : <LogIn />}Reconnect</Button>
-                        <Button type="button" variant="ghost" size="sm" disabled={!!busy} onClick={() => void disconnectGoogle()} data-testid="button-google-disconnect"><Unplug />Disconnect</Button>
+                        <Button type="button" variant="ghost" size="sm" className="text-danger hover:text-danger" disabled={!!busy} onClick={() => void disconnectGoogle()} data-testid="button-google-disconnect"><Unplug />Disconnect</Button>
                       </>
                     ) : (
-                      <Button type="button" disabled={!!busy || !canConnect} onClick={() => void connectGoogle()} data-testid="button-google-connect">{busy === "google" ? <Loader2 className="animate-spin" /> : <LogIn />}Connect with Google</Button>
+                      <Button type="button" variant="outline" disabled={!!busy || !canConnect} onClick={() => void connectGoogle()} data-testid="button-google-connect">{busy === "google" ? <Loader2 className="animate-spin" /> : <LogIn />}Connect with Google</Button>
                     )}
                   </div>
                 </div>
