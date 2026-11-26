@@ -85,5 +85,5 @@ export interface StatementData {
   ytd: Record<string, { gross: number; net: number }>;
   ytdYear: number | null;
 }
-export interface ScheduleData { from: string; to: string; shifts: PortalShiftItem[]; timeOff: PortalTimeOffItem[]; unpublishedWeeks: string[] }
+export interface ScheduleData { from: string; to: string; shifts: PortalShiftItem[]; timeOff: PortalTimeOffItem[]; unpublishedWeeks: string[]; publishedWeeks?: string[]; weekStartsOn?: number }
 export interface TimeOffItem { id: string; start: string; end: string; reason: string; status: TimeOffStatus; requestedBy: "owner" | "employee"; createdAt: string; decidedAt: string | null }

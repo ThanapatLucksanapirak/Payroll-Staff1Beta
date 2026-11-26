@@ -6,6 +6,7 @@ import { useApp } from "@/context/AppData";
 import { api, errorMessage } from "@/lib/api";
 import { applyProfile, blankManual, updateEmployee, updateManual } from "@/lib/doc";
 import { useToast } from "@/hooks/use-toast";
+import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
@@ -97,7 +98,49 @@ export function RatesTab(p: WsProps) {
         )}
       >
         {rows.length === 0 ? <EmptyState compact icon={Users} title="No employees with shifts yet" description="Rates appear here once the timesheet has shifts. Add them on the Shifts tab." /> : (
-          <div className="overflow-x-auto -mx-5 px-5">
+          <>
+          {/* Phones: one card per person with only the rate that applies, instead of a table that scrolls sideways. */}
+          <ul className="-mx-1 space-y-2.5 sm:hidden" data-testid="rates-cards">
+            {rows.map((e) => {
+              const cat = e.categoryId !== CUSTOM ? cats.find((c) => c.id === e.categoryId) : undefined;
+              const k = employeeKey(e.name);
+              const basis = cat?.payBasis ?? e.payBasis;
+              const money = (v: number, patch: (n: number) => Partial<EmployeeConfig>, key: string, label: string) => (
+                <Field label={label}><NumberInput className="[&_input]:h-10" prefix={app.prefs.currencySymbol} value={v} disabled={locked || !!cat} onChange={(n) => setEmp(e.name, patch(n), `${key}:${k}`)} data-testid={`m-input-${key}-${k}`} /></Field>
+              );
+              return (
+                <li key={k} className="space-y-3 rounded-xl border border-border/80 p-3.5" data-testid={`card-rate-${k}`}>
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="min-w-0 truncate text-[15px] font-semibold" title={e.name}>{e.name}</span>
+                    <label className="flex shrink-0 items-center gap-2 text-xs text-muted-foreground">Include<Switch checked={!e.excluded} disabled={locked} onCheckedChange={(v) => setEmp(e.name, { excluded: !v })} aria-label="Include in totals" /></label>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2.5">
+                    <Field label="Category">
+                      <Select value={cat ? e.categoryId : CUSTOM} onValueChange={(v) => setEmp(e.name, { categoryId: v })} disabled={locked}>
+                        <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
+                        <SelectContent><SelectItem value={CUSTOM}>Custom</SelectItem>{cats.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}</SelectContent>
+                      </Select>
+                    </Field>
+                    <Field label="Pay basis">
+                      <Select value={basis} onValueChange={(v) => setEmp(e.name, { payBasis: v as any })} disabled={locked || !!cat}>
+                        <SelectTrigger className="h-10" data-testid={`m-select-basis-${k}`}><SelectValue /></SelectTrigger>
+                        <SelectContent><SelectItem value="day_rate">Day rate</SelectItem><SelectItem value="hourly">Hourly</SelectItem></SelectContent>
+                      </Select>
+                    </Field>
+                    {basis === "hourly"
+                      ? money(cat ? cat.hourlyRate : e.hourlyRate, (n) => ({ hourlyRate: n }), "hourly", "Per hour")
+                      : <>{money(cat ? cat.fullDayRate : e.fullDayRate, (n) => ({ fullDayRate: n }), "full", "Full day")}{money(cat ? cat.halfDayRate : e.halfDayRate, (n) => ({ halfDayRate: n }), "half", "Half day")}</>}
+                    <label className={cn("flex items-center justify-between gap-2 self-end rounded-lg border border-border/80 px-3 text-[13px]", basis === "hourly" ? "h-10" : "col-span-2 h-10")}>
+                      <span>Net <span className="text-xs text-muted-foreground">(no tax taken)</span></span>
+                      <Switch checked={e.isNetPay} disabled={locked} onCheckedChange={(v) => setEmp(e.name, { isNetPay: v })} aria-label="Net pay" />
+                    </label>
+                  </div>
+                  <Field label="Paid by"><PaymentPicker method={e.paymentMethod} cash={e.splitCashAmount} defaultMethod={doc.rules.defaultPaymentMethod} disabled={locked} testid={`m-${k}`} onChange={(patch, key) => setEmp(e.name, patch, key)} /></Field>
+                </li>
+              );
+            })}
+          </ul>
+          <div className="-mx-5 hidden overflow-x-auto px-5 sm:block">
             <table className="w-full text-sm min-w-[58rem]">
               <thead>
                 <tr className="text-left text-xs text-muted-foreground">
@@ -141,6 +184,7 @@ export function RatesTab(p: WsProps) {
               </tbody>
             </table>
           </div>
+          </>
         )}
       </Section>
 

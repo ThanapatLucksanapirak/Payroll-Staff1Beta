@@ -30,7 +30,7 @@ export function LoginPage({ appName, setupRequired, dbError, onDone }: { appName
     setBusy(true);
     try {
       const r = await api<{ twoFactor?: "verify" | "setup"; ticket?: string; method?: "app" | "email"; sentTo?: string; emailError?: string }>("POST", setupRequired ? "/api/auth/setup" : "/api/auth/login", setupRequired
-        ? { username: username.trim(), displayName: displayName.trim() || undefined, password, setupCode }
+        ? { username: username.trim(), displayName: displayName.trim() || undefined, password, setupCode, timezone: deviceTimeZone() }
         : { username: username.trim(), password, remember });
       if (r?.twoFactor && r.ticket) { setPassword(""); setSecond({ kind: r.twoFactor, ticket: r.ticket, method: r.method, sentTo: r.sentTo, emailError: r.emailError }); return; }
       session.set();
@@ -104,6 +104,9 @@ export function LoginPage({ appName, setupRequired, dbError, onDone }: { appName
               Keep me signed in
             </label>
             {error && <p id="login-error" className="rounded-[10px] bg-danger-soft px-3.5 py-2.5 text-[13px] font-medium leading-[18px] text-danger" role="alert" data-testid="text-login-error">{error}</p>}
+            {setupRequired && deviceTimeZone() && (
+              <p className="text-[12.5px] leading-[18px] text-muted-foreground" data-testid="text-setup-timezone">Time zone: {deviceTimeZone()!.replace(/_/g, " ")}, from this device. You can change it later in Settings → Locations &amp; rules.</p>
+            )}
             <Button type="submit" size="lg" className="mt-1.5 h-12 w-full rounded-[10px] text-[15px] font-semibold" disabled={busy || !password || (setupRequired && (!setupCode.trim() || !username.trim()))} data-testid="button-login">
               {setupRequired ? (busy ? "Creating account…" : "Create owner account") : busy ? "Signing in…" : "Sign in"}
             </Button>
@@ -126,4 +129,9 @@ export function LoginPage({ appName, setupRequired, dbError, onDone }: { appName
       </main>
     </div>
   );
+}
+
+/** This device's time zone, used for the first location at setup. */
+function deviceTimeZone(): string | undefined {
+  try { return Intl.DateTimeFormat().resolvedOptions().timeZone || undefined; } catch { return undefined; }
 }

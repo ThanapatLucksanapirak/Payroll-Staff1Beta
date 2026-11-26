@@ -69,6 +69,8 @@ export interface Ctx {
   running: Map<number, string>;
   /** Footer page label overrides (e.g. per-statement numbering). */
   pageLabels: Map<number, string>;
+  /** Left footer text for a page, in place of the "internal use" footer (pay statements: whose statement it is). */
+  footerLabels: Map<number, string>;
   periodText: string;
 }
 
@@ -80,14 +82,14 @@ export function createCtx(o: PdfOptions, force?: { orientation?: "portrait" | "l
   const orientation = force?.orientation ?? o.orientation ?? o.prefs.pdfOrientation ?? "landscape";
   const format = o.pageSize ?? o.prefs.pdfPageSize ?? "letter";
   const pdf = new jsPDF({ orientation, unit: "mm", format, compress: true });
-  pdf.setProperties({ title: pdfText(o.title), creator: pdfText(o.prefs.appName || "Payroll Admin") });
+  pdf.setProperties({ title: pdfText(o.title), creator: pdfText(o.prefs.appName || "Shijiri Payroll") });
   pdf.setLineHeightFactor(1.2);
   const W = pdf.internal.pageSize.getWidth();
   const H = pdf.internal.pageSize.getHeight();
   const M = orientation === "landscape" ? 15 : 16;
   const fmt = makeFmt(o.prefs);
   const heading = pdfText(o.prefs.businessName || o.site.name || o.prefs.appName);
-  return { pdf, W, H, M, top: M + 13, bottom: H - 17, fmt, o, heading, running: new Map(), pageLabels: new Map(), periodText: fmt.period(o.result.periodStart, o.result.periodEnd) };
+  return { pdf, W, H, M, top: M + 13, bottom: H - 17, fmt, o, heading, running: new Map(), pageLabels: new Map(), footerLabels: new Map(), periodText: fmt.period(o.result.periodStart, o.result.periodEnd) };
 }
 
 // ── Low-level text helpers ───────────────────────────────────────────────────
@@ -242,7 +244,8 @@ export function finishPages(ctx: Ctx) {
       font(ctx, 7, "bold", C.accent);
       pdf.text("DRAFT, not final: numbers can still change", M, y);
       font(ctx, 7, "normal", C.faint);
-    } else if (o.prefs.pdfFooter) pdf.text(fitText(ctx, pdfText(o.prefs.pdfFooter), third + 15), M, y);
+    } else if (ctx.footerLabels.has(i)) pdf.text(fitText(ctx, pdfText(ctx.footerLabels.get(i)!), third + 15), M, y);
+    else if (o.prefs.pdfFooter) pdf.text(fitText(ctx, pdfText(o.prefs.pdfFooter), third + 15), M, y);
     pdf.text(gen, W / 2, y, { align: "center" });
     pdf.text(ctx.pageLabels.get(i) ?? `Page ${i} of ${n}`, W - M, y, { align: "right" });
   }

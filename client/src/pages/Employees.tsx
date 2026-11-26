@@ -20,6 +20,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Field } from "@/components/workspace/fields";
 import { cn } from "@/lib/utils";
 import { YtdPanel } from "@/components/pay/YtdPanel";
+import { PortalSettingsCard } from "@/components/settings/PortalSettings";
 
 export interface EmployeeRow { id: string; name: string; role: string; active: boolean; hasPin: boolean; pinViewable?: boolean; createdAt: string; updatedAt: string }
 
@@ -70,6 +71,19 @@ export function EmployeesPage() {
   const noPin = (q.data ?? []).filter((e) => e.active && !e.hasPin).length;
   const activeCount = (q.data ?? []).filter((e) => e.active).length;
 
+  const [generating, setGenerating] = useState(false);
+  const [newPins, setNewPins] = useState<{ id: string; name: string; pin: string }[] | null>(null);
+  const generatePins = async () => {
+    if (!(await confirm({ title: `Give ${noPin} ${noPin === 1 ? "person" : "people"} a PIN?`, description: "Each active employee without a PIN gets a random 4-digit one. You'll see them once, to hand out.", confirmLabel: "Make PINs" }))) return;
+    setGenerating(true);
+    try {
+      const r = await api<{ pins: { id: string; name: string; pin: string }[]; skipped: number }>("POST", `/api/sites/${site.id}/employee-pins/generate`, {});
+      await queryClient.invalidateQueries({ queryKey: key });
+      setNewPins(r.pins);
+      if (r.skipped) toast({ title: `${r.skipped} couldn't get a PIN`, description: "Edit them to set one by hand.", variant: "destructive" });
+    } catch (err) { toast({ title: "Couldn't make PINs", description: errorMessage(err), variant: "destructive" }); } finally { setGenerating(false); }
+  };
+
   const remove = async (e: EmployeeRow) => {
     if (!(await confirm({ title: `Remove ${e.name}?`, description: "They can no longer use the time clock. Their past punches and timesheets are kept. To pause someone instead, turn off Active.", confirmLabel: "Remove", destructive: true }))) return;
     try {
@@ -84,7 +98,7 @@ export function EmployeesPage() {
       <PageHeader
         title="Employees"
         titleTestId="text-page-title"
-        subtitle={<span className="inline-flex flex-wrap items-center gap-x-1.5"><SiteDot color={site.color} />{site.name}<span aria-hidden>·</span>{q.data ? `${activeCount} on the time clock` : "who can use the time clock"}</span>}
+        subtitle={<span className="inline-flex flex-wrap items-center gap-x-1.5"><SiteDot color={site.color} />{site.name}<span aria-hidden>·</span>{q.data ? `${activeCount} employee${activeCount === 1 ? "" : "s"}` : "Your staff"}</span>}
         actions={(admin || owner) && (
           <>
             {owner && (pins
@@ -106,8 +120,30 @@ export function EmployeesPage() {
         </div>
       )}
       {noPin > 0 && (
-        <p className="mb-5 flex items-start gap-3 rounded-xl border border-card-border bg-card px-4 py-3 text-[13px] text-muted-foreground shadow-card"><KeyRound className="mt-0.5 h-4 w-4 shrink-0 text-warning" />{noPin} employee{noPin === 1 ? " has" : "s have"} no PIN yet and can't clock in.{admin && " Edit them to set one."}</p>
+        <div className="mb-5 flex flex-col gap-2.5 rounded-xl border border-card-border bg-card px-4 py-3 text-[13px] text-muted-foreground shadow-card sm:flex-row sm:items-center sm:gap-3" data-testid="banner-no-pin">
+          <span className="flex min-w-0 flex-1 items-start gap-3"><KeyRound className="mt-0.5 h-4 w-4 shrink-0 text-warning" /><span>{noPin} employee{noPin === 1 ? " has" : "s have"} no PIN yet, so they can't use the time clock or the staff portal.{admin && " Give everyone a PIN at once, or edit someone to choose theirs."}</span></span>
+          {admin && <span className="shrink-0 pl-7 sm:pl-0"><Button size="sm" variant="outline" onClick={() => void generatePins()} disabled={generating} data-testid="button-generate-pins">{generating ? <Loader2 className="animate-spin" /> : <Dices />}Give everyone a PIN</Button></span>}
+        </div>
       )}
+      {settingsAdmin && site.timeSource !== "square" && (
+        <div className="mb-5 rounded-xl border border-card-border bg-card px-4 pb-3 shadow-card [&>div]:border-t-0" data-testid="card-employees-portal">
+          <PortalSettingsCard site={site} />
+        </div>
+      )}
+      <Dialog open={!!newPins} onOpenChange={(o) => { if (!o) setNewPins(null); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>New PINs</DialogTitle>
+            <DialogDescription>Give each person their PIN now. {owner ? "You can look them up again with Show PINs." : "Only an owner can look them up again."}</DialogDescription>
+          </DialogHeader>
+          <ul className="max-h-80 divide-y divide-border/70 overflow-y-auto rounded-xl border border-border/80 text-[13px]" data-testid="list-new-pins">
+            {(newPins ?? []).map((p) => (
+              <li key={p.id} className="flex items-center justify-between gap-3 px-3 py-2"><span className="min-w-0 truncate font-medium">{p.name}</span><span className="font-mono text-[15px] font-semibold tabular tracking-widest">{p.pin}</span></li>
+            ))}
+          </ul>
+          <DialogFooter><Button onClick={() => setNewPins(null)}>Done</Button></DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <div className="mb-5 flex flex-wrap items-center gap-3">
         <div className="relative min-w-[12rem] flex-1">
@@ -225,7 +261,7 @@ function EmployeeDialog({ siteId, employee, onClose }: { siteId: string; employe
             <form className="space-y-3" onSubmit={(e) => { e.preventDefault(); if (name.trim() && pinOk) void save(); }}>
               <Field label="Name" hint="As it appears in timesheets."><Input autoFocus value={name} maxLength={80} onChange={(e) => setName(e.target.value)} data-testid="input-employee-name" /></Field>
               <Field label="Role or title (optional)"><Input value={role} maxLength={60} onChange={(e) => setRole(e.target.value)} placeholder="e.g. Cook" /></Field>
-              <Field label={employee?.hasPin ? "New PIN (leave blank to keep the current one)" : "PIN (4–6 digits)"} error={!pinOk ? "Use 4 to 6 digits." : undefined}>
+              <Field label={employee?.hasPin ? "New PIN (leave blank to keep the current one)" : "PIN (4–6 digits)"} hint={!employee?.hasPin ? "Needed only for the time clock and the staff portal. You can leave it blank." : undefined} error={!pinOk ? "Use 4 to 6 digits." : undefined}>
                 <div className="flex gap-2">
                   <Input
                     inputMode="numeric" autoComplete="off" value={pin} maxLength={6}

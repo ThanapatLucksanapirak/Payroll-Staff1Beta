@@ -8,6 +8,8 @@ import { timesheetChecklist } from "../shared/payrollChecklist";
 import { defaultPayBasis, newDoc, syncEmployees } from "../client/src/lib/doc";
 import { site as makeSite } from "./pdf-fixture";
 import { hoursView } from "../client/src/portal/format";
+import { detectMapping } from "../shared/importers/csv";
+import { weakPin } from "../server/employees";
 
 const site = makeSite();
 
@@ -54,4 +56,15 @@ test("portal My hours: the no-time-clock note never sits above hours", () => {
   assert.equal(hoursView({ days: [{}] }, false).noClockNote, false, "time-clock days shown (location switched to Square later)");
   assert.equal(hoursView({ days: [] }, true).noClockNote, false, "uses the time clock: the empty text covers it");
   assert.equal(hoursView({ days: [{}], timesheets: [sheet] }, true).fromSheets, false, "time-clock days win over statement hours");
+});
+
+test("CSV: 'Break (minutes)' and 'Break (hours)' headers are recognised", () => {
+  assert.equal(detectMapping(["Employee", "Date", "Clock in", "Clock out", "Break (minutes)"]).breakMinutes, "Break (minutes)");
+  assert.equal(detectMapping(["Employee", "Date", "Clock in", "Clock out", "Break (hours)"]).breakHours, "Break (hours)");
+  assert.equal(detectMapping(["Employee", "Date", "Clock in", "Clock out", "break_minutes"]).breakMinutes, "break_minutes");
+});
+
+test("generated PINs skip the obvious ones", () => {
+  for (const p of ["0000", "7777", "1234", "4321", "3456", "9876", "0123"]) assert.equal(weakPin(p), true, p);
+  for (const p of ["1357", "4821", "1235", "9087", "1212"]) assert.equal(weakPin(p), false, p);
 });

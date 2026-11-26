@@ -115,7 +115,9 @@ export function HomePage() {
             {admin && timeSource !== "kiosk" && !squareOn && <Button asChild variant="outline"><Link href="/settings/locations"><Link2 />Connect Square</Link></Button>}
             <Button onClick={() => newTimesheet()}><Plus />New timesheet</Button>
           </>}
-        />
+        >
+          {editable && <FirstRunSteps timeSource={timeSource} />}
+        </EmptyState>
       ) : (
         <>
           {/* At a glance */}
@@ -261,5 +263,29 @@ function StatCard({ icon: Icon, label, value, sub, extra, tone, onClick, testid 
         {extra}
       </span>
     </Comp>
+  );
+}
+
+/** The order a first payroll goes in, so the starting points above aren't four equal guesses. */
+function FirstRunSteps({ timeSource }: { timeSource: string }) {
+  const steps: { title: string; sub: string; href?: string }[] = [
+    { title: "Add your staff", sub: "Names, and a PIN for anyone using the time clock or staff portal", href: "/employees" },
+    { title: "Bring in hours", sub: timeSource === "kiosk" ? "From the time clock, or upload a CSV" : timeSource === "square" ? "Pull from Square, or upload a CSV" : "From the time clock, Square or a CSV" },
+    { title: "Set pay rates", sub: "On the timesheet's Rates tab. Save them as defaults for next time" },
+    { title: "Review", sub: "Check before export lists anything that needs a look" },
+    { title: "Mark as final", sub: "Locks the numbers. Then export, email the PDFs or publish" },
+  ];
+  return (
+    <ol className="mx-auto mt-2 w-full max-w-md space-y-2 text-left" data-testid="first-run-steps">
+      {steps.map((st, i) => (
+        <li key={st.title} className="flex items-start gap-3 rounded-xl border border-border/80 bg-card px-3.5 py-2.5">
+          <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[12px] font-semibold text-primary tabular">{i + 1}</span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-[13px] font-semibold">{st.href ? <Link href={st.href} className="hover:underline">{st.title}</Link> : st.title}</span>
+            <span className="block text-[12px] leading-snug text-muted-foreground">{st.sub}</span>
+          </span>
+        </li>
+      ))}
+    </ol>
   );
 }
