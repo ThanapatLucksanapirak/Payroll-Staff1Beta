@@ -6,6 +6,7 @@ import { CategoriesSettings } from "@/components/settings/CategoriesSettings";
 import { DatabaseSettings } from "@/components/settings/DatabaseSettings";
 import { SecuritySettings } from "@/components/settings/SecuritySettings";
 import { DataSettings } from "@/components/settings/DataSettings";
+import { UpdateSettings } from "@/components/settings/UpdateSettings";
 import { PreferencesSettings } from "@/components/settings/PreferencesSettings";
 import { UsersSettings } from "@/components/settings/UsersSettings";
 import { AuditSettings } from "@/components/settings/AuditSettings";
@@ -27,6 +28,7 @@ const PANES: Record<string, ComponentType> = {
   users: UsersSettings,
   activity: AuditSettings,
   data: DataSettings,
+  updates: UpdateSettings,
 };
 
 function IconTile({ s, size = "md" }: { s: SettingsSectionMeta; size?: "md" | "lg" }) {
