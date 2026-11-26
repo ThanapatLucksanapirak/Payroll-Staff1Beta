@@ -2,6 +2,7 @@ import { useState } from "react";
 import { RotateCcw } from "lucide-react";
 import { useApp } from "@/context/AppData";
 import { useConfirm } from "@/components/ConfirmDialog";
+import { finalizeDescription } from "@/lib/doc";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -29,7 +30,10 @@ export function DetailsTab(p: WsProps) {
             </Select>
           </Field>
           <Field label="Status" hint={doc.status === "final" ? "Locked. An owner can reopen it from the banner above." : "Finalizing locks the timesheet and takes any advance repayments."}>
-            <Select value={doc.status} onValueChange={(v) => edit((d) => ({ ...d, status: v as any }))} disabled={doc.status === "final"}>
+            <Select value={doc.status} onValueChange={async (v) => {
+              if (v === "final" && !(await confirm({ title: "Mark this timesheet as final?", description: finalizeDescription(app.user.role === "owner"), confirmLabel: "Mark as final" }))) return;
+              edit((d) => ({ ...d, status: v as any }));
+            }} disabled={doc.status === "final"}>
               <SelectTrigger data-testid="select-details-status"><SelectValue /></SelectTrigger>
               <SelectContent><SelectItem value="draft">Draft — still editing</SelectItem><SelectItem value="final">Final — locked</SelectItem></SelectContent>
             </Select>

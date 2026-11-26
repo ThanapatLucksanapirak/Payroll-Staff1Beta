@@ -54,6 +54,11 @@ export function newDoc(site: Site, shifts: Shift[], opts: { source: string; file
   };
 }
 
+/** What "Mark as final" does, for its confirm dialog (same wording everywhere). */
+export function finalizeDescription(isOwner: boolean): string {
+  return `This locks the timesheet, records any advance repayments and puts the pay statements in the staff portal. ${isOwner ? "You can reopen it later." : "Only an owner can reopen it."} Then use Export to download or email the PDFs, or publish it to your accountant.`;
+}
+
 export function uid(prefix = "x") {
   return `${prefix}_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
 }

@@ -5,7 +5,7 @@ import { computePayroll } from "@shared/engine";
 import { computeTimesheet, journalCsv, ytdStatementMap } from "@shared/payExtras";
 import { useApp } from "@/context/AppData";
 import { useTimesheet, type SaveState } from "@/hooks/useTimesheet";
-import { downloadBlob, safeFilename, timeAgo } from "@/lib/doc";
+import { downloadBlob, finalizeDescription, safeFilename, timeAgo } from "@/lib/doc";
 import { shiftsToCsv } from "@shared/importers/csv";
 import { errorMessage } from "@/lib/api";
 import { can, canEdit, isAccountant, isAdmin } from "@/lib/roles";
@@ -110,7 +110,7 @@ export function WorkspacePage({ id }: { id: string }) {
   const markFinal = async () => {
     const ok = await confirm({
       title: `Mark “${title}” as final?`,
-      description: `This locks the timesheet and records any advance repayments.${app.user.role === "owner" ? " You can reopen it later." : " Only an owner can reopen it."} Then use Export to download or email the PDFs.`,
+      description: finalizeDescription(app.user.role === "owner"),
       confirmLabel: "Mark as final",
     });
     if (!ok) return;
@@ -165,7 +165,7 @@ export function WorkspacePage({ id }: { id: string }) {
                   {doc.status === "draft" && <>
                     {/* Order of things: downloads work on a draft (to check it); emailing needs it final. */}
                     <p className="px-2 py-1.5 text-xs leading-snug text-muted-foreground" data-testid="text-export-draft-note">
-                      <span className="font-medium text-foreground">This is a draft.</span> You can download it to check, but the numbers can still change. Mark it as final to lock it and email the PDFs.
+                      <span className="font-medium text-foreground">This is a draft.</span> You can download it to check, but the numbers can still change. Mark it as final to lock it, email the PDFs and publish it.
                     </p>
                     {canFinalize && <DropdownMenuItem onClick={() => void markFinal()} data-testid="button-mark-final-menu"><Lock />Mark as final…</DropdownMenuItem>}
                     <DropdownMenuSeparator />
