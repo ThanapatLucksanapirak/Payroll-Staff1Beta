@@ -268,16 +268,23 @@ test("punch with station and photo; photo served only to editors; not in backups
   assert.equal(anaNow.breakDue, false);
   assert.deepEqual(live.body.punches.find((x: any) => x.id === pid).meta, { station: "Sushi bar", photo: "saved" });
 
-  // Camera unavailable: the punch still succeeds and records "no photo"
-  const out = await K("POST", "/api/kiosk/punch", { id: randomUUID(), type: "break_start", pin: "1234", photo: null });
-  assert.equal(out.status, 200);
-  assert.equal(out.body.punch.photo, "none");
-  // Garbage instead of a JPEG: still punches, no photo
-  const junk = await K("POST", "/api/kiosk/punch", { id: randomUUID(), type: "break_end", pin: "1234", photo: "data:image/jpeg;base64,AAAA" });
-  assert.equal(junk.status, 200);
-  assert.equal(junk.body.punch.photo, "none");
+  // Camera blocked / no face (no photo sent): a live punch is refused and says why
+  const blocked = await K("POST", "/api/kiosk/punch", { id: randomUUID(), type: "break_start", pin: "1234", photo: null });
+  assert.equal(blocked.status, 422);
+  assert.equal(blocked.body.code, "photo");
+  assert.match(blocked.body.error, /Face not detected/);
+  assert.equal((await K("POST", "/api/kiosk/punch", { id: randomUUID(), type: "break_start", pin: "1234" })).status, 422, "no photo field at all");
+  // Garbage instead of a JPEG: refused too
+  const junk = await K("POST", "/api/kiosk/punch", { id: randomUUID(), type: "break_start", pin: "1234", photo: "data:image/jpeg;base64,AAAA" });
+  assert.equal(junk.status, 422);
+  // A punch queued while offline is never lost over a photo: accepted, recorded as "no photo"
+  const queued = await K("POST", "/api/kiosk/punch", { id: randomUUID(), type: "break_start", pin: "1234", photo: null, at: new Date().toISOString() });
+  assert.equal(queued.status, 200, JSON.stringify(queued.body));
+  assert.equal(queued.body.punch.photo, "none");
+  const back = await K("POST", "/api/kiosk/punch", { id: randomUUID(), type: "break_end", pin: "1234", photo: JPEG });
+  assert.equal(back.status, 200);
   // Unknown station is ignored, not an error
-  const benIn = await K("POST", "/api/kiosk/punch", { id: randomUUID(), type: "in", pin: "5678", station: "Roof" });
+  const benIn = await K("POST", "/api/kiosk/punch", { id: randomUUID(), type: "in", pin: "5678", station: "Roof", photo: JPEG });
   assert.equal(benIn.status, 200);
   assert.equal(benIn.body.punch.station, null);
 
@@ -294,7 +301,7 @@ test("punch with station and photo; photo served only to editors; not in backups
   assert.equal(backup.body.punches.find((x: any) => x.id === pid).meta.photo, "saved");
 
   // Deleting the punch removes its photo
-  await K("POST", "/api/kiosk/punch", { id: randomUUID(), type: "out", pin: "1234" });
+  await K("POST", "/api/kiosk/punch", { id: randomUUID(), type: "out", pin: "1234", photo: JPEG });
   const del = await A("DELETE", `/api/punches/${pid}?force=1`, { note: "test" });
   assert.equal(del.body.ok, true);
   await new Promise((r) => setTimeout(r, 100));

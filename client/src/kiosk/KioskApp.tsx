@@ -6,7 +6,7 @@ import {
   type Identified, type KioskNote, type KioskOptions, type KioskState, type PunchResult, type RosterEmployee, KioskError, cache, clockOffset,
   flushQueue, queue, request, serverNow, token, uuid,
 } from "./api";
-import { useCamera } from "./camera";
+import { type CameraStatus, useCamera } from "./camera";
 import { ACTION_STYLE, BigSecondary, duration, firstName, fmt, initials, timeOf, useIdle } from "./ui";
 import { Mark } from "@/components/Logo";
 import { type Confirm, type FixInput, BreakNudge, ConfirmScreen, FixRequestScreen, GuardScreen, MessageScreen, NoteScreen, StationScreen } from "./screens";
@@ -192,6 +192,7 @@ export function KioskApp() {
         setRoster(who.employee.id, status, who.since);
         return setScreen({ k: "guard", who, pin: sess.pin, offline: false, message: e.message, question: e.body.question ?? null, suggest: e.body.suggest ?? null });
       }
+      if (e.code === "photo") void refresh(); // the device's photo setting may have just changed
       setScreen({ ...only(sess), k: "actions", error: e.message });
     }
   };
@@ -203,10 +204,19 @@ export function KioskApp() {
     if (!check.ok) {
       return setScreen({ ...only(sess), k: "guard", message: check.message!, question: check.question ?? null, suggest: check.suggest ?? null });
     }
-    // Photo at the moment of the tap; null = camera unavailable (the punch still goes through).
-    const photo = options.photo ? camera.snapshot() : undefined;
-    if (type === "in" && options.stations.length) return setScreen({ ...only(sess), k: "station", type, photo });
-    void send(type, sess, photo, null);
+    if (!options.photo) {
+      if (type === "in" && options.stations.length) return setScreen({ ...only(sess), k: "station", type, photo: undefined });
+      return void send(type, sess, undefined, null);
+    }
+    // Photo at the moment of the tap. It must show a face: a blocked or covered
+    // camera, or nobody in view, stops the punch with a message saying why.
+    setBusy(true);
+    void camera.capture().then((shot) => {
+      setBusy(false);
+      if (!shot.ok) return setScreen({ ...only(sess), k: "actions", error: shot.message });
+      if (type === "in" && options.stations.length) return setScreen({ ...only(sess), k: "station", type, photo: shot.photo });
+      void send(type, sess, shot.photo, null);
+    });
   };
 
   const sendFix = async (sess: Session, v: FixInput) => {
@@ -302,7 +312,7 @@ export function KioskApp() {
           <ConfirmScreen c={screen.c} tz={tz} onDone={home} />
         )}
       </main>
-      {cameraOn && <CameraPreview attach={camera.attach} status={camera.status} />}
+      {cameraOn && <CameraPreview attach={camera.attach} status={camera.status} faceSeen={camera.faceSeen} />}
       {showInfo && (
         <InfoSheet
           state={state} options={options} pending={pending} online={online} canUnpair={guarded && !!managerPin} guarded={guarded}
@@ -382,17 +392,22 @@ function TopBar({ state, online, pending, onInfo, onExitFullscreen }: { state: K
   );
 }
 
-/** Small live preview so people know a photo is taken with each punch. */
-function CameraPreview({ attach, status }: { attach: (el: HTMLVideoElement | null) => void; status: string }) {
+/** Small live preview so people know a photo is taken with each punch, and whether their face is in view. */
+function CameraPreview({ attach, status, faceSeen }: { attach: (el: HTMLVideoElement | null) => void; status: CameraStatus; faceSeen: boolean | null }) {
+  const broken = status === "blocked" || status === "unavailable";
+  const warn = broken || faceSeen === false;
   return (
-    <div className="pointer-events-none fixed bottom-4 left-4 z-40 flex items-center gap-3 rounded-2xl bg-white/95 p-2 pr-4 shadow-lg ring-1 ring-neutral-200" data-testid="kiosk-camera">
-      {status === "unavailable" ? (
-        <span className="flex h-16 w-16 items-center justify-center rounded-xl bg-neutral-100 text-neutral-500"><CameraOff className="h-7 w-7" /></span>
+    <div className={`pointer-events-none fixed bottom-4 left-4 z-40 flex items-center gap-3 rounded-2xl p-2 pr-4 shadow-lg ring-1 ${warn ? "bg-red-50 ring-red-300" : "bg-white/95 ring-neutral-200"}`} data-testid="kiosk-camera" data-status={status} data-face={faceSeen === null ? "" : faceSeen ? "yes" : "no"}>
+      {broken ? (
+        <span className="flex h-16 w-16 items-center justify-center rounded-xl bg-red-100 text-red-700"><CameraOff className="h-7 w-7" /></span>
       ) : (
-        <video ref={attach} className="h-16 w-16 -scale-x-100 rounded-xl bg-neutral-200 object-cover" muted playsInline autoPlay />
+        <video ref={attach} className={`h-16 w-16 -scale-x-100 rounded-xl bg-neutral-200 object-cover ${faceSeen === false ? "ring-2 ring-red-400" : faceSeen ? "ring-2 ring-emerald-400" : ""}`} muted playsInline autoPlay />
       )}
-      <span className="text-sm font-medium text-neutral-700">
-        {status === "unavailable" ? <>Camera unavailable<br /><span className="font-normal text-neutral-600">Punches still work</span></> : <><Camera className="mr-1 inline h-4 w-4" />Photo taken<br />with your punch</>}
+      <span className={`text-sm font-medium ${warn ? "text-red-900" : "text-neutral-700"}`}>
+        {status === "blocked" ? <>Camera blocked<br /><span className="font-normal">Punching needs the camera</span></>
+          : status === "unavailable" ? <>Camera not available<br /><span className="font-normal">Punching needs the camera</span></>
+          : faceSeen === false ? <>Face not detected<br /><span className="font-normal">Look at the camera</span></>
+          : <><Camera className="mr-1 inline h-4 w-4" />Photo taken<br />with your punch</>}
       </span>
     </div>
   );

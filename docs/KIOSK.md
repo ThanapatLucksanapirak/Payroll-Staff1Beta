@@ -124,6 +124,14 @@ ingress:
 
 You can also put Cloudflare Access in front of the admin hostname only.
 
+### Android app
+
+`android/` builds a Google Play app ("Time Clock") that opens only the kiosk
+hostname, full screen. The kiosk hostname also serves
+`/.well-known/assetlinks.json` from `ANDROID_CERT_SHA256` (set it with
+`sudo payroll android fingerprint ...`). Setup and Play Console steps:
+[android/README.md](../android/README.md).
+
 ## 9. Database
 
 * SQLite: punches live in a `punches` table, created by migration 4 on start.

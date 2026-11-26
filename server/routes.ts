@@ -28,6 +28,7 @@ import { invalidateDeviceCache, kioskHostGuard, registerKioskRoutes, registerTim
 import { registerScheduleRoutes } from "./schedule";
 import { registerTimeclockRoutes } from "./timeclock";
 import { registerKioskFeatureAdminRoutes } from "./kioskFeatures";
+import { registerAndroidRoutes } from "./android";
 import { registerPayRoutes } from "./pay";
 import { registerPermissionRoutes } from "./permissions";
 import { TWO_FACTOR_PUBLIC, registerTwoFactorRoutes } from "./twofactor";
@@ -35,6 +36,7 @@ import { registerOffsiteRoutes } from "./offsite";
 import { registerPortalAdminRoutes, registerPortalRoutes } from "./portal";
 import { registerEmailRoutes } from "./email";
 import { registerGoogleEmailRoutes } from "./emailGoogle";
+import { registerShareRoutes } from "./share";
 import { getPublishedMap, invalidatePublishedCache, publishedRecord, registerPublishRoutes } from "./publish";
 
 type Handler = (req: Request, res: Response) => Promise<unknown>;
@@ -169,6 +171,7 @@ export function registerRoutes(app: Express) {
   // /live checks its own short-lived ticket (EventSource cannot send headers).
   const PUBLIC = new Set(["/health", "/auth/status", "/auth/login", "/auth/setup", "/auth/logout", "/live", "/email/google/callback", ...TWO_FACTOR_PUBLIC]);
   app.use(kioskHostGuard()); // KIOSK_HOST: serve only the kiosk on that hostname
+  registerAndroidRoutes(app); // /.well-known/assetlinks.json for the Android Time Clock app
   // Never cache API responses (payroll data) in browsers or at the Cloudflare edge.
   app.use("/api", (_req, res, next) => { res.setHeader("Cache-Control", "no-store"); next(); });
   // /api/kiosk/*: device-token auth (a custom header, so not exposed to CSRF), never the admin session
@@ -185,6 +188,7 @@ export function registerRoutes(app: Express) {
   registerEmailRoutes(app);
   registerGoogleEmailRoutes(app); // Settings → Email (owner / admin)
   registerPublishRoutes(app); // publish finalized payroll to accountants
+  registerShareRoutes(app); // email finalized payroll PDFs to accountants
 
   // ── Public ──────────────────────────────────────────────────────────────────
   app.get("/api/health", h(async (_req, res) => {
@@ -221,7 +225,8 @@ export function registerRoutes(app: Express) {
   app.put("/api/sites/:id", h(async (req, res) => {
     // Only the fields sent: renaming must not reset rules, time clock or archive state.
     const patch: any = parsePatch(siteInputSchema, req.body);
-    if (patch.rules) patch.rules = siteRulesSchema.parse({ ...((await settings.getSite(String(req.params.id)))?.rules ?? {}), ...patch.rules });
+    // Merge only the rule fields actually sent (the parsed patch has every rule filled with its default).
+    if (patch.rules) patch.rules = siteRulesSchema.parse({ ...((await settings.getSite(String(req.params.id)))?.rules ?? {}), ...(req.body.rules as object) });
     const site = await settings.updateSite(String(req.params.id), patch as any);
     if (!site) return res.status(404).json({ error: "Location not found." });
     res.json(site);

@@ -1,0 +1,70 @@
+plugins {
+    id "com.android.application"
+}
+
+def prop = { String name -> project.findProperty(name)?.toString() }
+def kioskHost = prop("kioskHost")
+def kioskUrl = "https://${kioskHost}/kiosk"
+
+// Release signing comes from the environment (CI secrets) or ~/.gradle/gradle.properties,
+// never from this repository. Without it, bundleRelease builds an unsigned bundle.
+def ksFile = System.getenv("ANDROID_KEYSTORE_FILE") ?: prop("timeclockKeystoreFile")
+def ksPass = System.getenv("ANDROID_KEYSTORE_PASSWORD") ?: prop("timeclockKeystorePassword")
+def ksAlias = System.getenv("ANDROID_KEY_ALIAS") ?: prop("timeclockKeyAlias")
+def ksKeyPass = System.getenv("ANDROID_KEY_PASSWORD") ?: prop("timeclockKeyPassword") ?: ksPass
+def canSign = ksFile && ksPass && ksAlias && file(ksFile).exists()
+
+android {
+    namespace "com.shijirigroup.timeclock"
+    compileSdk 36
+
+    defaultConfig {
+        applicationId prop("appId")
+        minSdk 23
+        targetSdk 36
+        versionCode Integer.parseInt(prop("versionCode"))
+        versionName prop("versionName")
+
+        manifestPlaceholders = [
+            kioskHost: kioskHost,
+            kioskUrl : kioskUrl,
+            appName  : prop("appName"),
+        ]
+        // Digital Asset Links: the app's side of the site ↔ app trust.
+        resValue "string", "asset_statements",
+            "[{\"relation\": [\"delegate_permission/common.handle_all_urls\"], \"target\": {\"namespace\": \"web\", \"site\": \"https://${kioskHost}\"}}]"
+    }
+
+    signingConfigs {
+        if (canSign) {
+            release {
+                storeFile file(ksFile)
+                storePassword ksPass
+                keyAlias ksAlias
+                keyPassword ksKeyPass
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled true
+            shrinkResources true
+            proguardFiles getDefaultProguardFile("proguard-android-optimize.txt")
+            if (canSign) signingConfig signingConfigs.release
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    buildFeatures {
+        resValues true
+    }
+}
+
+dependencies {
+    implementation "com.google.androidbrowserhelper:androidbrowserhelper:2.5.0"
+}

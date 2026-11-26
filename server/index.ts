@@ -10,6 +10,13 @@ import { securityHeaders } from "./security";
 import { runAdminCliAndExit } from "./cli";
 import { endLiveStreams } from "./live";
 import { startAutoCloseJob, stopAutoCloseJob } from "./timeclock";
+import { SHARE_PATH } from "./share";
+import { getPinKey } from "./config";
+
+// Say at start-up (not on the first PIN change) when PIN_KEY is unusable.
+if (process.env.PIN_KEY) {
+  try { getPinKey(); } catch (err) { console.error(`[config] ${(err as Error).message} Setting or changing employee PINs fails until this is fixed.`); }
+}
 
 const app = express();
 const httpServer = createServer(app);
@@ -20,7 +27,8 @@ app.disable("x-powered-by");
 app.use(securityHeaders(process.env.NODE_ENV === "production"));
 
 app.use((req, res, next) => {
-  if (req.path.startsWith("/api/backup/restore") || req.path.startsWith("/api/import/pdf")) return next();
+  // These routes read bigger bodies with their own parser.
+  if (req.path.startsWith("/api/backup/restore") || req.path.startsWith("/api/import/pdf") || SHARE_PATH.test(req.path)) return next();
   return express.json({ limit: "8mb" })(req, res, next);
 });
 

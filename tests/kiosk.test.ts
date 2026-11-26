@@ -11,6 +11,7 @@ import { randomUUID } from "node:crypto";
 import type { AddressInfo } from "node:net";
 import type { Server } from "node:http";
 
+import { middayZone } from "./clock-helpers";
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), "payroll-kiosk-"));
 process.env.DATA_DIR = dir;
 process.env.BACKUPS = "off";
@@ -63,6 +64,8 @@ before(async () => {
   assert.ok(admin, "setup signs in with a cookie");
   const boot = await A("GET", "/api/bootstrap");
   siteId = boot.body.sites[0].id;
+  const tzSet = await A("PUT", `/api/sites/${siteId}`, { rules: { timezone: middayZone() } }); // "today" covers the last few hours
+  assert.equal(tzSet.status, 200, JSON.stringify(tzSet.body));
   assert.equal(boot.body.sites[0].timeSource, "square", "existing locations default to Square");
   site2 = (await A("POST", "/api/sites", { name: "Uptown" })).body.id;
 });
@@ -114,6 +117,7 @@ test("time source setting is saved on the location", async () => {
   assert.equal(renamed.body.timeSource, "both");
   assert.equal(renamed.body.kioskLoginMode, "name_pin");
   assert.equal(renamed.body.rules.clockInCutoff, 600, "rules kept on rename");
+  assert.equal(renamed.body.rules.timezone, middayZone(), "changing one rule keeps the others");
   await A("PUT", `/api/sites/${site2}`, { timeSource: "kiosk" });
 });
 
@@ -369,6 +373,30 @@ test("KIOSK_HOST serves only the kiosk on that hostname", async () => {
     assert.equal((await rawGet("/", `127.0.0.1:${port}`)).status, 200);
   } finally {
     delete process.env.KIOSK_HOST;
+  }
+});
+
+test("assetlinks.json for the Android app, also on the kiosk hostname", async () => {
+  const fp = "ab:cd:ef:01:23:45:67:89:ab:cd:ef:01:23:45:67:89:ab:cd:ef:01:23:45:67:89:ab:cd:ef:01:23:45:67:89";
+  delete process.env.ANDROID_CERT_SHA256;
+  assert.equal((await rawGet("/.well-known/assetlinks.json", `127.0.0.1:${port}`)).status, 404, "not configured yet");
+  process.env.ANDROID_CERT_SHA256 = `${fp}, not-a-fingerprint, ${fp.replace(/:/g, "").toUpperCase()}`;
+  process.env.KIOSK_HOST = "clock.example.com";
+  try {
+    const r = await rawGet("/.well-known/assetlinks.json", "clock.example.com");
+    assert.equal(r.status, 200);
+    assert.match(String(r.headers["content-type"]), /application\/json/);
+    const body = JSON.parse(r.body);
+    assert.deepEqual(body, [{
+      relation: ["delegate_permission/common.handle_all_urls"],
+      target: { namespace: "android_app", package_name: "com.shijirigroup.timeclock", sha256_cert_fingerprints: [fp.toUpperCase()] },
+    }]);
+    process.env.ANDROID_APP_PACKAGE = "bad package";
+    assert.equal((await rawGet("/.well-known/assetlinks.json", "clock.example.com")).status, 404);
+  } finally {
+    delete process.env.KIOSK_HOST;
+    delete process.env.ANDROID_CERT_SHA256;
+    delete process.env.ANDROID_APP_PACKAGE;
   }
 });
 

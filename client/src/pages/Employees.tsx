@@ -1,7 +1,7 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "wouter";
 import { useQuery } from "@tanstack/react-query";
-import { AlertTriangle, Dices, Download, KeyRound, Loader2, Pencil, Plus, Search, Trash2, UserRound } from "lucide-react";
+import { AlertTriangle, Dices, Download, Eye, EyeOff, KeyRound, Loader2, Pencil, Plus, Search, Trash2, UserRound } from "lucide-react";
 import { useApp } from "@/context/AppData";
 import { api, errorMessage, queryClient } from "@/lib/api";
 import { can, isAdmin } from "@/lib/roles";
@@ -21,7 +21,10 @@ import { Field } from "@/components/workspace/fields";
 import { cn } from "@/lib/utils";
 import { YtdPanel } from "@/components/pay/YtdPanel";
 
-export interface EmployeeRow { id: string; name: string; role: string; active: boolean; hasPin: boolean; createdAt: string; updatedAt: string }
+export interface EmployeeRow { id: string; name: string; role: string; active: boolean; hasPin: boolean; pinViewable?: boolean; createdAt: string; updatedAt: string }
+
+/** PINs shown to an owner after they re-enter their password; hidden again after this long. */
+const SHOW_PINS_MS = 2 * 60_000;
 
 function randomPin(len = 4) {
   const b = new Uint32Array(len);
@@ -45,6 +48,16 @@ export function EmployeesPage() {
   const [importing, setImporting] = useState(false);
   const [search, setSearch] = useState("");
   const [showInactive, setShowInactive] = useState(false);
+  // Owners can look up PINs (password re-entry; every look-up is logged).
+  const owner = app.user?.role === "owner";
+  const [pins, setPins] = useState<Record<string, string | null> | null>(null);
+  const [askPins, setAskPins] = useState(false);
+  useEffect(() => {
+    if (!pins) return;
+    const t = setTimeout(() => setPins(null), SHOW_PINS_MS);
+    return () => clearTimeout(t);
+  }, [pins]);
+  useEffect(() => { setPins(null); }, [site.id]);
 
   const rows = useMemo(() => {
     let r = q.data ?? [];
@@ -72,10 +85,13 @@ export function EmployeesPage() {
         title="Employees"
         titleTestId="text-page-title"
         subtitle={<span className="inline-flex flex-wrap items-center gap-x-1.5"><SiteDot color={site.color} />{site.name}<span aria-hidden>·</span>{q.data ? `${activeCount} on the time clock` : "who can use the time clock"}</span>}
-        actions={admin && (
+        actions={(admin || owner) && (
           <>
-            <Button variant="ghost" onClick={() => setImporting(true)} data-testid="button-import-employees"><Download /> Import names</Button>
-            <Button onClick={() => setEditing("new")} data-testid="button-add-employee"><Plus /> Add employee</Button>
+            {owner && (pins
+              ? <Button variant="ghost" onClick={() => setPins(null)} data-testid="button-hide-pins"><EyeOff /> Hide PINs</Button>
+              : <Button variant="ghost" onClick={() => setAskPins(true)} data-testid="button-show-pins"><Eye /> Show PINs</Button>)}
+            {admin && <Button variant="ghost" onClick={() => setImporting(true)} data-testid="button-import-employees"><Download /> Import names</Button>}
+            {admin && <Button onClick={() => setEditing("new")} data-testid="button-add-employee"><Plus /> Add employee</Button>}
           </>
         )}
       />
@@ -134,7 +150,11 @@ export function EmployeesPage() {
                   <p className="truncate text-xs text-muted-foreground">{e.role || "—"}</p>
                 </div>
                 {!e.active && <Badge variant="secondary">Inactive</Badge>}
-                {e.hasPin ? <Badge variant="success" title="PIN set"><KeyRound /><span className="sr-only sm:not-sr-only">PIN set</span></Badge> : <Badge variant="warning">No PIN</Badge>}
+                {pins && e.hasPin ? (
+                  pins[e.id]
+                    ? <span className="rounded-lg bg-foreground/[0.05] px-2.5 py-1 font-mono text-[15px] font-semibold tracking-[0.2em]" data-testid={`text-pin-${e.id}`}>{pins[e.id]}</span>
+                    : <span className="max-w-[11rem] text-right text-xs text-muted-foreground" data-testid={`text-pin-hidden-${e.id}`}>Set before PINs could be shown. Set a new one to see it.</span>
+                ) : e.hasPin ? <Badge variant="success" title="PIN set"><KeyRound /><span className="sr-only sm:not-sr-only">PIN set</span></Badge> : <Badge variant="warning">No PIN</Badge>}
                 {admin && (
                   <>
                     <Button variant="ghost" size="icon-sm" className="text-muted-foreground" aria-label={`Edit ${e.name}`} onClick={() => setEditing(e)} data-testid={`button-edit-employee-${e.id}`}><Pencil /></Button>
@@ -153,6 +173,7 @@ export function EmployeesPage() {
 
       {editing && <EmployeeDialog siteId={site.id} employee={editing === "new" ? null : editing} onClose={() => setEditing(null)} />}
       {importing && <ImportNamesDialog siteId={site.id} onClose={() => setImporting(false)} />}
+      {askPins && <ShowPinsDialog siteId={site.id} onClose={() => setAskPins(false)} onShown={(p) => { setPins(p); setAskPins(false); }} />}
     </Page>
   );
 }
@@ -189,7 +210,7 @@ function EmployeeDialog({ siteId, employee, onClose }: { siteId: string; employe
       <DialogContent className="max-w-sm">
         {shownPin ? (
           <>
-            <DialogHeader><DialogTitle>PIN saved</DialogTitle><DialogDescription>Give this PIN to {name.trim()}. It is stored securely and can't be shown again.</DialogDescription></DialogHeader>
+            <DialogHeader><DialogTitle>PIN saved</DialogTitle><DialogDescription>Give this PIN to {name.trim()}. It is stored encrypted. The owner can look it up later with Show PINs.</DialogDescription></DialogHeader>
             <p className="my-2 rounded-xl bg-foreground/[0.04] py-4 text-center font-mono text-4xl font-semibold tracking-[0.3em]" data-testid="text-new-pin">{shownPin}</p>
             <DialogFooter><Button onClick={onClose}>Done</Button></DialogFooter>
           </>
@@ -273,6 +294,38 @@ function ImportNamesDialog({ siteId, onClose }: { siteId: string; onClose: () =>
           <Button variant="outline" onClick={onClose}>Cancel</Button>
           <Button disabled={busy || !picked.length} onClick={run} data-testid="button-confirm-import-employees">{busy && <Loader2 className="animate-spin" />}Add {picked.length || ""}</Button>
         </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/** Owner-only: re-enter your password to see the PINs at this location for a couple of minutes. */
+function ShowPinsDialog({ siteId, onClose, onShown }: { siteId: string; onClose: () => void; onShown: (pins: Record<string, string | null>) => void }) {
+  const [password, setPassword] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const run = async () => {
+    setBusy(true); setError(null);
+    try {
+      const r = await api<{ pins: { id: string; pin: string | null }[] }>("POST", `/api/sites/${siteId}/employee-pins/reveal`, { password });
+      onShown(Object.fromEntries(r.pins.map((p) => [p.id, p.pin])));
+    } catch (e) { setError(errorMessage(e)); } finally { setBusy(false); setPassword(""); }
+  };
+  return (
+    <Dialog open onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-sm">
+        <DialogHeader>
+          <DialogTitle>Show employee PINs</DialogTitle>
+          <DialogDescription>Enter your password to see the time clock PINs here. They hide again after 2 minutes, and each look-up is recorded in Settings → Activity.</DialogDescription>
+        </DialogHeader>
+        <form className="space-y-3" onSubmit={(e) => { e.preventDefault(); if (password) void run(); }}>
+          <Field label="Your password"><Input type="password" autoComplete="current-password" autoFocus value={password} onChange={(e) => setPassword(e.target.value)} data-testid="input-pins-password" /></Field>
+          {error && <p className="rounded-lg bg-danger-soft px-3 py-2 text-[13px] font-medium text-danger" role="alert">{error}</p>}
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>
+            <Button type="submit" disabled={busy || !password} data-testid="button-confirm-show-pins">{busy && <Loader2 className="animate-spin" />}Show PINs</Button>
+          </DialogFooter>
+        </form>
       </DialogContent>
     </Dialog>
   );

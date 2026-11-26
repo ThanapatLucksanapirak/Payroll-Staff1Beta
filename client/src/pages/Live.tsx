@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "wouter";
 import { useQuery } from "@tanstack/react-query";
-import { AlertTriangle, Clock, Coffee, Loader2, Pencil, Plus, Tablet, Trash2, UserRound, Users } from "lucide-react";
+import { AlertTriangle, Clock, Coffee, Loader2, LogOut, Pencil, Plus, Tablet, Trash2, UserRound, Users, XCircle } from "lucide-react";
 import { type ClockStatus, type Punch, type PunchType, PUNCH_LABELS, PUNCH_TYPES } from "@shared/punches";
 import { instantToLocal, localToInstant, minutesToInput, inputToMinutes, todayISO } from "@shared/dates";
 import { useApp } from "@/context/AppData";
@@ -62,7 +62,8 @@ export function LivePage() {
   const key = ["/api/sites", site.id, "timeclock"];
   const q = useQuery<DayData>({ queryKey: key, staleTime: 0, refetchInterval: 5 * 60_000 });
   const [fix, setFix] = useState<Punch | null>(null);
-  const [adding, setAdding] = useState<{ employeeId?: string } | null>(null);
+  const [adding, setAdding] = useState<{ employeeId?: string; type?: PunchType; title?: string } | null>(null);
+  const [cancelling, setCancelling] = useState<EmployeeNow | null>(null);
   const [, tick] = useState(0);
   useEffect(() => { const t = setInterval(() => tick((n) => n + 1), 30_000); return () => clearInterval(t); }, []);
 
@@ -149,6 +150,12 @@ export function LivePage() {
                       <span className="text-[13px] text-muted-foreground">{e.status === "break" ? "Break since" : "In since"} <b className="font-medium text-foreground">{t(e.status === "break" ? e.since : e.shiftStart)}</b></span>
                       <span className="tabular text-[20px] font-semibold leading-none tracking-tight">{hm(minutesNow(e))}</span>
                     </div>
+                    {editable && (
+                      <div className="mt-3 flex flex-wrap gap-1.5 border-t border-border/70 pt-3">
+                        <Button size="sm" variant="outline" onClick={() => setAdding({ employeeId: e.id, type: "out", title: `Clock out ${e.name}` })} data-testid={`button-clock-out-${e.id}`}><LogOut /> Clock out</Button>
+                        <Button size="sm" variant="ghost" className="text-muted-foreground hover:text-destructive" onClick={() => setCancelling(e)} data-testid={`button-cancel-shift-${e.id}`}><XCircle /> Cancel clock-in</Button>
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
@@ -207,7 +214,8 @@ export function LivePage() {
       )}
 
       {fix && <FixPunchDialog punch={fix} tz={tz} name={names[fix.employeeId] ?? fix.employeeName} onClose={() => setFix(null)} />}
-      {adding && data && <AddPunchDialog siteId={site.id} tz={tz} employees={data.employees.filter((e) => e.inDirectory)} onClose={() => setAdding(null)} />}
+      {adding && data && <AddPunchDialog siteId={site.id} tz={tz} employees={data.employees.filter((e) => e.inDirectory || e.id === adding.employeeId)} initial={adding} onClose={() => setAdding(null)} />}
+      {cancelling && <CancelShiftDialog siteId={site.id} employee={cancelling} when={t(cancelling.shiftStart)} onClose={() => setCancelling(null)} />}
     </Page>
   );
 }
@@ -315,13 +323,13 @@ function FixPunchDialog({ punch, tz, name, onClose }: { punch: Punch; tz: string
   );
 }
 
-function AddPunchDialog({ siteId, tz, employees, onClose }: { siteId: string; tz: string; employees: EmployeeNow[]; onClose: () => void }) {
+function AddPunchDialog({ siteId, tz, employees, initial, onClose }: { siteId: string; tz: string; employees: EmployeeNow[]; initial?: { employeeId?: string; type?: PunchType; title?: string }; onClose: () => void }) {
   const { toast } = useToast();
   const dt = useLocalDateTime(new Date().toISOString(), tz);
-  const [employeeId, setEmployeeId] = useState(employees[0]?.id ?? "");
+  const [employeeId, setEmployeeId] = useState(initial?.employeeId ?? employees[0]?.id ?? "");
   const emp = employees.find((e) => e.id === employeeId);
   const suggested: PunchType = emp ? (emp.status === "out" ? "in" : emp.status === "break" ? "break_end" : "out") : "in";
-  const [type, setType] = useState<PunchType | null>(null);
+  const [type, setType] = useState<PunchType | null>(initial?.type ?? null);
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
@@ -342,8 +350,8 @@ function AddPunchDialog({ siteId, tz, employees, onClose }: { siteId: string; tz
     <Dialog open onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>Add a punch</DialogTitle>
-          <DialogDescription>For a missed clock-in, break or clock-out.</DialogDescription>
+          <DialogTitle>{initial?.title ?? "Add a punch"}</DialogTitle>
+          <DialogDescription>{initial?.type === "out" ? "Records the clock-out for them, for example when the kiosk was offline. Change the time if they left earlier." : "For a missed clock-in, break or clock-out."}</DialogDescription>
         </DialogHeader>
         {employees.length === 0 ? (
           <p className="text-sm text-muted-foreground">Add employees first on the <Link href="/employees" className="font-medium text-primary hover:underline">Employees</Link> page.</p>
@@ -366,7 +374,7 @@ function AddPunchDialog({ siteId, tz, employees, onClose }: { siteId: string; tz
               <Field label={`Time (${tz})`}><Input type="time" value={dt.time} onChange={(e) => dt.setTime(e.target.value)} /></Field>
             </div>
             <Field label="Note (required)">
-              <Textarea rows={2} value={note} maxLength={300} onChange={(e) => setNote(e.target.value)} placeholder="e.g. Tablet was offline" />
+              <Textarea rows={2} value={note} maxLength={300} onChange={(e) => setNote(e.target.value)} placeholder="e.g. Tablet was offline" data-testid="input-new-punch-note" />
             </Field>
             {problem && <p className="rounded-lg bg-danger-soft px-3 py-2 text-[13px] font-medium text-danger" role="alert">{problem}</p>}
           </div>
@@ -374,6 +382,44 @@ function AddPunchDialog({ siteId, tz, employees, onClose }: { siteId: string; tz
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>Cancel</Button>
           <Button disabled={busy || !employeeId || !note.trim()} onClick={save} data-testid="button-save-new-punch">{busy && <Loader2 className="animate-spin" />}{conflict ? "Add anyway" : "Add punch"}</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/** Cancel someone's current clock-in (and any breaks since): as if they never clocked in. */
+function CancelShiftDialog({ siteId, employee, when, onClose }: { siteId: string; employee: EmployeeNow; when: string; onClose: () => void }) {
+  const { toast } = useToast();
+  const [note, setNote] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [problem, setProblem] = useState<string | null>(null);
+  const run = async () => {
+    setBusy(true); setProblem(null);
+    try {
+      await api("POST", `/api/sites/${siteId}/employees/${encodeURIComponent(employee.id)}/cancel-shift`, { note: note.trim() });
+      toast({ title: "Clock-in cancelled", description: `${employee.name} is no longer clocked in.` });
+      await queryClient.invalidateQueries({ queryKey: ["/api/sites", siteId, "timeclock"] });
+      onClose();
+    } catch (e) { setProblem(errorMessage(e)); } finally { setBusy(false); }
+  };
+  return (
+    <Dialog open onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>Cancel {employee.name}'s clock-in?</DialogTitle>
+          <DialogDescription>
+            Removes the clock-in at {when}{employee.status === "break" ? " and their break" : " and any breaks since"}, as if they never clocked in. No hours are counted for it.
+            If they did work, use Clock out instead.
+          </DialogDescription>
+        </DialogHeader>
+        <Field label="Note (required)" hint="Kept in Settings → Activity.">
+          <Textarea rows={2} value={note} maxLength={300} onChange={(e) => setNote(e.target.value)} placeholder="e.g. Clocked in by mistake, kiosk went offline" data-testid="input-cancel-shift-note" />
+        </Field>
+        {problem && <p className="rounded-lg bg-danger-soft px-3 py-2 text-[13px] font-medium text-danger" role="alert">{problem}</p>}
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>Keep it</Button>
+          <Button variant="destructive" disabled={busy || !note.trim()} onClick={run} data-testid="button-confirm-cancel-shift">{busy && <Loader2 className="animate-spin" />}Cancel clock-in</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

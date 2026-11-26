@@ -13,8 +13,9 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { NumberInput } from "@/components/workspace/fields";
+import { UnsavedDot, usePendingChange } from "@/components/settings/pendingChanges";
 
-/** Settings → Locations → Time clock: close shifts people forgot to clock out of. Saved right away. */
+/** Settings → Locations → Time clock: close shifts people forgot to clock out of. Saved with the page's Save changes button. */
 export function AutoClockOutSettings({ site }: { site: Site }) {
   const { toast } = useToast();
   const q = useQuery<AutoCloseData>({ queryKey: tcKeys.autoClose(site.id) });
@@ -25,15 +26,18 @@ export function AutoClockOutSettings({ site }: { site: Site }) {
   const dirty = !!cfg && !!saved && (cfg.cutoffMinutes !== saved.cutoffMinutes || cfg.maxShiftHours !== saved.maxShiftHours);
   const on = !!saved && (saved.cutoffMinutes != null || saved.maxShiftHours > 0);
 
-  const save = async () => {
+  const persist = async () => {
     if (!cfg) return;
+    const r = await api<{ config: AutoCloseConfig; closed: number }>("PUT", `/api/sites/${site.id}/timeclock/auto-close`, cfg);
+    await queryClient.invalidateQueries({ queryKey: tcKeys.autoClose(site.id) });
+    await invalidateTimeclock(site.id);
+    if (r.closed) toast({ title: "Auto clock-out saved", description: `${r.closed} forgotten shift${r.closed === 1 ? " was" : "s were"} closed. Review them in Live → Fix punches.` });
+  };
+  const discard = () => { if (saved) setCfg(saved); };
+  const inPage = usePendingChange(`auto-close:${site.id}`, dirty, { label: "Auto clock-out", save: persist, discard });
+  const save = async () => {
     setBusy(true);
-    try {
-      const r = await api<{ config: AutoCloseConfig; closed: number }>("PUT", `/api/sites/${site.id}/timeclock/auto-close`, cfg);
-      await queryClient.invalidateQueries({ queryKey: tcKeys.autoClose(site.id) });
-      await invalidateTimeclock(site.id);
-      toast({ title: "Auto clock-out saved", description: r.closed ? `${r.closed} forgotten shift${r.closed === 1 ? " was" : "s were"} closed. Review them in Live → Fix punches.` : undefined });
-    } catch (e) { toast({ title: "Couldn't save", description: errorMessage(e), variant: "destructive" }); } finally { setBusy(false); }
+    try { await persist(); toast({ title: "Auto clock-out saved" }); } catch (e) { toast({ title: "Couldn't save", description: errorMessage(e), variant: "destructive" }); } finally { setBusy(false); }
   };
 
   return (
@@ -41,7 +45,7 @@ export function AutoClockOutSettings({ site }: { site: Site }) {
       <div className="flex items-start gap-3">
         <MoonStar className="mt-0.5 h-4 w-4 text-muted-foreground" />
         <div className="min-w-0 flex-1">
-          <p className="flex items-center gap-2 text-[13px] font-semibold">Auto clock-out {q.isLoading ? null : on ? <Badge variant="success">On</Badge> : <Badge variant="secondary">Off</Badge>}</p>
+          <p className="flex items-center gap-2 text-[13px] font-semibold">Auto clock-out {q.isLoading ? null : on ? <Badge variant="success">On</Badge> : <Badge variant="secondary">Off</Badge>} <UnsavedDot show={dirty} /></p>
           <p className="mt-0.5 text-xs text-muted-foreground">
             Closes shifts people forgot to clock out of, at the time you set (not when it's noticed). Each one is marked “Auto-closed” for you to check in Live → Fix punches.
             {q.data?.lastRun && <> Last checked {timeAgo(q.data.lastRun.at)}.</>}
@@ -74,7 +78,7 @@ export function AutoClockOutSettings({ site }: { site: Site }) {
               <span className="text-[13px] text-muted-foreground">hours</span>
             </div>
           </div>
-          {dirty && (
+          {dirty && !inPage && (
             <div className="flex justify-end gap-2">
               <Button variant="ghost" size="sm" onClick={() => setCfg(saved!)}>Cancel</Button>
               <Button size="sm" onClick={save} disabled={busy} data-testid="button-save-auto-close">{busy && <Loader2 className="animate-spin" />}Save auto clock-out</Button>

@@ -16,6 +16,8 @@ export interface LocalConfig {
   /** Last known user accounts, so sign-in still works while the database is unreachable. */
   usersCache?: unknown[];
   setupCode?: string;
+  /** Key that encrypts employee PINs so owners can look them up (kept here, never in the database or backups). */
+  pinKey?: string;
 }
 
 let cache: LocalConfig | null = null;
@@ -82,4 +84,22 @@ export function effectiveDatabaseConfig(): DatabaseConfig {
   if (cfg.database) return cfg.database;
   if (managedSupabase()) return { kind: "managed" };
   return { kind: "sqlite" };
+}
+
+/** 32-byte key for encrypting employee PINs (created on first use). */
+export function getPinKey(): Buffer {
+  const env = process.env.PIN_KEY?.trim();
+  if (env) {
+    const key = Buffer.from(env, "base64url");
+    // A passphrase would make a weak key: insist on 32 random bytes.
+    if (key.length !== 32 || key.toString("base64url") !== env.replace(/=+$/, "").replace(/\+/g, "-").replace(/\//g, "_")) {
+      throw new Error("PIN_KEY must be 32 random bytes in base64url (for example: openssl rand -base64 32 | tr '+/' '-_' | tr -d '='). Remove it to use the key kept in config.json.");
+    }
+    return key;
+  }
+  const cfg = loadConfig();
+  if (cfg.pinKey) return Buffer.from(cfg.pinKey, "base64url");
+  const key = randomBytes(32);
+  saveConfig({ pinKey: key.toString("base64url") });
+  return key;
 }

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link } from "wouter";
 import { useQuery } from "@tanstack/react-query";
-import { CheckCircle2, Loader2, Mail, MailWarning, Send, Undo2 } from "lucide-react";
+import { CheckCircle2, FileText, Loader2, Mail, MailWarning, Send, Undo2 } from "lucide-react";
 import type { TimesheetSummary } from "@shared/schema";
 import { api, errorMessage, queryClient } from "@/lib/api";
 import { useApp } from "@/context/AppData";
@@ -33,7 +33,7 @@ const key = (id: string) => ["/api/timesheets", id, "publish"];
  * accountant (who then sees it and gets an email). Accountants see when it was
  * published.
  */
-export function PublishPanel({ id, title }: { id: string; title: string }) {
+export function PublishPanel({ id, title, onShare }: { id: string; title: string; onShare?: () => void }) {
   const app = useApp();
   const admin = isAdmin(app.user);
   const { toast } = useToast();
@@ -113,6 +113,9 @@ export function PublishPanel({ id, title }: { id: string; title: string }) {
             <>Not published yet. Publish it so your accountant can see it{data.emailReady && withEmail.length ? " and gets an email" : ""}.</>
           )}
         </span>
+        {onShare && data.emailReady && (
+          <Button size="sm" variant="outline" onClick={onShare} data-testid="button-share"><FileText />Email PDFs…</Button>
+        )}
         {pub ? (
           <span className="flex gap-1.5">
             <Button size="sm" variant="outline" onClick={() => setOpen(true)} data-testid="button-republish"><Mail />Email again</Button>

@@ -33,3 +33,10 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .portal-fade-up, .portal-shake { animation: none; }
 }
+
+/* App-like on phones: no double-tap zoom, and form fields at least 16px on
+   touch screens so iOS doesn't zoom in on focus (see lib/noZoom.ts). */
+html { touch-action: manipulation; -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+@media (pointer: coarse) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]), textarea, select { font-size: max(16px, 1em) !important; }
+}

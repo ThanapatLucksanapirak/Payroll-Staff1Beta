@@ -2,7 +2,7 @@
 // (the HTML pages, hashed scripts/styles, icons and manifests) so the app
 // opens quickly and shows "can't reach the server" when offline. It never
 // touches /api/ (so payroll data and sign-in are never cached) or other sites.
-const VERSION = "1";
+const VERSION = "2";
 const SHELL = `payroll-shell-v${VERSION}`;
 const ASSETS = `payroll-assets-v${VERSION}`;
 const MAX_ASSETS = 80;
@@ -60,6 +60,20 @@ self.addEventListener("fetch", (event) => {
       if (hit) return hit;
       const res = await fetch(req);
       if (cacheable(res)) { await cache.put(req, res.clone()); event.waitUntil(trim(cache)); }
+      return res;
+    })());
+    return;
+  }
+
+  // The kiosk's face-check model and runtime (large, unversioned names): cache
+  // first, so a kiosk downloads them once. Bump VERSION when they change.
+  if (/^\/face\/[\w.-]+$/.test(url.pathname)) {
+    event.respondWith((async () => {
+      const cache = await caches.open(SHELL);
+      const hit = await cache.match(req);
+      if (hit) return hit;
+      const res = await fetch(req);
+      if (cacheable(res)) await cache.put(req, res.clone());
       return res;
     })());
     return;

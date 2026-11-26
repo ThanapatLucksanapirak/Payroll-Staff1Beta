@@ -11,6 +11,17 @@ few short bullets written for the people who use the app, not for developers.
 - Easier to use on phones: timesheets, schedule, settings and the two-factor notice fit small screens.
 - The time clock is easier to read, and "Fix a missed punch" fits on the tablet without scrolling.
 
+## 2026-11-26 · Kiosk and app polish from feedback (#22)
+- Live: each person who is clocked in has Clock out and Cancel clock-in, for when the kiosk went offline or someone clocked in by mistake.
+- With photos on, the time clock checks for a face: a blocked or covered camera, or nobody in view, stops the punch and says "Face not detected".
+- Settings → Locations: kiosk options, stations, break reminder, auto clock-out and the employee portal now save with the one Save changes button, which lists what's unsaved.
+- Owners can show employee PINs on the Employees page after re-entering their password. PINs set before this update need to be set again to be shown.
+- On phones the app no longer zooms on pinch, double-tap or when you tap a text box. On iPhone Safari, a tip explains Add to Home Screen to open it full screen.
+
+## 2026-11-26 · Time Clock app for Android (#21)
+- The kiosk can be installed as an Android app from Google Play. It opens straight to the time clock, full screen, with no zooming.
+- `sudo payroll android fingerprint ...` links the app to your kiosk address.
+
 ## 2026-11-26 · About page with version history (#15)
 - Settings → About shows the installed version, when it was installed and when it last checked for updates.
 - Version history lists every update with notes on what changed.
