@@ -1,4 +1,4 @@
-# Time Clock for Android (Google Play)
+# Shijiri Time Clock for Android (Google Play)
 
 A small Android app that opens **only the kiosk page**,
 `https://kioskpayroll.shijirigroup.com/kiosk`, full screen with no browser bar.
@@ -81,7 +81,8 @@ folder, then **Build → Generate Signed App Bundle**.)
    can. It needs a D-U-N-S number, but new *personal* accounts must run a
    closed test with at least 12 testers for 14 days before they can publish to
    everyone. Organization accounts skip that.
-2. **Create app**: name "Time Clock" (or "Shijiri Time Clock"), App, Free.
+2. **Create app**: name "Shijiri Time Clock", App, Free. (The label under
+   the icon on the tablet is the short name, "Time Clock".)
 3. **Test and release → Testing → Internal testing → Create new release**.
    Accept **Play App Signing** (Google keeps the real signing key; yours is only
    the upload key). Upload `app-release.aab`, add yourself as a tester, roll
