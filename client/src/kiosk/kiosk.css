@@ -205,3 +205,35 @@ html { touch-action: manipulation; -webkit-text-size-adjust: 100%; text-size-adj
   .kiosk-actions > div:has(> [data-testid^="kiosk-action-"]) { margin-top: 0.75rem; gap: 0.5rem; }
   .kiosk-actions .kiosk-tap:not([data-testid^="kiosk-action-"]) { min-height: 3rem; }
 }
+
+/* A wrong-PIN or lockout message on a short phone: it takes the prompt line's room, so the keypad doesn't move off screen. */
+@media (max-height: 760px) and (max-width: 639px) {
+  [data-testid="kiosk-pin-hint"][data-msg] { max-width: 20rem; text-align: center; font-size: 1rem; line-height: 1.3rem; }
+  .kiosk-scroll:has([data-testid="kiosk-pin-hint"][data-msg]) .kiosk-prompt,
+  .kiosk-scroll:has([data-testid="kiosk-pin-hint"][data-msg]) .kiosk-date { display: none; }
+  .kiosk-pin-cancel { margin-top: 0.5rem; min-height: 2.75rem; padding-top: 0; padding-bottom: 0; font-size: 1.125rem; }
+  .kiosk-pin-cancel.kiosk-tap { min-height: 2.75rem; }
+}
+@media (max-height: 640px) and (max-width: 1023px) {
+  [data-testid="kiosk-pin-hint"][data-msg] { font-size: 0.9375rem; line-height: 1.2rem; }
+}
+/* Name, then PIN: the "Hi, Ana" header gets smaller on short phones. */
+@media (max-height: 760px) and (max-width: 639px) {
+  .kiosk-pin-who > span:first-child { width: 4rem; height: 4rem; font-size: 1.5rem; }
+  .kiosk-pin-who > p:nth-of-type(1) { margin-top: 0.5rem; font-size: 1.875rem; line-height: 2.25rem; }
+  .kiosk-pin-who > p:nth-of-type(2) { font-size: 1.125rem; line-height: 1.5rem; }
+  .kiosk-scroll:has([data-testid="kiosk-pin-hint"][data-msg]) .kiosk-pin-who > p:nth-of-type(2) { display: none; }
+}
+@media (max-height: 640px) and (max-width: 1023px) {
+  .kiosk-pin-who > span:first-child { width: 3rem; height: 3rem; font-size: 1.125rem; }
+  .kiosk-pin-who > p:nth-of-type(1) { margin-top: 0.25rem; font-size: 1.5rem; line-height: 1.85rem; }
+  .kiosk-pin-who > p:nth-of-type(2) { font-size: 1rem; line-height: 1.35rem; }
+  .kiosk-scroll:has([data-testid="kiosk-pin-hint"][data-msg]) .kiosk-pin-who > p:nth-of-type(2) { display: none; }
+}
+/* While digits are typed, "Delete last digit" appears under the keypad: the prompt (and on the smallest screens the initials) make room for it. */
+@media (max-height: 760px) and (max-width: 639px) {
+  .kiosk-scroll:has(.kiosk-pin-who):has(.kiosk-pin-cancel) .kiosk-pin-who > p:nth-of-type(2) { display: none; }
+}
+@media (max-height: 640px) and (max-width: 1023px) {
+  .kiosk-scroll:has(.kiosk-pin-who):has(.kiosk-pin-cancel) .kiosk-pin-who > span:first-child { display: none; }
+}

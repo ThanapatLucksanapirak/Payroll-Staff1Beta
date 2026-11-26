@@ -11,6 +11,10 @@ few short bullets written for the people who use the app, not for developers.
 - No face, no punch: the kiosk says "Face not detected" and asks the person to try again.
 - A punch saved on a tablet while it was offline is still kept, but if its photo shows no face it gets a "No face" tag on Live.
 
+## 2026-11-26 · Time clock lockout countdown (#33)
+- After too many wrong PINs, the time clock counts down to when it unlocks ("Try again in 0:57") instead of a fixed message, also after it goes back to the start screen, and then says "You can try again now."
+- On small phones, wrong-PIN messages and the name-then-PIN screen fit without scrolling.
+
 ## 2026-11-26 · iPhone home screen edges, and labor from Square (#32)
 - On an iPhone added to the home screen, the app now fills the whole screen neatly: the tab bar sits above the home bar, the top bar clears the status bar and camera, and nothing is cut off by the rounded corners, in portrait and landscape. The time clock and staff portal got the same care.
 - Home and Reports: for a location that tracks time in Square, "Labor vs. sales" now counts this week's Square timecards at your saved pay rates (marked est.), instead of showing $0.00 labor until a timesheet is saved. The payroll forecast counts them too.
