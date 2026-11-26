@@ -12,6 +12,9 @@ few short bullets written for the people who use the app, not for developers.
 - Two-step sign-in codes are limited the same way: 8 wrong codes for an account lock its second step for 15 minutes, even when the password is entered again to get a new code screen.
 - Changing your password, and every other "enter your password" check, counts toward the same 8 wrong tries per account as signing in.
 
+## 2026-11-26 · "No photo" tag for offline punches without a photo (#39)
+- On Live, a punch saved on a tablet while it was offline and sent without a photo now says "No photo" instead of "No face". "No face" is only for a photo that shows no face.
+
 ## 2026-11-26 · Your server checks punch photos for a face (#37)
 - The time clock no longer tries to recognize faces on the phone or tablet. It takes the photo and your server checks it for a face before it accepts the punch, so it works the same on iPhone, iPad and Android, and can't be skipped.
 - No face, no punch: the kiosk says "Face not detected" and asks the person to try again.
