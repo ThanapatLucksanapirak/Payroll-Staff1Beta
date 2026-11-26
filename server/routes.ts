@@ -23,7 +23,7 @@ import { listLocations, pullTimecards } from "./square";
 import { extractPdfText } from "./pdf";
 import { invalidateEmployeeCache } from "./employees";
 import { type Punch, punchSchema } from "@shared/punches";
-import { kioskHostGuard, registerKioskRoutes, registerTimeClockAdminRoutes } from "./kiosk";
+import { invalidateDeviceCache, kioskHostGuard, registerKioskRoutes, registerTimeClockAdminRoutes } from "./kiosk";
 import { registerScheduleRoutes } from "./schedule";
 import { registerTimeclockRoutes } from "./timeclock";
 import { registerKioskFeatureAdminRoutes } from "./kioskFeatures";
@@ -123,10 +123,17 @@ const restoreSchema = z.object({
 /**
  * Restore an export: afterwards the data matches the backup exactly (timesheets
  * and settings added since are removed, edited punches go back). The current
- * user accounts, activity log, manager PINs and email settings are always kept.
+ * user accounts, activity log, manager PINs, email settings and paired kiosk
+ * devices are always kept, and so are Square tokens when the file was downloaded
+ * without them.
  */
 async function restoreFrom(raw: unknown) {
   const body = restoreSchema.parse(raw);
+  // A real export always has both lists; a file missing them would empty the database.
+  const r0 = raw as any;
+  if (!Array.isArray(r0?.settings) || !Array.isArray(r0?.timesheets) || !r0.settings.length) {
+    throw Object.assign(new Error("That file isn't a complete backup (it has no settings or timesheets list), so nothing was restored."), { status: 400 });
+  }
   const hasPunches = !!raw && typeof raw === "object" && Array.isArray((raw as any).punches);
   const punches: Punch[] = [];
   for (const r of body.punches) {
@@ -137,7 +144,11 @@ async function restoreFrom(raw: unknown) {
     throw Object.assign(new Error(`Restore cancelled: could not back up the current data first (${err.message}).`), { status: 500 });
   });
   const store = await db();
-  const keepSetting = (k: string) => k === "password_hash" || k === USERS_KEY || k === "revoked_sessions" || k.startsWith(AUDIT_PREFIX) || k.startsWith("kiosk_manager_pin:") || k.startsWith("email:") || NEVER_BACKED_UP(k);
+  // Square tokens are left out of default downloads: keep today's unless the file carries its own.
+  const isSquareToken = (k: string) => k.startsWith("square_token:") || k === "square_access_token";
+  const fileHasSquare = body.settings.some((x) => isSquareToken(x.key));
+  // Paired kiosk devices always stay as they are now, so a restore can't bring back a removed device.
+  const keepSetting = (k: string) => k === "password_hash" || k === USERS_KEY || k === "revoked_sessions" || k === "kiosk_devices" || k.startsWith(AUDIT_PREFIX) || k.startsWith("kiosk_manager_pin:") || k.startsWith("email:") || (isSquareToken(k) && !fileHasSquare) || NEVER_BACKED_UP(k);
   const result = await store.importAll({
     settings: body.settings.filter((x) => !NEVER_BACKED_UP(x.key)),
     timesheets: body.timesheets.map(({ updated_at: _u, ...rest }: any) => rest),
@@ -147,6 +158,7 @@ async function restoreFrom(raw: unknown) {
   settings.invalidateSettingsCache();
   invalidatePublishedCache();
   invalidateEmployeeCache();
+  invalidateDeviceCache();
   resetTagCache();
   return result;
 }
@@ -322,7 +334,7 @@ export function registerRoutes(app: Express) {
   }));
 
   app.post("/api/timesheets", h(async (req, res) => {
-    const doc = timesheetDocSchema.parse(req.body.doc);
+    const doc = { ...timesheetDocSchema.parse(req.body.doc), paidResult: undefined };
     const store = await db();
     const summary = await store.insertTimesheet(await rowFromDoc(doc));
     const removed = await applyRetention(doc.siteId, summary.id);
@@ -339,7 +351,8 @@ export function registerRoutes(app: Express) {
     if (!body.force && body.baseUpdatedAt && cur.updated_at && Date.parse(cur.updated_at) !== Date.parse(body.baseUpdatedAt)) {
       return res.status(409).json({ error: "This timesheet was changed somewhere else (another tab or device).", updatedAt: cur.updated_at });
     }
-    const summary = await store.updateTimesheet(id, await rowFromDoc(body.doc));
+    // Only reachable while the stored timesheet is a draft (finalized ones are locked), so it has no paid totals yet.
+    const summary = await store.updateTimesheet(id, await rowFromDoc({ ...body.doc, paidResult: undefined }));
     res.json(summary);
   }));
 

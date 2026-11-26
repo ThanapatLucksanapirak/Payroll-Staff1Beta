@@ -2,6 +2,7 @@ import { useState } from "react";
 import { ChevronLeft, ChevronRight, FileSpreadsheet } from "lucide-react";
 import { ytdCsv } from "@shared/payExtras";
 import { useApp } from "@/context/AppData";
+import { can } from "@/lib/roles";
 import { downloadBlob, safeFilename } from "@/lib/doc";
 import { useYtd } from "@/lib/pay";
 import { errorMessage } from "@/lib/api";
@@ -27,7 +28,7 @@ export function YtdPanel({ siteId, siteName }: { siteId: string; siteName: strin
           <Button variant="ghost" size="icon-sm" aria-label="Previous year" onClick={() => setYear(year - 1)}><ChevronLeft /></Button>
           <span className="w-12 text-center text-[13px] font-medium tabular">{year}</span>
           <Button variant="ghost" size="icon-sm" aria-label="Next year" disabled={year >= new Date().getFullYear()} onClick={() => setYear(year + 1)}><ChevronRight /></Button>
-          <Button variant="outline" size="sm" className="ml-2" disabled={!rows.length} onClick={() => downloadBlob(ytdCsv(rows, year), `${safeFilename(`${siteName} YTD ${year}`)}.csv`, "text/csv")} data-testid="button-ytd-csv"><FileSpreadsheet />YTD CSV</Button>
+          {can(app.user, "pay.view") && <Button variant="outline" size="sm" className="ml-2" disabled={!rows.length} onClick={() => downloadBlob(ytdCsv(rows, year), `${safeFilename(`${siteName} YTD ${year}`)}.csv`, "text/csv")} data-testid="button-ytd-csv"><FileSpreadsheet />YTD CSV</Button>}
         </div>
       </div>
       <div className="overflow-hidden rounded-xl border border-card-border bg-card shadow-card">
@@ -45,7 +46,7 @@ export function YtdPanel({ siteId, siteName }: { siteId: string; siteName: strin
                     <td className="px-4 py-2 font-medium">{r.name}</td>
                     <td className="px-2 py-2 text-right tabular text-muted-foreground">{r.timesheets}</td>
                     <td className="px-2 py-2 text-right tabular">{app.money(r.gross)}</td>
-                    <td className="px-2 py-2 text-right tabular text-muted-foreground">{r.deductions ? `−${app.money(r.deductions)}` : "—"}</td>
+                    <td className="px-2 py-2 text-right tabular text-muted-foreground">{r.deductions && can(app.user, "pay.view") ? `−${app.money(r.deductions)}` : "—"}</td>
                     <td className="px-4 py-2 text-right font-semibold tabular">{app.money(r.net)}</td>
                   </tr>
                 ))}
