@@ -79,7 +79,7 @@ export async function testDatabase(cfg: DatabaseConfig): Promise<DatabaseHealth>
   }
 }
 
-export interface SwitchResult { health: DatabaseHealth; copied: { settings: number; timesheets: number } | null }
+export interface SwitchResult { health: DatabaseHealth; copied: { settings: number; timesheets: number; punches: number } | null }
 
 export async function switchDatabase(cfg: DatabaseConfig, opts: { copyData: boolean }): Promise<SwitchResult> {
   const next = createStore(cfg);
@@ -95,7 +95,9 @@ export async function switchDatabase(cfg: DatabaseConfig, opts: { copyData: bool
       const rows = await prev.allTimesheets();
       const timesheets = rows.map(({ updated_at: _u, ...rest }) => rest);
       try {
-        copied = await next.importAll({ settings, timesheets });
+        // Time-clock punches are copied too, or every clock-in/out would be lost.
+        const punches = await prev.allPunches();
+        copied = await next.importAll({ settings, timesheets, punches });
       } catch (err: any) {
         next.close();
         throw new StoreError(`Nothing was switched: copying data failed (${err.message}).`, 400);

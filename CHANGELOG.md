@@ -6,6 +6,10 @@ Settings → About, next to the matching update.
 Add an entry with every pull request: a `## YYYY-MM-DD · Title (#PR)` heading and a
 few short bullets written for the people who use the app, not for developers.
 
+## 2026-11-26 · Switching database keeps time clock punches (#36)
+- Settings → Database → switch with "Copy my data" now copies every time clock punch along with timesheets, locations, rates and the password. Before, the new database started with no clock-ins or clock-outs.
+- The confirmation says how many punches were copied.
+
 ## 2026-11-26 · Time clock lockout countdown (#33)
 - After too many wrong PINs, the time clock counts down to when it unlocks ("Try again in 0:57") instead of a fixed message, also after it goes back to the start screen, and then says "You can try again now."
 - On small phones, wrong-PIN messages and the name-then-PIN screen fit without scrolling.
