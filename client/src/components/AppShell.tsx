@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type KeyboardEvent, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import { Link, useLocation } from "wouter";
 import { AlertTriangle, Menu, PanelLeftClose, PanelLeftOpen, Search } from "lucide-react";
 import { useApp } from "@/context/AppData";
@@ -48,17 +48,20 @@ function Shell({ children }: { children: ReactNode }) {
   const toggleCollapsed = useCallback(() => setCollapsed((c) => { safeStorage.set(COLLAPSE_KEY, c ? "0" : "1"); return !c; }), []);
 
   useEffect(() => { setMenuOpen(false); }, [loc]);
+  // The shell stays put and only the content pane scrolls (no whole-app bounce or
+  // empty band under the sidebar in the iPhone/iPad home-screen app).
+  const mainRef = useRef<HTMLElement>(null);
   // Scroll to top on page change (but not between workspace tabs).
-  useEffect(() => { window.scrollTo({ top: 0 }); }, [loc]);
+  useEffect(() => { mainRef.current?.scrollTo({ top: 0 }); }, [loc]);
 
   return (
-    <div className="flex min-h-dvh">
+    <div className="fixed inset-0 flex overflow-hidden" data-testid="app-shell">
       <a href="#main" className="sr-only focus:not-sr-only focus:fixed focus:left-3 focus:top-3 focus:z-[100] focus:rounded-md focus:bg-card focus:px-3 focus:py-2 focus:shadow-float">Skip to content</a>
 
       {/* Desktop sidebar */}
       <aside
         className={cn(
-          "sticky top-0 hidden h-dvh shrink-0 flex-col border-r border-sidebar-border bg-sidebar/90 backdrop-blur-xl transition-[width] duration-200 md:flex",
+          "hidden h-full shrink-0 flex-col border-r border-sidebar-border bg-sidebar/90 backdrop-blur-xl transition-[width] duration-200 md:flex",
           collapsed ? "w-[4.25rem]" : "w-[15.5rem]",
         )}
         data-testid="sidebar"
@@ -66,9 +69,9 @@ function Shell({ children }: { children: ReactNode }) {
         <SidebarBody collapsed={collapsed} onToggleCollapsed={toggleCollapsed} onSearch={() => setPaletteOpen(true)} />
       </aside>
 
-      <div className="flex min-w-0 flex-1 flex-col">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
         {/* Mobile top bar */}
-        <header className="glass sticky top-0 z-40 flex h-14 items-center gap-1 border-b border-border/70 px-2 md:hidden">
+        <header className="glass z-40 shrink-0 flex h-14 items-center gap-1 border-b border-border/70 px-2 md:hidden">
           <Button variant="ghost" size="icon" className="h-10 w-10" aria-label="Open menu" onClick={() => setMenuOpen(true)} data-testid="button-mobile-menu"><Menu className="h-5 w-5" /></Button>
           <Link href="/" className="flex min-w-0 shrink-0 items-center gap-2 rounded-md p-1 focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/35" aria-label="Home" data-testid="link-home-mobile">
             <Brand compact />
@@ -77,7 +80,7 @@ function Shell({ children }: { children: ReactNode }) {
           <Button variant="ghost" size="icon" className="h-10 w-10" aria-label="Search" onClick={() => setPaletteOpen(true)} data-testid="button-mobile-search"><Search className="h-5 w-5" /></Button>
         </header>
 
-        <main id="main" className="flex-1 pb-[calc(4.5rem+env(safe-area-inset-bottom))] md:pb-0" tabIndex={-1}>{children}</main>
+        <main id="main" ref={mainRef} className="min-h-0 flex-1 overflow-y-auto overscroll-contain pb-[calc(4.5rem+env(safe-area-inset-bottom))] md:pb-0" tabIndex={-1}>{children}</main>
       </div>
 
       {/* Mobile bottom tab bar */}
