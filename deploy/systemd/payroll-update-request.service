@@ -9,6 +9,7 @@ ConditionPathExists=/var/lib/payroll/update-request
 Type=oneshot
 # Runs even when automatic updates are off; the result goes to update-status.json.
 ExecStart=/usr/local/bin/payroll update
-ExecStopPost=/bin/rm -f /var/lib/payroll/update-request
+# -r: a directory planted at this path must not wedge "Update now" (rm -r never follows symlinks).
+ExecStopPost=/bin/rm -rf /var/lib/payroll/update-request
 Nice=10
 TimeoutStartSec=45min

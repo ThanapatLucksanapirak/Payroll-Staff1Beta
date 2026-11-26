@@ -72,3 +72,35 @@ test("Update now: refused without the installer, writes the request with it", as
   assert.equal((await call("GET", "/api/system/update")).body.requested, false);
   delete process.env.PAYROLL_MANAGED;
 });
+
+test("Update now: a directory or symlink at the request path never wedges it or is written through", async () => {
+  process.env.PAYROLL_MANAGED = "1";
+  const req = path.join(dir, "update-request");
+  fs.writeFileSync(path.join(dir, "update-status.json"), JSON.stringify({ state: "ok", at: new Date().toISOString() }));
+
+  // Directory: removed, then a normal request is written
+  fs.rmSync(req, { recursive: true, force: true });
+  fs.mkdirSync(path.join(req, "nested"), { recursive: true });
+  const r1 = await call("POST", "/api/system/update");
+  assert.equal(r1.body.ok, true);
+  assert.notEqual(r1.body.alreadyRunning, true, "a directory is not an update in progress");
+  assert.ok(fs.lstatSync(req).isFile());
+  fs.rmSync(req, { force: true });
+
+  // Dangling symlink: removed; its target is never created
+  const target = path.join(dir, "not-here");
+  fs.symlinkSync(target, req);
+  assert.equal((await call("POST", "/api/system/update")).body.ok, true);
+  assert.ok(!fs.existsSync(target), "no file created through the link");
+  assert.ok(fs.lstatSync(req).isFile());
+  fs.rmSync(req, { force: true });
+
+  // Live symlink: removed; the target keeps its contents
+  const live = path.join(dir, "live.txt");
+  fs.writeFileSync(live, "keep");
+  fs.symlinkSync(live, req);
+  assert.equal((await call("GET", "/api/system/update")).body.requested, false);
+  assert.equal(fs.readFileSync(live, "utf8"), "keep");
+  assert.ok(!fs.existsSync(req));
+  delete process.env.PAYROLL_MANAGED;
+});

@@ -324,6 +324,10 @@ build_and_start() {
     elif try_older_versions "$want"; then
       return 0
     fi
+    if (( ${#TRIED_OLDER[@]} )); then
+      show_start_error
+      die "The app did not start, and neither did the ${#TRIED_OLDER[@]} earlier version(s) tried (${TRIED_OLDER[*]}). The $(( ${#TRIED_OLDER[@]} + 1 )) newest versions all fail on this server; the reason is shown above (full log: sudo payroll logs). Run the installer again once a fixed version is published."
+    fi
     die "The app did not start. The reason is shown above (full log: sudo payroll logs)."
   fi
   ok "App is running"
@@ -332,9 +336,11 @@ build_and_start() {
 
 # Nothing to roll back to (first install, or reinstall after uninstall) and the
 # newest commit doesn't start: try the few commits before it instead.
+TRIED_OLDER=()
 try_older_versions() {
   local bad="$1" c dir
   for c in $(git_repo rev-list --first-parent --skip=1 --max-count=3 "$bad" 2>/dev/null); do
+    TRIED_OLDER+=("${c:0:7}")
     warn "Trying the version before it (${c:0:7})…"
     if ! dir="$(build_release "$c" | tail -n1)" || [[ ! -f "$dir/dist/index.cjs" ]]; then continue; fi
     activate_release "$dir"
