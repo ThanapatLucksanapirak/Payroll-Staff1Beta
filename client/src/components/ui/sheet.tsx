@@ -18,14 +18,14 @@ export const SheetContent = React.forwardRef<
     <DialogPrimitive.Content
       ref={ref}
       className={cn(
-        "fixed inset-y-0 z-50 flex w-[19rem] max-w-[85vw] flex-col bg-sidebar shadow-pop duration-300 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:duration-200",
-        side === "left" ? "left-0 border-r data-[state=open]:slide-in-from-left data-[state=closed]:slide-out-to-left" : "right-0 border-l data-[state=open]:slide-in-from-right data-[state=closed]:slide-out-to-right",
+        "fixed inset-y-0 z-50 flex w-[19rem] max-w-[85vw] flex-col bg-sidebar pb-[env(safe-area-inset-bottom)] pt-[env(safe-area-inset-top)] shadow-pop duration-300 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:duration-200",
+        side === "left" ? "left-0 box-content border-r pl-[env(safe-area-inset-left)] data-[state=open]:slide-in-from-left data-[state=closed]:slide-out-to-left" : "right-0 box-content border-l pr-[env(safe-area-inset-right)] data-[state=open]:slide-in-from-right data-[state=closed]:slide-out-to-right",
         className,
       )}
       {...props}
     >
       {children}
-      <DialogPrimitive.Close className="absolute right-3 top-3 inline-flex h-9 w-9 items-center justify-center rounded-full bg-foreground/[0.06] text-muted-foreground hover:bg-foreground/10 hover:text-foreground focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/35">
+      <DialogPrimitive.Close className="absolute right-3 top-[calc(0.75rem+env(safe-area-inset-top))] inline-flex h-9 w-9 items-center justify-center rounded-full bg-foreground/[0.06] text-muted-foreground hover:bg-foreground/10 hover:text-foreground focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/35">
         <X className="h-4 w-4" strokeWidth={2.5} />
         <span className="sr-only">Close menu</span>
       </DialogPrimitive.Close>
