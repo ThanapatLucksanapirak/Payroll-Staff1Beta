@@ -200,6 +200,8 @@ html, body { overscroll-behavior: none; }
     user-select: none;
   }
   input, textarea, select, [contenteditable="true"] { -webkit-user-select: text; user-select: text; -webkit-touch-callout: default; }
+  /* Thumbnails inside buttons (e.g. Live punch photos) stay long-press savable on iOS. */
+  button img, [role="button"] img { -webkit-touch-callout: default; }
 }
 @media (pointer: coarse) {
   input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]), textarea, select { font-size: max(16px, 1em) !important; }

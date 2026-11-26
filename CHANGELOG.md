@@ -6,6 +6,13 @@ Settings → About, next to the matching update.
 Add an entry with every pull request: a `## YYYY-MM-DD · Title (#PR)` heading and a
 few short bullets written for the people who use the app, not for developers.
 
+## 2026-11-27 · Portal sign-out, publishing and small screen fixes (#00)
+- Turning the staff portal off now signs everyone out for good: turning it back on doesn't bring old sign-ins back.
+- Publishing a timesheet no longer waits on a slow email server, and pressing Publish several times sends one email, not several. If the email fails, the result is shown on the timesheet and in the activity log.
+- Sending a PDF that is too big now says so plainly ("the limit is 10 MB"), and emails that fail to send no longer use up your 10 per hour.
+- Finalizing a timesheet twice at the same moment is logged once. A tab left open on a timesheet that was finalized elsewhere stops trying to save it.
+- Viewers no longer see the Trash button, Home shows no change figure without an earlier pay period, "Leave out of totals" can be clicked, and the page shows "Loading your data…" while it retries.
+
 ## 2026-11-27 · Face data is kept through a database switch or restore (#47)
 - Switching to another database, or restoring an older backup, no longer lets the daily clean-up delete saved face data. Face data isn't in backups, so before this it couldn't be got back after switching back.
 - The clean-up now skips a location when the database in use doesn't have it, has no employees there, or has no punches there within the face data retention period.

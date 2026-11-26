@@ -12,7 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import { EmptyState } from "@/components/ui/empty-state";
 import { DayDialog, type DayEdit } from "./DayDialog";
@@ -259,8 +259,8 @@ function EmployeeCard(p: WsProps & { emp: EmployeeSummary; open: boolean; onTogg
             <div className="flex flex-wrap items-center gap-2">
               {!emp.isManual && <Button variant="outline" size="sm" onClick={() => setAdding(true)} data-testid={`button-add-day-${employeeKey(emp.name)}`}><Plus /> Add day</Button>}
               <div className="ml-auto flex items-center gap-2 text-[13px]">
-                <span className="text-muted-foreground">Leave out of totals</span>
-                <Switch checked={emp.excluded} onCheckedChange={setExcluded} data-testid={`switch-exclude-${employeeKey(emp.name)}`} />
+                <label htmlFor={`exclude-${employeeKey(emp.name)}`} className="cursor-pointer text-muted-foreground">Leave out of totals</label>
+                <Switch id={`exclude-${employeeKey(emp.name)}`} checked={emp.excluded} onCheckedChange={setExcluded} data-testid={`switch-exclude-${employeeKey(emp.name)}`} />
               </div>
             </div>
           )}
@@ -325,7 +325,7 @@ function AddDayDialog({ open, onOpenChange, employee, defaultDate, onAdd }: { op
   return (
     <Dialog open={open} onOpenChange={(o) => { onOpenChange(o); if (o) setDate(defaultDate); }}>
       <DialogContent className="max-w-sm" onOpenAutoFocus={() => setDate(defaultDate)}>
-        <DialogHeader><DialogTitle>Add a day for {employee}</DialogTitle></DialogHeader>
+        <DialogHeader><DialogTitle>Add a day for {employee}</DialogTitle><DialogDescription className="sr-only">Pick the date and the in and out times for the new day.</DialogDescription></DialogHeader>
         <div className="space-y-3">
           <Field label="Date"><Input type="date" value={date} onChange={(e) => setDate(e.target.value)} data-testid="input-add-day-date" /></Field>
           <div className="grid grid-cols-3 gap-2">
