@@ -259,7 +259,13 @@ test("retention: removed employees and people who stopped punching", async () =>
   // Ben gets face data again; removing him deletes it
   await A("POST", `${url(ben)}/consent`, { confirm: true });
   assert.equal((await A("POST", `${url(ben)}/refs`, { punchId: benPunch })).status, 200);
-  assert.equal((await A("DELETE", `/api/sites/${siteId}/employees/${ben}`)).status, 200);
+  // He's clocked in, so removing him is refused unless he's clocked out with it
+  const refused = await A("DELETE", `/api/sites/${siteId}/employees/${ben}`);
+  assert.equal(refused.status, 409);
+  assert.equal(refused.body.code, "clocked_in");
+  // Older data can still have someone removed while clocked in: make that state directly
+  const { deleteEmployee } = await import("../server/employees");
+  assert.equal(await deleteEmployee(siteId, ben), true);
   assert.equal(fs.existsSync(path.join(dir, "face-data", siteId, ben)), false, "deleted with the employee");
   const kept = (await A("GET", `/api/sites/${siteId}/photos`)).body.photos.find((p: any) => p.punchId === benPunch);
   assert.ok(kept, "his punch photo is kept (a pay record) until photo retention");
@@ -270,6 +276,33 @@ test("retention: removed employees and people who stopped punching", async () =>
   const benNow = live.body.employees.find((e: any) => e.id === ben);
   assert.equal(benNow?.status, "in");
   assert.equal(benNow?.inDirectory, false);
+  // A manager can clock him out (only that), so the hours he worked are paid
+  const M = as(manager);
+  const addPunch = (type: string) => M("POST", `/api/sites/${siteId}/punches`, { employeeId: ben, type, at: new Date().toISOString(), note: "Left before he was removed" });
+  for (const type of ["in", "break_start", "break_end"]) assert.equal((await addPunch(type)).status, 404, `${type} refused for a removed employee`);
+  const out = await addPunch("out");
+  assert.equal(out.status, 200, JSON.stringify(out.body));
+  assert.equal(out.body.employeeName, "Ben Lee");
+  assert.equal(out.body.type, "out");
+  const again = await addPunch("out");
+  assert.equal(again.status, 404, "no open shift left");
+  assert.match(again.body.error, /isn't clocked in/);
+  assert.equal((await as(viewer)("POST", `/api/sites/${siteId}/punches`, { employeeId: ben, type: "out", at: new Date().toISOString(), note: "x" })).status, 403, "same permission as adding a punch");
+  assert.equal((await A("POST", `/api/sites/${siteId}/punches`, { employeeId: "nobody-here", type: "out", at: new Date().toISOString(), note: "x" })).status, 404, "never punched here");
+  const after = (await A("GET", `/api/sites/${siteId}/timeclock`)).body.employees.find((e: any) => e.id === ben);
+  assert.notEqual(after?.status, "in");
+
+  // Removing someone who's clocked in, with the clock-out: the shift is closed first
+  const cara = (await A("POST", `/api/sites/${siteId}/employees`, { name: "Cara Diaz", pin: "4321" })).body.id;
+  assert.equal((await K("POST", "/api/kiosk/punch", { id: randomUUID(), type: "in", pin: "4321", photo: fixture("face-3.jpg") })).status, 200);
+  assert.equal((await A("DELETE", `/api/sites/${siteId}/employees/${cara}`)).status, 409);
+  const gone = await A("DELETE", `/api/sites/${siteId}/employees/${cara}?clockOut=1`);
+  assert.equal(gone.status, 200, JSON.stringify(gone.body));
+  assert.equal(gone.body.ok, true);
+  assert.ok(gone.body.clockedOut);
+  const caraNow = (await A("GET", `/api/sites/${siteId}/timeclock`)).body.employees.find((e: any) => e.id === cara);
+  assert.notEqual(caraNow?.status, "in");
+  assert.notEqual(caraNow?.status, "break");
 
   // Ana: consent only. Nothing expires today; a year and a bit from now she hasn't punched, so it goes.
   await A("POST", `${url(ana)}/consent`, { confirm: true });

@@ -42,6 +42,19 @@ Every fix asks for the real time (pre-filled) and keeps a note, and goes through
 the normal punch add / edit / delete, so the punch keeps its edit history. If a
 change doesn't fit the punches around it you're told why and can save anyway.
 
+### Removing someone who is clocked in
+
+Removing an employee who is clocked in (or on a break) clocks them out at that
+moment first, with the note "Clocked out when removed from the employee list";
+the remove dialog says so. The server refuses to remove a clocked-in employee
+any other way, so no open shift is left behind.
+
+Someone removed while clocked in before this existed shows on Live as
+**Removed**. **Clock out** on their card records the clock-out (managers who can
+add punches); nothing else can be added for a removed person, and only while
+they have an open shift. **Cancel clock-in** also works but deletes the
+clock-in, so their hours for that shift are lost.
+
 ## Approving days
 
 On Fix punches, each employee's day (the day the shift started) has
