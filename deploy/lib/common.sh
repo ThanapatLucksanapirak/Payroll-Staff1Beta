@@ -256,17 +256,21 @@ wait_healthy() {
   return 1
 }
 
-# Short, readable reason the app didn't start: the last few log lines, each cut
+# Short, readable reason the app didn't start. Reads only what the app itself
+# printed (_SYSTEMD_UNIT matches the app's processes, not systemd's own "Start
+# request repeated too quickly" lines), prefers error lines, and cuts each line
 # to one screen line (a crash can print the whole minified bundle otherwise).
 show_start_error() {
   command -v journalctl >/dev/null || return 0
-  local lines
-  lines="$(journalctl -u payroll.service -n 60 --no-pager -o cat 2>/dev/null \
+  local all errs
+  all="$(journalctl _SYSTEMD_UNIT=payroll.service -n 120 --no-pager -o cat 2>/dev/null \
     | grep -v '^[[:space:]]*$' | grep -Ev '^[[:space:]]*at |^[[:space:]]*\^+[[:space:]]*$|^Node\.js v' \
-    | awk 'length($0) <= 300' | cut -c1-160 | tail -n 6)" || true
-  [[ -n "$lines" ]] || return 0
+    | awk 'length($0) <= 300' | cut -c1-160)" || true
+  errs="$(grep -E 'Error|error|ERR_|EADDRINUSE|EACCES|ENOENT|Cannot |failed|refused' <<<"$all" | awk '!seen[$0]++' | tail -n 4)" || true
+  [[ -n "$errs" ]] || errs="$(tail -n 6 <<<"$all")"
+  [[ -n "$errs" ]] || return 0
   printf '    %sWhat the app said:%s\n' "$C_DIM" "$C_RESET" >&2
-  printf '%s\n' "$lines" | sed 's/^/      /' >&2
+  printf '%s\n' "$errs" | sed 's/^/      /' >&2
   printf '    %sFull log: sudo payroll logs%s\n' "$C_DIM" "$C_RESET" >&2
 }
 
