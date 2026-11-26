@@ -6,6 +6,15 @@ Settings → About, next to the matching update.
 Add an entry with every pull request: a `## YYYY-MM-DD · Title (#PR)` heading and a
 few short bullets written for the people who use the app, not for developers.
 
+## 2026-11-26 · Safer restores, Square pulls and Supabase backups (#40)
+- Restore: if any time clock punch in the file can't be read, nothing is restored and you're told how many are bad. Before, those punches were skipped, so a damaged file could wipe out punches.
+- Restore: a backup with no timesheets or no punches (for example, one that was edited) no longer silently deletes all of yours. The app says what would be deleted and asks first.
+- Restore: a file with timesheets that aren't from this app (no id) is refused, so it can't replace your timesheets with blank ones.
+- Restore: a damaged, cut-off or wrong file gets a plain message instead of a technical error. The result says how many settings the file had, and says "kept as they were" when the file has no punches.
+- Restore: several restores in a row each keep their own "before restore" backup instead of overwriting the previous one.
+- Square: when Square is busy ("too many requests") or briefly down, the app waits and tries again. A garbled reply from Square now shows an error instead of looking like "no timecards". Timecards with unreadable times are skipped with a warning, a timecard is never counted twice, and a very long period says when it was cut short.
+- Supabase: backups, database copies and restores now read every row. Before, Supabase returned at most 1,000 rows per request, so larger databases could get incomplete backups.
+
 ## 2026-11-26 · Stronger sign-in protection (#38)
 - Wrong passwords now count against the account being tried, not only the device trying. After 8 wrong passwords for one account, that account waits 15 minutes, whichever devices the guesses came from. Signing in successfully clears it.
 - Signing in to your own account no longer resets the wrong-password count for everyone else on the same network. One network gets 30 wrong tries in 15 minutes, shared by everyone on it.

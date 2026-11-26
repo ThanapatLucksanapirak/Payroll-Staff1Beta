@@ -12,26 +12,53 @@ export class SquareError extends Error {
   constructor(message: string, public status = 502) { super(message); }
 }
 
-async function call(token: string, path: string, init: { method?: string; body?: unknown } = {}): Promise<any> {
-  let res: Response;
-  try {
-    res = await fetchWithTimeout(`${API}${path}`, {
-      method: init.method ?? "GET",
-      headers: { Authorization: `Bearer ${token}`, "Square-Version": VERSION, "Content-Type": "application/json" },
-      body: init.body === undefined ? undefined : JSON.stringify(init.body),
-    }, 20000);
-  } catch (err: any) {
-    throw new SquareError(`Could not reach Square: ${err.message}`);
-  }
-  const data: any = await res.json().catch(() => ({}));
-  if (res.status === 401) throw new SquareError("Square rejected the access token. Reconnect Square in Settings → Locations.", 400);
-  if (!res.ok || data.errors) {
-    const e = new SquareError(data.errors?.[0]?.detail ?? `Square returned ${res.status}`);
-    e.code = data.errors?.[0]?.code ?? (res.status === 403 ? "FORBIDDEN" : undefined);
-    throw e;
-  }
-  return data;
+const MAX_RETRIES = 3;
+/** Pages of timecards read per pull (200 each). */
+const MAX_PAGES = 100;
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+/** Wait before retry `attempt` (0-based): Square's Retry-After when given (capped), else 0.5 s, 1 s, 2 s. */
+function retryDelay(res: Response, attempt: number) {
+  const after = Number(res.headers.get("retry-after"));
+  return Number.isFinite(after) && after > 0 ? Math.min(after * 1000, 5000) : 500 * 2 ** attempt;
 }
+
+async function call(token: string, path: string, init: { method?: string; body?: unknown } = {}): Promise<any> {
+  for (let attempt = 0; ; attempt++) {
+    let res: Response;
+    try {
+      res = await fetchWithTimeout(`${API}${path}`, {
+        method: init.method ?? "GET",
+        headers: { Authorization: `Bearer ${token}`, "Square-Version": VERSION, "Content-Type": "application/json" },
+        body: init.body === undefined ? undefined : JSON.stringify(init.body),
+      }, 20000);
+    } catch (err: any) {
+      throw new SquareError(`Could not reach Square: ${err.message}`);
+    }
+    // Rate limited or a passing Square outage: wait and try again a few times.
+    if ((res.status === 429 || res.status >= 500) && attempt < MAX_RETRIES) {
+      await res.body?.cancel().catch(() => undefined);
+      await sleep(retryDelay(res, attempt));
+      continue;
+    }
+    const text = await res.text().catch(() => "");
+    let data: any = null;
+    try { data = text ? JSON.parse(text) : {}; } catch { data = null; }
+    if (res.status === 401) throw new SquareError("Square rejected the access token. Reconnect Square in Settings → Locations.", 400);
+    if (res.status === 429) throw new SquareError("Square is limiting requests right now. Wait a minute and try again.", 503);
+    if (!data || typeof data !== "object" || Array.isArray(data)) {
+      // A proxy error page or a cut-off reply: never read it as "no timecards".
+      throw new SquareError(`Square sent a reply that couldn't be read (status ${res.status}). Try again in a minute.`);
+    }
+    if (!res.ok || data.errors) {
+      const e = new SquareError(data.errors?.[0]?.detail ?? `Square returned ${res.status}`);
+      e.code = data.errors?.[0]?.code ?? (res.status === 403 ? "FORBIDDEN" : undefined);
+      throw e;
+    }
+    return data;
+  }
+}
+
+const validInstant = (v: unknown): v is string => typeof v === "string" && Number.isFinite(Date.parse(v));
 
 export async function listLocations(token: string): Promise<{ id: string; name: string; timezone: string | null }[]> {
   const data = await call(token, "/locations");
@@ -49,26 +76,34 @@ export async function pullTimecards(token: string, opts: { locationId?: string; 
   const endAt = localToInstant(addDays(opts.end, 1), 0, opts.timezone);
 
   const timecards: any[] = [];
+  const seen = new Set<string>();
   let cursor: string | undefined;
   let open = 0;
-  let guard = 0;
+  let bad = 0;
+  let pages = 0;
   do {
     const body: any = { query: { filter: { location_ids: [locationId], start: { start_at: startAt, end_at: endAt } } }, limit: 200 };
     if (cursor) body.cursor = cursor;
     const data = await call(token, "/labor/timecards/search", { method: "POST", body });
-    for (const tc of data.timecards ?? []) {
+    for (const tc of Array.isArray(data.timecards) ? data.timecards : []) {
+      // The same timecard can come back on two pages if it changes while we read.
+      if (!tc || typeof tc !== "object" || (tc.id && seen.has(tc.id))) continue;
+      if (tc.id) seen.add(tc.id);
+      if (!validInstant(tc.start_at)) { bad++; continue; }
       if (!tc.end_at) { open++; continue; }
+      if (!validInstant(tc.end_at)) { bad++; continue; }
       timecards.push(tc);
     }
-    cursor = data.cursor;
-  } while (cursor && ++guard < 100);
+    cursor = typeof data.cursor === "string" && data.cursor ? data.cursor : undefined;
+  } while (cursor && ++pages < MAX_PAGES);
+  const truncated = !!cursor;
 
   const names: Record<string, string> = {};
   const needed = new Set(timecards.map((tc) => tc.team_member_id).filter(Boolean));
   if (needed.size) {
     // Look up only this location's team, and stop once every name is known.
     let tmCursor: string | undefined;
-    guard = 0;
+    let guard = 0;
     do {
       const body: any = { limit: 200, query: { filter: { location_ids: [locationId] } } };
       if (tmCursor) body.cursor = tmCursor;
@@ -102,7 +137,10 @@ export async function pullTimecards(token: string, opts: { locationId?: string; 
       role: tc.wage?.title ?? "", source: "square" as const, note: "",
     };
   });
-  const warnings = open ? [`${open} timecard${open === 1 ? " is" : "s are"} still open (not clocked out) and were skipped.`] : [];
+  const warnings: string[] = [];
+  if (open) warnings.push(`${open} timecard${open === 1 ? " is" : "s are"} still open (not clocked out) and were skipped.`);
+  if (bad) warnings.push(`${bad} timecard${bad === 1 ? " has" : "s have"} an unreadable start or end time and ${bad === 1 ? "was" : "were"} skipped. Check ${bad === 1 ? "it" : "them"} in Square.`);
+  if (truncated) warnings.push(`Square has more than ${MAX_PAGES * 200} timecards in this period, so only the first ${timecards.length} were brought in. Pull a shorter period.`);
   return { shifts, warnings, locationId };
 }
 
@@ -128,6 +166,7 @@ export async function pullDailySales(token: string, opts: { locationId?: string;
   const startAt = localToInstant(opts.start, 0, opts.timezone);
   const endAt = localToInstant(addDays(opts.end, 1), 0, opts.timezone);
   const out: Record<string, number> = {};
+  const seen = new Set<string>();
   let cursor: string | undefined;
   let guard = 0;
   do {
@@ -141,9 +180,11 @@ export async function pullDailySales(token: string, opts: { locationId?: string;
     };
     if (cursor) body.cursor = cursor;
     const data = await call(token, "/orders/search", { method: "POST", body });
-    for (const o of data.orders ?? []) {
+    for (const o of Array.isArray(data.orders) ? data.orders : []) {
+      if (!o || typeof o !== "object" || (o.id && seen.has(o.id))) continue;
+      if (o.id) seen.add(o.id);
       const at = o.closed_at ?? o.created_at;
-      if (!at) continue;
+      if (!validInstant(at)) continue;
       const a = o.net_amounts ?? {};
       const total = a.total_money ? moneyOf(a.total_money) : moneyOf(o.total_money);
       const tax = a.tax_money ? moneyOf(a.tax_money) : moneyOf(o.total_tax_money);
@@ -151,7 +192,8 @@ export async function pullDailySales(token: string, opts: { locationId?: string;
       const date = instantToLocal(at, opts.timezone).date;
       out[date] = Math.round(((out[date] ?? 0) + total - tax - tip) * 100) / 100;
     }
-    cursor = data.cursor;
+    cursor = typeof data.cursor === "string" && data.cursor ? data.cursor : undefined;
   } while (cursor && ++guard < 200);
+  if (cursor) console.warn("[square] daily sales stopped after 200 pages; later orders were not counted");
   return out;
 }
