@@ -23,7 +23,7 @@ const only = (s: Session): Session => ({ who: s.who, pin: s.pin, offline: s.offl
 
 type Screen =
   | { k: "home" }
-  | { k: "pin"; employee?: RosterEmployee; error?: string; shake?: number; lockedUntil?: number }
+  | { k: "pin"; employee?: RosterEmployee; error?: string; shake?: number }
   | ({ k: "actions"; error?: string } & Session)
   | ({ k: "station"; type: PunchType; photo: string | null | undefined } & Session)
   | ({ k: "guard"; message: string; question: string | null; suggest: PunchType | null; also?: PunchType; error?: string } & Session)
@@ -43,6 +43,14 @@ export function KioskApp() {
   const [screen, setScreen] = useState<Screen>({ k: "home" });
   const [busy, setBusy] = useState(false);
   const [showInfo, setShowInfo] = useState(false);
+  // Kept outside the screen so the countdown survives going back to the home screen when idle.
+  const [lockedUntil, setLockedUntil] = useState<number | undefined>();
+  useEffect(() => {
+    if (!lockedUntil) return;
+    // "You can try again now" stays up for half a minute after the lock ends, then the screen is back to normal.
+    const t = setTimeout(() => setLockedUntil(undefined), Math.max(0, lockedUntil - Date.now()) + 30_000);
+    return () => clearTimeout(t);
+  }, [lockedUntil]);
   /** The manager PIN entered to open settings (needed to unpair); cleared when settings close. */
   const [managerPin, setManagerPin] = useState<string | null>(null);
   const exitFullscreen = useRef<(() => void) | null>(null);
@@ -129,6 +137,7 @@ export function KioskApp() {
     try {
       const who = await request<Identified>("POST", "/api/kiosk/identify", { pin, employeeId: employee?.id });
       setOnline(true);
+      setLockedUntil(undefined);
       setScreen({ k: "actions", who, pin, offline: false });
     } catch (err) {
       const e = err as KioskError;
@@ -144,7 +153,8 @@ export function KioskApp() {
         return;
       }
       const lockedUntil = e.code === "locked" && Number(e.body?.retryAfter) > 0 ? Date.now() + Number(e.body.retryAfter) * 1000 : undefined;
-      setScreen((s) => ({ k: "pin", employee: s.k === "pin" ? s.employee : employee, error: e.message, shake: Date.now(), lockedUntil }));
+      setLockedUntil(lockedUntil);
+      setScreen((s) => ({ k: "pin", employee: s.k === "pin" ? s.employee : employee, error: lockedUntil ? undefined : e.message, shake: Date.now() }));
     }
   };
 
@@ -294,12 +304,12 @@ export function KioskApp() {
           </Centered>
         ) : screen.k === "home" ? (
           loginMode === "pin" ? (
-            <PinScreen tz={tz} idleMs={idleMs} onSubmit={(pin) => identify(pin)} key="pin-home" />
+            <PinScreen tz={tz} lockedUntil={lockedUntil} idleMs={idleMs} onSubmit={(pin) => identify(pin)} key="pin-home" />
           ) : (
             <NamesScreen tz={tz} employees={state.employees} onPick={(e) => setScreen({ k: "pin", employee: e })} />
           )
         ) : screen.k === "pin" ? (
-          <PinScreen tz={tz} employee={screen.employee} error={screen.error} shake={screen.shake} lockedUntil={screen.lockedUntil} idleMs={idleMs} onSubmit={(pin) => identify(pin, screen.employee)} onBack={home} />
+          <PinScreen tz={tz} employee={screen.employee} error={screen.error} shake={screen.shake} lockedUntil={lockedUntil} idleMs={idleMs} onSubmit={(pin) => identify(pin, screen.employee)} onBack={home} />
         ) : screen.k === "actions" ? (
           <ActionsScreen
             tz={tz} who={screen.who} offline={screen.offline} error={screen.error} busy={busy} idleMs={idleMs}
@@ -436,7 +446,7 @@ function CameraCaption({ status, faceSeen, center }: { status: CameraStatus; fac
     <span className={`text-base font-medium leading-snug ${center ? "text-center" : ""} ${warn ? "text-red-800" : faceSeen ? "text-emerald-800" : "text-stone-700"}`} data-testid="kiosk-camera-caption">
       {status === "blocked" ? <>Camera blocked<br /><span className="font-normal">Punching needs the camera</span></>
         : status === "unavailable" ? <>Camera not available<br /><span className="font-normal">Punching needs the camera</span></>
-        : faceSeen === false ? <>Face not detected<br /><span className="font-normal">Please show your face</span></>
+        : faceSeen === false ? <>Face not detected<br /><span className="font-normal">Show your face to the camera</span></>
         : faceSeen ? <><Check className="mr-1 inline h-5 w-5" />Face found<br /><span className="font-normal text-stone-700">Photo taken with your punch</span></>
         : <><Camera className="mr-1 inline h-5 w-5" />Please show your face<br /><span className="font-normal">Photo taken with your punch</span></>}
     </span>
@@ -465,12 +475,13 @@ function PinScreen({ tz, employee, heading, error, shake, lockedUntil, maxLength
   const [tick, setTick] = useState(() => Date.now());
   useEffect(() => {
     if (!lockedUntil) return;
+    setTick(Date.now());
     const t = setInterval(() => setTick(Date.now()), 1000);
     return () => clearInterval(t);
   }, [lockedUntil]);
   const lockLeft = lockedUntil ? Math.max(0, Math.ceil((lockedUntil - tick) / 1000)) : 0;
-  if (lockedUntil && lockLeft > 0) error = `Too many wrong PINs. Try again in ${Math.floor(lockLeft / 60)}:${String(lockLeft % 60).padStart(2, "0")}`;
-  else if (lockedUntil && error?.startsWith("Too many wrong PINs")) error = "You can try again now.";
+  const unlocked = !!lockedUntil && lockLeft === 0;
+  if (lockedUntil) error = lockLeft > 0 ? `Too many wrong PINs. Try again in ${Math.floor(lockLeft / 60)}:${String(lockLeft % 60).padStart(2, "0")}` : "You can try again now.";
   const [busy, setBusy] = useState(false);
   useEffect(() => { if (shake) setPin(""); }, [shake]);
   useIdle(idleMs, () => { setPin(""); onBack?.(); }, [onBack]);
@@ -503,7 +514,7 @@ function PinScreen({ tz, employee, heading, error, shake, lockedUntil, maxLength
             <p className="mt-1 text-xl text-stone-700">{heading.sub}</p>
           </div>
         ) : employee ? (
-          <div className="kiosk-fade-up">
+          <div className="kiosk-pin-who kiosk-fade-up">
             <Avatar name={employee.name} big />
             <p className="mt-4 text-4xl font-display font-normal tracking-[-0.01em] text-stone-950">Hi, {firstName(employee.name)}</p>
             <p className="mt-1 text-xl text-stone-700">Enter your PIN, then tap <Check className="inline h-5 w-5 align-[-0.15em]" strokeWidth={2.75} aria-label="the check mark" /></p>
@@ -522,15 +533,15 @@ function PinScreen({ tz, employee, heading, error, shake, lockedUntil, maxLength
           ))}
         </div>
         {/* Once a PIN could be complete, say what to do next: PINs are 4 to 6 digits, so it can't send itself. */}
-        <p className={`mt-2 min-h-7 text-lg font-medium ${error ? "text-red-700" : pin.length >= 4 && !busy ? "text-stone-700" : "text-transparent"}`} role={error ? "alert" : undefined} aria-live="polite" data-testid="kiosk-pin-hint">{error || (pin.length >= 4 && !busy ? "Tap the check mark to continue" : "·")}</p>
+        <p className={`mt-2 min-h-7 text-lg font-medium ${unlocked ? "text-emerald-800" : error ? "text-red-700" : pin.length >= 4 && !busy ? "text-stone-700" : "text-transparent"}`} role={error && !unlocked ? "alert" : undefined} aria-live="polite" data-msg={error ? "" : undefined} data-testid="kiosk-pin-hint">{error || (pin.length >= 4 && !busy ? "Tap the check mark to continue" : "·")}</p>
         <div className="mt-3 grid grid-cols-3 gap-3 sm:gap-5">
           {["1", "2", "3", "4", "5", "6", "7", "8", "9"].map((d) => <Key key={d} onPress={() => press(d)} label={d} />)}
           {onBack && employee ? <Key onPress={onBack} label={<ArrowLeft className="h-8 w-8" />} subtle aria="Back" /> : <Key onPress={back} label={<Delete className="h-8 w-8" />} subtle aria="Delete" />}
           <Key onPress={() => press("0")} label="0" />
           <Key onPress={() => void submit(pin)} label={busy ? <Spinner /> : <Check className="h-9 w-9" strokeWidth={2.5} />} primary disabled={pin.length < 4 || busy} aria="OK" />
         </div>
-        {onBack && employee && pin.length > 0 && <button className="kiosk-tap mt-3 rounded-2xl px-6 text-lg font-medium text-stone-800 active:bg-stone-100" onClick={back}>Delete last digit</button>}
-        {onBack && !employee && <BigSecondary className="mt-4" onClick={onBack}>Cancel</BigSecondary>}
+        {onBack && employee && pin.length > 0 && <button className="kiosk-tap kiosk-pin-cancel mt-3 rounded-2xl px-6 text-lg font-medium text-stone-800 active:bg-stone-100" onClick={back}>Delete last digit</button>}
+        {onBack && !employee && <BigSecondary className="kiosk-pin-cancel mt-4" onClick={onBack}>Cancel</BigSecondary>}
       </div>
     </div>
   );

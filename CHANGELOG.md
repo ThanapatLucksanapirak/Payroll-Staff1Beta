@@ -7,7 +7,12 @@ Add an entry with every pull request: a `## YYYY-MM-DD · Title (#PR)` heading a
 few short bullets written for the people who use the app, not for developers.
 
 ## 2026-11-26 · Time clock lockout countdown (#33)
-- After too many wrong PINs, the time clock counts down to when it unlocks ("Try again in 0:57") instead of a fixed message, and says when you can try again.
+- After too many wrong PINs, the time clock counts down to when it unlocks ("Try again in 0:57") instead of a fixed message, also after it goes back to the start screen, and then says "You can try again now."
+- On small phones, wrong-PIN messages and the name-then-PIN screen fit without scrolling.
+
+## 2026-11-26 · Clearer camera messages on the time clock (#34)
+- When the camera has been denied for the time clock, the screen now says "Camera blocked" (with how to fix it) instead of "Camera not available", also on Android tablets.
+- The no-face messages all say the same thing: show your face to the camera and try again.
 
 ## 2026-11-26 · The time clock checks for a face before a punch (#30)
 - With photos on, the time clock now always checks that a face is in the photo, also on Android tablets where the check could switch itself off. Covering the camera no longer goes through unnoticed.
