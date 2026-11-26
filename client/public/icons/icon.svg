@@ -1,6 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
-  <defs><linearGradient id="g" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3b9bff"/><stop offset="1" stop-color="#0060d6"/></linearGradient></defs>
-  <rect width="32" height="32" rx="8.5" fill="url(#g)"/>
-  <path d="M9.5 11h13M9.5 16h13M9.5 21h7.5" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round"/>
-  <circle cx="22.5" cy="21" r="2.4" fill="#fff" fill-opacity="0.75"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" role="img" aria-label="Shijiri">
+  <rect width="100" height="100" rx="22.5" fill="#7a295e"/>
+  <path fill="#ffffff" d="M19 48A22 22 0 0 1 63 48Z M37 55A22 22 0 0 0 81 55Z" transform="translate(50 51.5) scale(1.0) translate(-50 -51.5)"/>
 </svg>

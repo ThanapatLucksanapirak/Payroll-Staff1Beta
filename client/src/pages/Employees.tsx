@@ -97,14 +97,16 @@ export function EmployeesPage() {
       />
 
       {site.timeSource === "square" && (
-        <div className="mb-5 flex flex-wrap items-center gap-3 rounded-xl bg-warning-soft px-4 py-3 text-[13px]" role="status">
-          <AlertTriangle className="h-4 w-4 shrink-0 text-warning" />
-          <span className="flex-1">The time clock is off at {site.name} (hours come from Square). You can still set up employees now.</span>
-          {settingsAdmin && <Button asChild size="sm" variant="outline"><Link href="/settings/locations">Time clock settings</Link></Button>}
+        <div className="mb-5 flex flex-col gap-2.5 rounded-xl bg-warning-soft px-4 py-3 text-[13px] sm:flex-row sm:items-center sm:gap-3" role="status">
+          <span className="flex min-w-0 flex-1 items-start gap-3">
+            <AlertTriangle className="mt-px h-4 w-4 shrink-0 text-warning" />
+            <span className="min-w-0 flex-1">The time clock is off at {site.name} (hours come from Square). You can still set up employees now.</span>
+          </span>
+          {settingsAdmin && <span className="shrink-0 pl-7 sm:pl-0"><Button asChild size="sm" variant="outline"><Link href="/settings/locations">Time clock settings</Link></Button></span>}
         </div>
       )}
       {noPin > 0 && (
-        <p className="mb-5 flex items-center gap-2 rounded-xl border border-card-border bg-card px-4 py-3 text-[13px] text-muted-foreground shadow-card"><KeyRound className="h-4 w-4 shrink-0 text-warning" />{noPin} employee{noPin === 1 ? " has" : "s have"} no PIN yet and can't clock in.{admin && " Edit them to set one."}</p>
+        <p className="mb-5 flex items-start gap-3 rounded-xl border border-card-border bg-card px-4 py-3 text-[13px] text-muted-foreground shadow-card"><KeyRound className="mt-0.5 h-4 w-4 shrink-0 text-warning" />{noPin} employee{noPin === 1 ? " has" : "s have"} no PIN yet and can't clock in.{admin && " Edit them to set one."}</p>
       )}
 
       <div className="mb-5 flex flex-wrap items-center gap-3">
@@ -113,14 +115,21 @@ export function EmployeesPage() {
           <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search employees" aria-label="Search employees" className="pl-9" data-testid="input-search-employees" />
         </div>
         {inactive > 0 && (
-          <label className="flex items-center gap-2 text-[13px] text-muted-foreground">
-            <Switch checked={showInactive} onCheckedChange={setShowInactive} /> Show inactive ({inactive})
+          <label className="flex min-h-10 cursor-pointer items-center gap-2 text-[13px] text-muted-foreground">
+            <Switch checked={showInactive} onCheckedChange={setShowInactive} /> Show inactive (<span className="tabular">{inactive}</span>)
           </label>
         )}
       </div>
 
       {q.isLoading ? (
-        <div className="space-y-2 rounded-xl border border-card-border bg-card p-4 shadow-card">{[0, 1, 2].map((i) => <Skeleton key={i} className="h-10" />)}</div>
+        <div className="divide-y divide-border/70 overflow-hidden rounded-xl border border-card-border bg-card shadow-card" aria-busy="true" aria-label="Loading employees">
+          {[0, 1, 2, 3].map((i) => (
+            <div key={i} className="flex items-center gap-3 px-4 py-3">
+              <Skeleton className="h-9 w-9 shrink-0 rounded-full" />
+              <div className="flex-1 space-y-1.5"><Skeleton className="h-3.5 w-40 max-w-[60%]" /><Skeleton className="h-3 w-20" /></div>
+            </div>
+          ))}
+        </div>
       ) : q.error ? (
         <EmptyState icon={AlertTriangle} title="Couldn't load employees" description={errorMessage(q.error)} action={<Button variant="outline" size="sm" onClick={() => q.refetch()}>Try again</Button>} />
       ) : !(q.data ?? []).length ? (
@@ -156,7 +165,7 @@ export function EmployeesPage() {
                 )}
               </li>
             ))}
-            {!rows.length && <li className="px-4 py-6 text-center text-[13px] text-muted-foreground">No matches.</li>}
+            {!rows.length && <li className="px-4 py-8 text-center text-[13px] text-muted-foreground">{search.trim() ? <>No one matches “{search.trim()}”.</> : "Everyone here is inactive. Turn on Show inactive to see them."}</li>}
           </ul>
         </div>
       )}
@@ -216,7 +225,7 @@ function EmployeeDialog({ siteId, employee, onClose }: { siteId: string; employe
             <form className="space-y-3" onSubmit={(e) => { e.preventDefault(); if (name.trim() && pinOk) void save(); }}>
               <Field label="Name" hint="As it appears in timesheets."><Input autoFocus value={name} maxLength={80} onChange={(e) => setName(e.target.value)} data-testid="input-employee-name" /></Field>
               <Field label="Role or title (optional)"><Input value={role} maxLength={60} onChange={(e) => setRole(e.target.value)} placeholder="e.g. Cook" /></Field>
-              <Field label={employee?.hasPin ? "New PIN (leave blank to keep the current one)" : "PIN (4–6 digits)"}>
+              <Field label={employee?.hasPin ? "New PIN (leave blank to keep the current one)" : "PIN (4–6 digits)"} error={!pinOk ? "Use 4 to 6 digits." : undefined}>
                 <div className="flex gap-2">
                   <Input
                     inputMode="numeric" autoComplete="off" value={pin} maxLength={6}
@@ -236,7 +245,7 @@ function EmployeeDialog({ siteId, employee, onClose }: { siteId: string; employe
               {error && <p className="rounded-lg bg-danger-soft px-3 py-2 text-[13px] font-medium text-danger" role="alert">{error}</p>}
               <DialogFooter>
                 <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>
-                <Button type="submit" disabled={busy || !name.trim() || !pinOk} data-testid="button-save-employee">{busy && <Loader2 className="animate-spin" />}{employee ? "Save" : "Add"}</Button>
+                <Button type="submit" disabled={busy || !name.trim() || !pinOk} data-testid="button-save-employee">{busy && <Loader2 className="animate-spin" />}{employee ? "Save" : "Add employee"}</Button>
               </DialogFooter>
             </form>
           </>
@@ -270,22 +279,26 @@ function ImportNamesDialog({ siteId, onClose }: { siteId: string; onClose: () =>
           <DialogTitle>Import names</DialogTitle>
           <DialogDescription>From this location's saved rates and recent timesheets. People already in the list are left out.</DialogDescription>
         </DialogHeader>
-        {q.isLoading ? <div className="flex justify-center py-6"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>
+        {q.isLoading ? <div className="space-y-2 rounded-xl border border-border/80 p-3" aria-busy="true" aria-label="Looking for names">{[0, 1, 2].map((i) => <Skeleton key={i} className="h-5" />)}</div>
           : !(q.data ?? []).length ? <p className="py-4 text-sm text-muted-foreground">No new names found. Everyone from your timesheets is already in the list.</p>
           : (
             <div className="max-h-[50dvh] divide-y divide-border/70 overflow-y-auto rounded-xl border border-border/80">
               {q.data!.map((s) => (
-                <label key={s.name} className="flex cursor-pointer items-center gap-3 px-3 py-2 text-sm">
+                <label key={s.name} className="flex min-h-11 cursor-pointer items-center gap-3 px-3 py-2 text-sm hover:bg-foreground/[0.02]">
                   <Checkbox checked={!skip.has(s.name)} onCheckedChange={(v) => { const n = new Set(skip); v ? n.delete(s.name) : n.add(s.name); setSkip(n); }} />
-                  <span className="flex-1 truncate font-medium">{s.name}</span>
-                  <span className="text-xs text-muted-foreground">{s.from}</span>
+                  <span className="min-w-0 flex-1 truncate font-medium" title={s.name}>{s.name}</span>
+                  <span className="shrink-0 text-xs text-muted-foreground">{s.from}</span>
                 </label>
               ))}
             </div>
           )}
         <DialogFooter>
-          <Button variant="outline" onClick={onClose}>Cancel</Button>
-          <Button disabled={busy || !picked.length} onClick={run} data-testid="button-confirm-import-employees">{busy && <Loader2 className="animate-spin" />}Add {picked.length || ""}</Button>
+          {(q.data ?? []).length > 0 || q.isLoading ? (
+            <>
+              <Button variant="outline" onClick={onClose}>Cancel</Button>
+              <Button disabled={busy || !picked.length} onClick={run} data-testid="button-confirm-import-employees">{busy && <Loader2 className="animate-spin" />}Add {picked.length || ""}</Button>
+            </>
+          ) : <Button variant="outline" onClick={onClose}>Close</Button>}
         </DialogFooter>
       </DialogContent>
     </Dialog>

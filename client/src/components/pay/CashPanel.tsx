@@ -43,7 +43,7 @@ export function CashPanel({ result, cash }: { result: AnalysisResult; cash: Cash
             {plan.leftover > 0 && <span className="text-warning">{app.money(plan.leftover)} can't be made with these bills and coins. Check the denominations in Settings → Pay extras.</span>}
           </p>
         )}
-        <button className="flex items-center gap-1 text-[13px] font-medium text-primary" onClick={() => setOpen(!open)} aria-expanded={open} data-testid="button-cash-per-person">
+        <button className="-mx-1 flex items-center gap-1 rounded-md px-1 text-[13px] font-medium text-primary hover:underline focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/35" onClick={() => setOpen(!open)} aria-expanded={open} data-testid="button-cash-per-person">
           <ChevronDown className={cn("h-4 w-4 transition-transform", open && "rotate-180")} />{open ? "Hide" : "Show"} per person
         </button>
         {open && (

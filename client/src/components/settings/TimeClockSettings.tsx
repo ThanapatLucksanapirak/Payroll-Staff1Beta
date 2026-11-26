@@ -34,7 +34,7 @@ export function TimeClockSection({ site, draft, onChange }: { site: Site; draft:
     <Section title="Time clock" description="Where this location's hours come from, and the tablets employees clock in on.">
       <div className="space-y-5">
         <Field label="Hours come from">
-          <div className="grid gap-2 sm:grid-cols-3" role="radiogroup">
+          <div className="grid gap-2 sm:grid-cols-3" role="radiogroup" aria-label="Hours come from">
             {SOURCES.map((s) => (
               <button
                 key={s.id}
@@ -42,7 +42,7 @@ export function TimeClockSection({ site, draft, onChange }: { site: Site; draft:
                 role="radio"
                 aria-checked={draft.timeSource === s.id}
                 onClick={() => onChange({ ...draft, timeSource: s.id })}
-                className={cn("rounded-xl border border-border/80 bg-card p-3 text-left shadow-card transition-[border-color,box-shadow] duration-150 hover:border-primary/40 focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/35", draft.timeSource === s.id && "border-primary ring-1 ring-primary")}
+                className={cn("min-h-14 rounded-xl border border-border/80 bg-card px-3.5 py-2.5 text-left shadow-card transition-[border-color,box-shadow] duration-150 hover:border-primary/40 focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/35", draft.timeSource === s.id && "border-primary ring-1 ring-primary")}
                 data-testid={`radio-time-source-${s.id}`}
               >
                 <span className="flex items-center justify-between text-[13px] font-semibold">{s.title}{draft.timeSource === s.id && <Check className="h-4 w-4 text-primary" />}</span>
@@ -118,15 +118,15 @@ function Devices({ site, enabled }: { site: Site; enabled: boolean }) {
         <ul className="divide-y divide-border/70 overflow-hidden rounded-xl border border-border/80">
           {q.data!.map((d) => (
             <li key={d.id} className="text-[13px]">
-              <div className="flex items-center gap-3 px-3 py-2">
+              <div className="flex items-center gap-2 px-3 py-2 sm:gap-3">
                 <Tablet className="h-4 w-4 shrink-0 text-muted-foreground" />
                 <span className="min-w-0 flex-1">
                   <span className="block truncate font-medium">{d.name}</span>
                   {d.options && <span className="block truncate text-xs text-muted-foreground">{[d.options.photo ? "Photo on" : "No photo", d.options.loginMode === "site" ? null : d.options.loginMode === "pin" ? "PIN only" : "Name list", `${d.options.idleSeconds}s idle`].filter(Boolean).join(" · ")}</span>}
                 </span>
                 {d.pairCodeExpiresAt ? <Badge variant="warning">Waiting to pair</Badge> : <span className="hidden text-xs text-muted-foreground sm:inline">{d.lastSeenAt ? `Seen ${timeAgo(d.lastSeenAt)}` : "Not used yet"}</span>}
-                <Button variant="ghost" size="sm" className="text-muted-foreground" aria-expanded={openOptions === d.id} onClick={() => setOpenOptions(openOptions === d.id ? null : d.id)} data-testid={`button-device-options-${d.id}`}><SlidersHorizontal /> Options</Button>
-                <Button variant="ghost" size="icon-sm" className="text-muted-foreground hover:text-destructive" aria-label={`Remove ${d.name}`} onClick={() => revoke(d)} data-testid={`button-revoke-${d.id}`}><Trash2 /></Button>
+                <Button variant="ghost" size="sm" className="text-muted-foreground max-sm:h-10 max-sm:w-10 max-sm:px-0" aria-label={`Options for ${d.name}`} aria-expanded={openOptions === d.id} onClick={() => setOpenOptions(openOptions === d.id ? null : d.id)} data-testid={`button-device-options-${d.id}`}><SlidersHorizontal /><span className="max-sm:hidden">Options</span></Button>
+                <Button variant="ghost" size="icon-sm" className="text-muted-foreground hover:text-danger max-sm:h-10 max-sm:w-10" aria-label={`Remove ${d.name}`} onClick={() => revoke(d)} data-testid={`button-revoke-${d.id}`}><Trash2 /></Button>
               </div>
               {/* Kept mounted while closed so unsaved changes survive collapsing the panel. */}
               <div hidden={openOptions !== d.id}><DeviceOptionsPanel siteId={site.id} deviceId={d.id} deviceName={d.name} options={d.options} hasStations={(cfg.data?.stations.length ?? 0) > 0} /></div>
@@ -225,7 +225,7 @@ function ManagerPin({ site }: { site: Site }) {
   const isSet = q.data?.set;
 
   return (
-    <div className="space-y-3 rounded-xl border border-border/80 p-3">
+    <div className="space-y-3 border-t border-border/70 pt-4">
       <div className="flex items-start gap-3">
         <KeyRound className="mt-0.5 h-4 w-4 text-muted-foreground" />
         <div className="min-w-0 flex-1">

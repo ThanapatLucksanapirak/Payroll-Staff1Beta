@@ -56,29 +56,30 @@ export function RolePermissionsPanel() {
       {q.isLoading ? <Skeleton className="h-64" /> : q.error || !roles ? (
         <p className="text-sm text-destructive">{errorMessage(q.error)}</p>
       ) : (
-        <div className="-mx-5 overflow-x-auto">
-          <table className="w-full text-sm" data-testid="table-role-permissions">
+        <div className="-mx-5">
+          <table className="w-full text-sm max-sm:block" data-testid="table-role-permissions">
             <thead>
-              <tr className="border-b text-left text-xs text-muted-foreground">
+              <tr className="border-b border-border/70 text-left text-xs text-muted-foreground max-sm:hidden">
                 <th className="px-5 py-2 font-medium">Permission</th>
-                <th className="w-24 px-2 py-2 text-center font-medium">Owner &amp; Admin</th>
+                <th className="w-24 px-2 py-2 text-center font-medium leading-tight">Owner &amp; Admin</th>
                 {LIMITED_ROLES.map((r) => <th key={r} className="w-24 px-2 py-2 text-center font-medium">{ROLE_LABELS[r]}</th>)}
               </tr>
             </thead>
-            <tbody>
+            <tbody className="max-sm:block">
               {PERMISSIONS.map((p) => {
                 const info = PERMISSION_INFO[p];
                 return (
-                  <tr key={p} className="border-b border-border/60 last:border-0">
-                    <td className="px-5 py-2.5">
+                  <tr key={p} className="border-b border-border/60 last:border-0 max-sm:flex max-sm:flex-wrap max-sm:items-center max-sm:gap-x-5 max-sm:px-5 max-sm:py-3">
+                    <td className="px-5 py-2.5 max-sm:w-full max-sm:p-0 max-sm:pb-2.5">
                       <p className="text-[13px] font-medium">{info.label}</p>
-                      <p className="text-xs text-muted-foreground">{info.help}{info.requires ? ` Needs “${info.requires.map((x) => PERMISSION_INFO[x].label).join(", ")}”.` : ""}</p>
+                      <p className="mt-0.5 text-xs text-muted-foreground">{info.help}{info.requires ? ` Needs “${info.requires.map((x) => PERMISSION_INFO[x].label).join(", ")}”.` : ""}</p>
                     </td>
-                    <td className="px-2 py-2.5 text-center"><Check className="mx-auto h-4 w-4 text-muted-foreground" aria-label="Always" /></td>
+                    <td className="px-2 py-2.5 text-center max-sm:hidden"><Check className="mx-auto h-4 w-4 text-muted-foreground" aria-label="Always" /></td>
                     {LIMITED_ROLES.map((r) => {
                       const blocked = info.requires?.some((x) => !roles[r][x]) ?? false;
                       return (
-                        <td key={r} className="px-2 py-2.5 text-center">
+                        <td key={r} className="px-2 py-2.5 text-center max-sm:flex max-sm:items-center max-sm:gap-2 max-sm:p-0">
+                          <span className="text-xs text-muted-foreground sm:hidden" aria-hidden>{ROLE_LABELS[r]}</span>
                           <Switch
                             checked={roles[r][p]}
                             disabled={blocked || !!busy}

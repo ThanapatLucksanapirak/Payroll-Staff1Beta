@@ -108,30 +108,30 @@ export function WorkspacePage({ id }: { id: string }) {
   const base = safeFilename(`${site.name} ${doc.label || result.periodStart || "payroll"}`);
 
   return (
-    <div className="mx-auto max-w-7xl px-4 pb-16 sm:px-8">
+    <div className="mx-auto max-w-[94rem] px-4 pb-16 sm:px-8">
       {/* Sticky toolbar: keeps save state, undo/redo and export in reach */}
       <div className="glass sticky top-14 z-30 -mx-4 border-b border-border/60 px-4 pb-3 pt-4 sm:-mx-8 sm:px-8 md:top-0 md:pt-6" data-testid="workspace-toolbar">
         <Link href="/timesheets" className="mb-1 inline-flex items-center gap-0.5 text-[13px] font-medium text-primary hover:underline" data-testid="link-back" aria-label="Back to timesheets">
           <ChevronLeft className="h-4 w-4" />Timesheets
         </Link>
-        <div className="flex items-start gap-x-3 gap-y-2">
-          <div className="min-w-0 flex-1">
+        <div className="flex flex-wrap items-start gap-x-3 gap-y-2">
+          <div className="min-w-0 flex-1 max-sm:basis-full">
             <h1 className="flex items-center gap-x-2.5 text-[20px] font-bold leading-7 tracking-tight sm:text-[26px] sm:leading-8">
               <span className="line-clamp-1 break-all sm:break-words" data-testid="text-timesheet-title">{title}</span>
               {doc.status === "final" ? <Badge variant="success"><Lock />Final</Badge> : <Badge variant="secondary">Draft</Badge>}
             </h1>
-            <p className="mt-1 flex flex-wrap items-center gap-x-1.5 text-[13px] text-muted-foreground"><span className="inline-flex items-center gap-1.5 whitespace-nowrap"><SiteDot color={site.color} />{site.name}</span><span aria-hidden>·</span><span className="whitespace-nowrap">{periodTitle}</span></p>
+            <p className="mt-1 flex flex-wrap items-center gap-x-1.5 text-[13px] text-muted-foreground"><span className="inline-flex items-center gap-1.5 whitespace-nowrap"><SiteDot color={site.color} />{site.name}</span><span aria-hidden className="hidden sm:inline">·</span><span className="basis-full whitespace-nowrap tabular sm:basis-auto">{periodTitle}</span></p>
           </div>
-          <div className="flex items-center gap-1">
+          <div className="flex w-full items-center gap-1 sm:w-auto">
             <SaveIndicator state={ts.saveState} error={ts.saveError} savedAt={ts.lastSavedAt} legacy={ts.legacy} />
             <div className="mx-1 hidden h-5 w-px bg-border sm:block" aria-hidden />
-            <Tooltip><TooltipTrigger asChild><Button variant="ghost" size="icon" onClick={ts.undo} disabled={!ts.canUndo} aria-label="Undo" data-testid="button-undo"><Undo2 /></Button></TooltipTrigger><TooltipContent>Undo (Ctrl+Z)</TooltipContent></Tooltip>
-            <Tooltip><TooltipTrigger asChild><Button variant="ghost" size="icon" onClick={ts.redo} disabled={!ts.canRedo} aria-label="Redo" data-testid="button-redo"><Redo2 /></Button></TooltipTrigger><TooltipContent>Redo (Ctrl+Shift+Z)</TooltipContent></Tooltip>
+            <Tooltip><TooltipTrigger asChild><Button variant="ghost" size="icon" className="max-sm:h-10 max-sm:w-10" onClick={ts.undo} disabled={!ts.canUndo} aria-label="Undo" data-testid="button-undo"><Undo2 /></Button></TooltipTrigger><TooltipContent>Undo (Ctrl+Z)</TooltipContent></Tooltip>
+            <Tooltip><TooltipTrigger asChild><Button variant="ghost" size="icon" className="max-sm:h-10 max-sm:w-10" onClick={ts.redo} disabled={!ts.canRedo} aria-label="Redo" data-testid="button-redo"><Redo2 /></Button></TooltipTrigger><TooltipContent>Redo (Ctrl+Shift+Z)</TooltipContent></Tooltip>
             {!readOnly && (!app.prefs.autosave || ts.saveState === "error" || ts.legacy) && (
-              <Button variant="outline" size="sm" onClick={() => ts.save()} disabled={ts.saveState === "saving" || (!ts.dirty && !ts.legacy)} data-testid="button-save"><Save /> Save</Button>
+              <Button variant="outline" size="sm" className="max-sm:h-10" onClick={() => ts.save()} disabled={ts.saveState === "saving" || (!ts.dirty && !ts.legacy)} data-testid="button-save"><Save /> Save</Button>
             )}
             {can(app.user, "export") && <DropdownMenu>
-              <DropdownMenuTrigger asChild><Button size="sm" className="ml-1" aria-label="Export" data-testid="button-export"><Download /><span className="hidden sm:inline">Export</span></Button></DropdownMenuTrigger>
+              <DropdownMenuTrigger asChild><Button size="sm" className="ml-auto max-sm:h-10 max-sm:w-10 max-sm:px-0 sm:ml-1" aria-label="Export" data-testid="button-export"><Download /><span className="hidden sm:inline">Export</span></Button></DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-56">
                 {!accountant && <>
                   <DropdownMenuItem onClick={() => setChecklist(true)} data-testid="button-payroll-checklist"><ListChecks />Check before export…</DropdownMenuItem>
@@ -188,13 +188,13 @@ export function WorkspacePage({ id }: { id: string }) {
       </div>
 
       <Tabs value={tab} onValueChange={setTab} className="mt-4">
-        <div className="-mx-4 overflow-x-auto px-4 sm:mx-0 sm:px-0">
+        <div className="overflow-x-auto">
           <TabsList className="w-full sm:w-auto">
-            <TabsTrigger value="payroll" data-testid="tab-payroll">Payroll</TabsTrigger>
-            <TabsTrigger value="rates" data-testid="tab-rates">Rates</TabsTrigger>
-            <TabsTrigger value="shifts" data-testid="tab-shifts">Shifts</TabsTrigger>
-            <TabsTrigger value="extras" data-testid="tab-extras">Tips & extras</TabsTrigger>
-            <TabsTrigger value="details" data-testid="tab-details">Details</TabsTrigger>
+            <TabsTrigger value="payroll" className={tabCls} data-testid="tab-payroll">Payroll</TabsTrigger>
+            <TabsTrigger value="rates" className={tabCls} data-testid="tab-rates">Rates</TabsTrigger>
+            <TabsTrigger value="shifts" className={tabCls} data-testid="tab-shifts">Shifts</TabsTrigger>
+            <TabsTrigger value="extras" className={tabCls} data-testid="tab-extras">Tips & extras</TabsTrigger>
+            <TabsTrigger value="details" className={tabCls} data-testid="tab-details">Details</TabsTrigger>
           </TabsList>
         </div>
         <TabsContent value="payroll" className="mt-5"><PayrollTab {...props} /></TabsContent>
@@ -227,3 +227,6 @@ function SaveIndicator({ state, error, savedAt, legacy }: { state: SaveState; er
     </span>
   );
 }
+
+/** Phones: let the five segments fit 358px without scrolling. */
+const tabCls = "max-sm:min-w-0 max-sm:px-2";

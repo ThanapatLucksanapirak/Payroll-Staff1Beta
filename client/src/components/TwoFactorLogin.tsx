@@ -8,6 +8,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { EnrollStep, RecoveryCodes } from "@/components/TwoFactor";
+import { cn } from "@/lib/utils";
+
+/** Small inline text link with a real focus ring and a comfortable hit area. */
+const linkClass = "-mx-1 rounded px-1 py-0.5 text-left text-[13px] font-medium underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/35 disabled:opacity-45";
 
 const isExpired = (e: unknown) => e instanceof ApiError && e.body?.expired === true;
 
@@ -20,7 +24,7 @@ export function TwoFactorStep({ kind, ticket, appName, method, sentTo, emailErro
 }
 
 function BackLink({ onBack }: { onBack: () => void }) {
-  return <button type="button" onClick={onBack} className="inline-flex items-center gap-1 text-[13px] text-muted-foreground hover:text-foreground"><ChevronLeft className="h-4 w-4" />Back</button>;
+  return <button type="button" onClick={onBack} className="-ml-1.5 inline-flex h-8 items-center gap-0.5 rounded-md pl-0.5 pr-2 text-[13px] font-medium text-muted-foreground transition-colors hover:bg-foreground/[0.05] hover:text-foreground focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/35"><ChevronLeft className="h-4 w-4" />Back</button>;
 }
 
 function VerifyStep({ ticket, email, onBack, onDone }: { ticket: string; email: { sentTo?: string; error?: string } | null; onBack: (message?: string) => void; onDone: () => void }) {
@@ -61,7 +65,7 @@ function VerifyStep({ ticket, email, onBack, onDone }: { ticket: string; email: 
       <div className="space-y-4">
         <p className="text-[14px] font-medium">You used a recovery code.</p>
         <p className="text-[13px] text-muted-foreground">{left === 0 ? "That was your last one." : `You have ${left} left.`} Make new ones under Settings → Account &amp; password.</p>
-        <Button className="w-full" onClick={onDone}>Continue</Button>
+        <Button size="lg" className="w-full" onClick={onDone}>Continue</Button>
       </div>
     );
   }
@@ -71,11 +75,16 @@ function VerifyStep({ ticket, email, onBack, onDone }: { ticket: string; email: 
       <BackLink onBack={() => onBack()} />
       {email && !recovery && (
         <div className="flex items-start gap-2.5 rounded-xl bg-info-soft px-3 py-2.5 text-[13px] text-info" data-testid="text-2fa-email-sent">
-          <Mail className="mt-0.5 h-4 w-4 shrink-0" />
-          <span>{sentTo ? <>We emailed a 6-digit code to <b className="font-semibold">{sentTo}</b>. It works for 10 minutes.</> : "Enter the 6-digit code from your email."}</span>
+          <Mail className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
+          <div className="min-w-0 space-y-1">
+            <p className="break-words">{sentTo ? <>We emailed a 6-digit code to <b className="font-semibold">{sentTo}</b>. It works for 10 minutes.</> : "Enter the 6-digit code from your email."}</p>
+            <button type="button" className={cn(linkClass, "text-info")} onClick={() => void resend()} disabled={resending} data-testid="button-2fa-resend">
+              {resending ? "Sending…" : "Send a new code"}
+            </button>
+          </div>
         </div>
       )}
-      {notice && <p className="text-[13px] text-muted-foreground" role="status">{notice}</p>}
+      {notice && <p className="rounded-lg bg-muted/60 px-3 py-2 text-[13px] text-muted-foreground" role="status">{notice}</p>}
       <div className="space-y-1.5">
         <Label htmlFor="otp">{recovery ? "Recovery code" : email ? "Code from the email" : "6-digit code"}</Label>
         {recovery ? (
@@ -83,16 +92,9 @@ function VerifyStep({ ticket, email, onBack, onDone }: { ticket: string; email: 
         ) : (
           <Input id="otp" autoFocus inputMode="numeric" autoComplete="one-time-code" maxLength={7} className="h-10 text-center font-mono text-lg tracking-[0.3em]" placeholder="123456" value={code} onChange={(e) => setCode(e.target.value.replace(/[^0-9]/g, ""))} data-testid="input-2fa-code" />
         )}
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <button type="button" className="text-xs font-medium text-primary hover:underline" onClick={() => { setRecovery(!recovery); setCode(""); setError(""); }}>
-            {recovery ? (email ? "Use the emailed code instead" : "Use a code from the app instead") : email ? "Can't get the email? Use a recovery code" : "Lost your phone? Use a recovery code"}
-          </button>
-          {email && !recovery && (
-            <button type="button" className="text-xs font-medium text-primary hover:underline disabled:opacity-50" onClick={() => void resend()} disabled={resending} data-testid="button-2fa-resend">
-              {resending ? "Sending…" : "Send a new code"}
-            </button>
-          )}
-        </div>
+        <button type="button" className={cn(linkClass, "text-primary")} onClick={() => { setRecovery(!recovery); setCode(""); setError(""); }}>
+          {recovery ? (email ? "Use the emailed code instead" : "Use a code from the app instead") : email ? "Can't get the email? Use a recovery code" : "Lost your phone? Use a recovery code"}
+        </button>
       </div>
       <label className="flex cursor-pointer select-none items-center gap-2 text-[13px] text-muted-foreground">
         <Checkbox checked={rememberDevice} onCheckedChange={(v) => setRememberDevice(v === true)} data-testid="checkbox-remember-device" />
@@ -135,7 +137,7 @@ function SetupStep({ ticket, appName, onBack, onDone }: { ticket: string; appNam
       <div className="space-y-4">
         <p className="text-[14px] font-medium">Two-factor sign-in is on.</p>
         <RecoveryCodes codes={codes} appName={appName} />
-        <Button className="w-full" onClick={onDone} data-testid="button-2fa-continue">Continue</Button>
+        <Button size="lg" className="w-full" onClick={onDone} data-testid="button-2fa-continue">Continue</Button>
       </div>
     );
   }
@@ -143,7 +145,7 @@ function SetupStep({ ticket, appName, onBack, onDone }: { ticket: string; appNam
     <div className="space-y-4">
       <BackLink onBack={() => onBack()} />
       <p className="text-[13px] text-muted-foreground">Your account needs two-factor sign-in. It takes a minute.</p>
-      {enroll ? <EnrollStep {...enroll} busy={busy} error={error} onSubmit={(c) => void enable(c)} submitLabel="Turn on and sign in" /> : <div className="flex justify-center py-8"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>}
+      {enroll ? <EnrollStep {...enroll} busy={busy} error={error} onSubmit={(c) => void enable(c)} submitLabel="Turn on and sign in" /> : <div className="flex justify-center py-8" role="status" aria-label="Preparing two-factor setup"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>}
     </div>
   );
 }

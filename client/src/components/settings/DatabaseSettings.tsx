@@ -7,6 +7,7 @@ import { api, errorMessage, queryClient, session } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 import { useConfirm } from "@/components/ConfirmDialog";
 import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -82,16 +83,19 @@ export function DatabaseSettings() {
   ];
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
       <Section title="Current database" actions={<Button variant="outline" size="sm" onClick={reconnect} disabled={!!busy} data-testid="button-db-reconnect">{busy === "reconnect" ? <Loader2 className="animate-spin" /> : <RefreshCw />} Reconnect</Button>}>
-        {q.isLoading ? <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /> : !d ? <p className="text-sm text-destructive">{errorMessage(q.error)}</p> : (
+        {q.isLoading ? <Skeleton className="h-6 w-72 max-w-full rounded-md" /> : !d ? <p className="text-sm text-destructive">{errorMessage(q.error)}</p> : (
           <div className="space-y-3 text-sm">
             <div className="flex flex-wrap items-center gap-2">
               <Database className="h-4 w-4 text-muted-foreground" />
               <span className="font-medium" data-testid="text-db-label">{d.status.label ?? d.current?.kind ?? "Not configured"}</span>
               {d.health?.ok ? <Badge variant="success"><CheckCircle2 />Connected</Badge> : <Badge variant="destructive"><XCircle />Problem</Badge>}
-              {h?.latencyMs != null && <span className="text-xs text-muted-foreground">{h.latencyMs} ms</span>}
-              {h?.timesheetCount != null && <span className="text-xs text-muted-foreground">· {h.timesheetCount} timesheets</span>}
+              {(h?.latencyMs != null || h?.timesheetCount != null) && (
+                <span className="text-xs text-muted-foreground tabular">
+                  {[h?.latencyMs != null ? `${h.latencyMs} ms` : null, h?.timesheetCount != null ? `${h.timesheetCount} timesheet${h.timesheetCount === 1 ? "" : "s"}` : null].filter(Boolean).join(" · ")}
+                </span>
+              )}
             </div>
             {d.current?.url && <p className="text-xs text-muted-foreground break-all">{d.current.url} · key {d.current.keyHint}</p>}
             {(d.health?.error || d.status.error) && <p className="text-xs text-destructive">{d.health?.error || d.status.error}</p>}
@@ -107,8 +111,8 @@ export function DatabaseSettings() {
         <div className="space-y-4">
           <div className="grid gap-2 sm:grid-cols-3">
             {kinds.filter((k) => k.show).map((k) => (
-              <button key={k.id} onClick={() => { setKind(k.id); setTest(null); }} className={cn("rounded-xl border border-border/80 p-3.5 text-left transition-[border-color,box-shadow] duration-150 hover:border-primary/40 focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/35", kind === k.id && "border-primary ring-[3px] ring-primary/15")} aria-pressed={kind === k.id} data-testid={`button-db-kind-${k.id}`}>
-                <p className="text-sm font-medium">{k.title}</p><p className="text-xs text-muted-foreground">{k.desc}</p>
+              <button key={k.id} onClick={() => { setKind(k.id); setTest(null); }} className={cn("flex flex-col items-start justify-start rounded-xl border border-border/80 p-3.5 text-left transition-[border-color,box-shadow] duration-150 hover:border-primary/40 focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/35", kind === k.id && "border-primary ring-[3px] ring-primary/15")} aria-pressed={kind === k.id} data-testid={`button-db-kind-${k.id}`}>
+                <p className="text-[13px] font-medium">{k.title}</p><p className="mt-0.5 text-xs text-muted-foreground">{k.desc}</p>
               </button>
             ))}
           </div>
@@ -121,7 +125,7 @@ export function DatabaseSettings() {
           {test && (
             <div className={cn("rounded-lg border p-3 text-sm", test.ok ? "border-transparent bg-success-soft" : "border-transparent bg-danger-soft")} data-testid="text-db-test">
               {test.ok ? (
-                <p className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4 text-success" />Connected in {test.latencyMs} ms{test.timesheetCount != null ? ` · ${test.timesheetCount} timesheets already there` : ""}</p>
+                <p className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4 text-success" />Connected in {test.latencyMs} ms{test.timesheetCount != null ? ` · ${test.timesheetCount} timesheet${test.timesheetCount === 1 ? "" : "s"} already there` : ""}</p>
               ) : <p className="flex items-start gap-2"><XCircle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />{test.error}</p>}
               {test.missingTables.length > 0 && <p className="mt-1 text-xs">Missing tables: {test.missingTables.join(", ")} — run the setup SQL below in the Supabase SQL editor, then test again.</p>}
               {test.missingColumns.length > 0 && <p className="mt-1 text-xs">Optional columns missing: {test.missingColumns.join(", ")}.</p>}
@@ -130,7 +134,7 @@ export function DatabaseSettings() {
           {kind === "supabase" && !valid && (url.trim() || key.trim()) && (
             <p className="text-xs text-muted-foreground">{!/^https:\/\/.+/.test(url.trim()) ? "The project URL should start with https://" : "That key looks too short — paste the full key from Supabase."}</p>
           )}
-          <label className="flex items-center gap-2 text-sm"><Checkbox checked={copyData} onCheckedChange={(v) => setCopyData(!!v)} data-testid="checkbox-db-copy" />Copy my current data into the new database</label>
+          <label className="flex items-center gap-2 text-[13px]"><Checkbox checked={copyData} onCheckedChange={(v) => setCopyData(!!v)} data-testid="checkbox-db-copy" />Copy my current data into the new database</label>
           <div className="flex flex-wrap gap-2">
             <Button variant="outline" onClick={runTest} disabled={!valid || !!busy} data-testid="button-db-test">{busy === "test" ? <Loader2 className="animate-spin" /> : <PlugZap />} Test connection</Button>
             <Button onClick={runSwitch} disabled={!valid || !!busy || !test?.ok} data-testid="button-db-switch">{busy === "switch" && <Loader2 className="animate-spin" />}Switch to this database</Button>

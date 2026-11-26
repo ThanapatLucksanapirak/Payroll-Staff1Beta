@@ -145,7 +145,7 @@ export function KioskLocationExtras({ site }: { site: Site }) {
 
   return (
     <div className="space-y-4">
-      <div className="space-y-2 rounded-xl border border-border/80 p-3">
+      <div className="space-y-2 border-t border-border/70 pt-4">
         <p className="flex items-center gap-2 text-[13px] font-semibold"><MapPin className="h-4 w-4 text-muted-foreground" />Stations <UnsavedDot show={stationsDirty} /></p>
         <p className="text-xs text-muted-foreground">At clock-in, employees tap where they're working (for example Sushi bar, Kitchen, Front). It shows on Live. Leave empty to skip the question.</p>
         {stations.length > 0 && (
@@ -166,7 +166,7 @@ export function KioskLocationExtras({ site }: { site: Site }) {
         )}
       </div>
 
-      <div className="space-y-2 rounded-xl border border-border/80 p-3">
+      <div className="space-y-2 border-t border-border/70 pt-4">
         <div className="flex items-start justify-between gap-3">
           <div>
             <p className="flex items-center gap-2 text-[13px] font-semibold"><Coffee className="h-4 w-4 text-muted-foreground" />Break reminder <UnsavedDot show={reminderDirty} /></p>
@@ -184,7 +184,7 @@ export function KioskLocationExtras({ site }: { site: Site }) {
         )}
       </div>
 
-      <div className="space-y-2 rounded-xl border border-border/80 p-3">
+      <div className="space-y-2 border-t border-border/70 pt-4">
         <p className="flex items-center gap-2 text-[13px] font-semibold"><Camera className="h-4 w-4 text-muted-foreground" />Punch photos <UnsavedDot show={daysDirty} /></p>
         <p className="text-xs text-muted-foreground">Turn photos on per device above. Photos are kept on the server (not in backups) and deleted automatically after:</p>
         <div className="flex flex-wrap items-center gap-2 text-[13px]">

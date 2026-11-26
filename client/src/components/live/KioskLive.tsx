@@ -97,7 +97,7 @@ export function FixRequests({ siteId, tz, editable }: { siteId: string; tz: stri
 
   return (
     <section data-testid="section-fix-requests">
-      <SectionLabel action={decided.length > 0 ? <button type="button" className="text-xs font-medium text-primary hover:underline" onClick={() => setShowDone((v) => !v)}>{showDone ? "Hide recent" : "Show recent"}</button> : undefined}>
+      <SectionLabel action={decided.length > 0 ? <button type="button" className="rounded-sm text-[13px] font-medium text-primary outline-none hover:underline focus-visible:ring-[3px] focus-visible:ring-ring/35" onClick={() => setShowDone((v) => !v)}>{showDone ? "Hide recent" : "Show recent"}</button> : undefined}>
         Fix requests{pending.length > 0 && <Badge variant="warning" className="ml-2 align-middle">{pending.length} new</Badge>}
       </SectionLabel>
       <div className="overflow-hidden rounded-xl border border-card-border bg-card shadow-card">
@@ -226,7 +226,7 @@ export function ShiftNotes({ siteId, tz, editable, employees }: { siteId: string
       <SectionLabel action={editable ? <Button size="sm" variant="ghost" onClick={() => setAdding(true)} data-testid="button-add-note"><Plus /> Post a note</Button> : undefined}>Shift notes</SectionLabel>
       <div className="overflow-hidden rounded-xl border border-card-border bg-card shadow-card">
         {active.length === 0 ? (
-          <p className="px-4 py-3 text-[13px] text-muted-foreground">Post a note and employees see it once when they clock in, with an OK button.</p>
+          <p className="flex items-start gap-3 px-4 py-3 text-[13px] text-muted-foreground"><Megaphone className="mt-0.5 h-4 w-4 shrink-0" />No notes up. Post one and each person sees it once when they clock in, and taps OK.</p>
         ) : (
           <ul className="divide-y divide-border/70" data-testid="list-notes">
             {active.map((n) => {
@@ -305,7 +305,7 @@ function NoteDialog({ siteId, tz, employees, onClose, onDone }: { siteId: string
           {!everyone && (
             <div className="max-h-48 space-y-1 overflow-y-auto rounded-lg border border-border/80 p-2">
               {employees.length === 0 ? <p className="text-xs text-muted-foreground">No employees yet.</p> : employees.map((e) => (
-                <label key={e.id} className="flex cursor-pointer items-center gap-2 rounded-md px-1.5 py-1 text-[13px] hover:bg-foreground/[0.03]">
+                <label key={e.id} className="flex min-h-9 cursor-pointer items-center gap-2 rounded-md px-1.5 py-1 text-[13px] hover:bg-foreground/[0.03]">
                   <Checkbox checked={picked.has(e.id)} onCheckedChange={() => toggle(e.id)} />
                   <span className="min-w-0 break-words">{e.name}</span>
                 </label>

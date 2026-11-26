@@ -6,6 +6,11 @@ Settings → About, next to the matching update.
 Add an entry with every pull request: a `## YYYY-MM-DD · Title (#PR)` heading and a
 few short bullets written for the people who use the app, not for developers.
 
+## 2026-11-26 · New Shijiri look (#24)
+- A new Shijiri logo, colours and sign-in page, shared by the admin app, time clock, staff portal and emails.
+- Easier to use on phones: timesheets, schedule, settings and the two-factor notice fit small screens.
+- The time clock is easier to read, and "Fix a missed punch" fits on the tablet without scrolling.
+
 ## 2026-11-26 · Kiosk and app polish from feedback (#22)
 - Live: each person who is clocked in has Clock out and Cancel clock-in, for when the kiosk went offline or someone clocked in by mistake.
 - With photos on, the time clock checks for a face: a blocked or covered camera, or nobody in view, stops the punch and says "Face not detected".

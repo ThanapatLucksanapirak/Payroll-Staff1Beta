@@ -35,7 +35,7 @@ const PANES: Record<string, ComponentType> = {
 
 function IconTile({ s, size = "md" }: { s: SettingsSectionMeta; size?: "md" | "lg" }) {
   return (
-    <span className={cn("flex shrink-0 items-center justify-center text-white shadow-sm", s.tint, size === "lg" ? "h-8 w-8 rounded-[9px]" : "h-[22px] w-[22px] rounded-[6px]")} aria-hidden>
+    <span className={cn("flex shrink-0 items-center justify-center bg-foreground/[0.07] text-foreground/75 dark:bg-foreground/[0.12]", size === "lg" ? "h-8 w-8 rounded-[9px]" : "h-[22px] w-[22px] rounded-[6px]")} aria-hidden>
       <s.icon className={size === "lg" ? "h-[18px] w-[18px]" : "h-3.5 w-3.5"} strokeWidth={2.2} />
     </span>
   );
@@ -71,7 +71,7 @@ export function SettingsPage({ section }: { section?: string }) {
                           aria-current={active ? "page" : undefined}
                           className={cn(
                             "flex items-center gap-3 px-3 py-2.5 text-[14px] transition-colors lg:rounded-md lg:px-2 lg:py-1.5 lg:text-[13px] focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-inset focus-visible:ring-ring/35",
-                            active ? "lg:bg-primary lg:text-primary-foreground" : "hover:bg-foreground/[0.04]",
+                            active ? "lg:bg-sidebar-accent lg:text-sidebar-accent-foreground" : "hover:bg-foreground/[0.04]",
                           )}
                           data-testid={`nav-settings-${s.id}`}
                         >

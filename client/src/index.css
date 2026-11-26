@@ -1,10 +1,10 @@
+@import "./fonts.css";
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 /*
- * Design tokens — calm, white, macOS / iOS inspired.
- * Light is the hero theme; dark mirrors it with Apple's elevated greys.
+ * Design tokens: Shijiri. Calm, warm neutrals with one plum accent (see DESIGN.md).
  * All colours are HSL triplets so Tailwind can apply alpha (`bg-primary/10`).
  */
 @layer base {
@@ -12,93 +12,101 @@
     --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Segoe UI Variable", "Segoe UI", system-ui, Roboto, "Helvetica Neue", Arial, sans-serif;
     --font-mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, monospace;
     --font-serif: ui-serif, Georgia, serif;
+    --font-display: "Young Serif", ui-serif, Georgia, serif;   /* Shijiri: wordmark + big headings, never figures */
 
-    /* Surfaces */
-    --background: 240 20% 99%;          /* #fbfbfd page canvas */
-    --foreground: 240 3% 12%;           /* #1d1d1f */
+    /* Surfaces — warm "rice paper" neutrals (Shijiri) */
+    --background: 30 20% 98%;           /* #fbfaf9 canvas */
+    --foreground: 330 6% 12%;           /* #201d1f */
     --card: 0 0% 100%;
-    --card-foreground: 240 3% 12%;
-    --card-border: 240 6% 90%;
+    --card-foreground: 330 6% 12%;
+    --card-border: 30 9% 89%;           /* #e6e3e0 */
     --popover: 0 0% 100%;
-    --popover-foreground: 240 3% 12%;
-    --popover-border: 240 6% 88%;
-    --sidebar: 240 11% 96%;             /* #f5f5f7 */
-    --sidebar-foreground: 240 3% 12%;
-    --sidebar-border: 240 6% 89%;
-    --sidebar-accent: 240 6% 90%;
-    --sidebar-accent-foreground: 240 3% 12%;
-    --sidebar-primary: 211 100% 45%;
+    --popover-foreground: 330 6% 12%;
+    --popover-border: 30 8% 87%;
+    --sidebar: 30 14% 96%;              /* #f6f5f3 */
+    --sidebar-foreground: 330 6% 12%;
+    --sidebar-border: 30 9% 89%;
+    --sidebar-accent: 322 32% 92%;      /* #f1e3ec plum-tinted active nav */
+    --sidebar-accent-foreground: 321 50% 24%; /* #5c1f47, 9.0:1 on the tint */
+    --sidebar-primary: 321 50% 32%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-ring: 211 100% 45%;
-    --segment: 0 0% 100%;               /* selected segment in a segmented control */
+    --sidebar-ring: 321 50% 40%;
+    --segment: 0 0% 100%;
 
-    /* Accent — Apple blue #0071e3 */
-    --primary: 211 100% 45%;
+    /* Brand — Shijiri Plum #7a295e (white text 9.1:1) */
+    --primary: 321 50% 32%;
     --primary-foreground: 0 0% 100%;
-    --secondary: 240 6% 95%;
-    --secondary-foreground: 240 3% 12%;
-    --muted: 240 6% 95%;
-    --muted-foreground: 240 2% 42%;     /* #6b6b70 — 5.2:1 on white */
-    --accent: 240 6% 94%;
-    --accent-foreground: 240 3% 12%;
+    --secondary: 30 9% 94%;
+    --secondary-foreground: 330 6% 12%;
+    --muted: 30 9% 94%;
+    --muted-foreground: 330 4% 40%;     /* #6a6266 — 5.9:1 white, 5.4:1 sidebar */
+    --accent: 30 9% 93%;
+    --accent-foreground: 330 6% 12%;
     --destructive: 355 100% 42%;        /* #d70015 */
     --destructive-foreground: 0 0% 100%;
-    --border: 240 6% 90%;
-    --input: 240 5% 84%;
-    --ring: 211 100% 45%;
+    --border: 30 9% 89%;
+    --input: 30 6% 82%;
+    --ring: 321 50% 40%;                /* #99346f, used at /35 for the halo */
     --radius: 0.75rem;
 
-    /* Status palette */
+    /* Shijiri brand moments only (sign-in panel, portal band): ink, rice, tonal mark, muted line */
+    --brand-ink: 322 38% 13%;           /* #2e1525 */
+    --brand-rice: 36 45% 94%;           /* #f7f1e9, 15:1 on ink */
+    --brand-tonal: 318 37% 20%;         /* #45203a */
+    --brand-muted: 338 18% 82%;         /* #d9c9cf, 10.6:1 on ink */
+
+    /* Status palette (unchanged hues; neutral warmed) */
     --success: 136 59% 32%;
     --success-soft: 137 50% 94%;
     --warning: 33 100% 33%;
     --warning-soft: 40 100% 93%;
     --danger: 355 80% 44%;
     --danger-soft: 354 100% 96%;
-    --neutral: 240 2% 42%;
-    --neutral-soft: 240 6% 94%;
+    --neutral: 330 4% 40%;
+    --neutral-soft: 30 9% 93%;
     --info: 211 100% 42%;
     --info-soft: 211 100% 96%;
 
-    --chart-1: 211 100% 45%;
+    --chart-1: 215 22% 42%;             /* slate: data, never the brand plum */
     --chart-2: 136 50% 42%;
     --chart-3: 33 100% 48%;
-    --chart-4: 280 50% 55%;
-    --chart-5: 190 70% 42%;
+    --chart-4: 214 70% 52%;             /* was 280 purple: too close to brand */
+    --chart-5: 190 70% 38%;
   }
 
   .dark {
-    --background: 240 4% 7%;
-    --foreground: 0 0% 96%;
-    --card: 240 3% 11%;                 /* #1c1c1e */
-    --card-foreground: 0 0% 96%;
-    --card-border: 240 3% 18%;
-    --popover: 240 3% 13%;
-    --popover-foreground: 0 0% 96%;
-    --popover-border: 240 3% 22%;
-    --sidebar: 240 3% 9%;
-    --sidebar-foreground: 0 0% 94%;
-    --sidebar-border: 240 3% 16%;
-    --sidebar-accent: 240 3% 18%;
-    --sidebar-accent-foreground: 0 0% 96%;
-    --sidebar-primary: 211 100% 55%;
-    --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-ring: 211 100% 60%;
-    --segment: 240 3% 28%;
+    --background: 320 6% 7%;            /* #131112 */
+    --foreground: 30 12% 95%;
+    --card: 320 4% 11%;                 /* #1d1b1c */
+    --card-foreground: 30 12% 95%;
+    --card-border: 320 4% 18%;
+    --popover: 320 4% 13%;
+    --popover-foreground: 30 12% 95%;
+    --popover-border: 320 4% 22%;
+    --sidebar: 320 5% 9%;
+    --sidebar-foreground: 30 10% 93%;
+    --sidebar-border: 320 4% 16%;
+    --sidebar-accent: 321 22% 20%;      /* #3e2836 */
+    --sidebar-accent-foreground: 320 50% 86%;
+    --sidebar-primary: 320 34% 72%;
+    --sidebar-primary-foreground: 322 38% 13%;
+    --sidebar-ring: 320 34% 72%;
+    --segment: 320 4% 28%;
 
-    --primary: 211 100% 55%;            /* #1a8cff */
-    --primary-foreground: 0 0% 100%;
-    --secondary: 240 3% 18%;
-    --secondary-foreground: 0 0% 94%;
-    --muted: 240 3% 16%;
-    --muted-foreground: 240 4% 66%;
-    --accent: 240 3% 19%;
-    --accent-foreground: 0 0% 96%;
+    /* Plum Light #d09fc0 with ink text: 7.5:1 on the fill, 7.7:1 as text on cards */
+    --primary: 320 34% 72%;
+    --primary-foreground: 322 38% 13%;  /* #2e1525 — NOT white in dark mode */
+    --secondary: 320 4% 18%;
+    --secondary-foreground: 30 10% 93%;
+    --muted: 320 4% 16%;
+    --muted-foreground: 330 4% 66%;     /* #aca5a8 — 7.1:1 on card */
+    --accent: 320 4% 19%;
+    --accent-foreground: 30 12% 95%;
     --destructive: 3 100% 62%;
     --destructive-foreground: 0 0% 100%;
-    --border: 240 3% 19%;
-    --input: 240 3% 26%;
-    --ring: 211 100% 60%;
+    --border: 320 4% 19%;
+    --input: 320 4% 26%;
+    --ring: 320 34% 82%;
 
     --success: 135 55% 58%;
     --success-soft: 135 35% 16%;
@@ -106,15 +114,15 @@
     --warning-soft: 35 50% 15%;
     --danger: 3 100% 68%;
     --danger-soft: 355 45% 17%;
-    --neutral: 240 4% 66%;
-    --neutral-soft: 240 3% 18%;
+    --neutral: 330 4% 66%;
+    --neutral-soft: 320 4% 18%;
     --info: 211 100% 68%;
     --info-soft: 211 50% 17%;
 
-    --chart-1: 211 100% 60%;
+    --chart-1: 215 25% 68%;
     --chart-2: 135 55% 55%;
     --chart-3: 38 100% 60%;
-    --chart-4: 280 60% 70%;
+    --chart-4: 214 85% 68%;
     --chart-5: 190 70% 55%;
   }
 }
@@ -139,8 +147,6 @@
   .tabular, .tabular-nums { font-variant-numeric: tabular-nums; }
   input[type="date"]::-webkit-calendar-picker-indicator,
   input[type="time"]::-webkit-calendar-picker-indicator { opacity: 0.55; cursor: pointer; }
-  .dark input[type="date"]::-webkit-calendar-picker-indicator,
-  .dark input[type="time"]::-webkit-calendar-picker-indicator { filter: invert(1); }
   /* Thin, quiet scrollbars */
   * { scrollbar-width: thin; scrollbar-color: hsl(var(--foreground) / 0.18) transparent; }
 }

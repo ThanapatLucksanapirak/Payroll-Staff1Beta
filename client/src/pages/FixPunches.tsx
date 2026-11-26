@@ -113,7 +113,11 @@ export function FixPunchesPage({ start: startParam, end: endParam }: { start?: s
           </div>
 
           {fix.length + review.length === 0 ? (
-            <EmptyState icon={CheckCircle2} title="No punch problems" description={data.days.length ? "Every shift in these dates pairs up. Approve the days below when you're happy with them." : "No punches in these dates."} />
+            <div className="rounded-xl border border-card-border bg-card shadow-card">
+              {data.days.length
+                ? <EmptyState compact icon={CheckCircle2} title="No punch problems" description="Every shift in these dates pairs up. Approve the days below when you're happy with them." />
+                : <EmptyState compact icon={CheckCircle2} title="No punches in these dates" description="Shifts from the time clock show up here to check and approve. Pick other dates above to look further back." />}
+            </div>
           ) : (
             <>
               {fix.length > 0 && <IssueList title="Needs fixing" issues={fix} editable={editable} onFix={(issue, f) => setFixing({ issue, fix: f })} dateLabel={(d) => formatDayLabel(d, app.prefs.dateFormat)} />}
@@ -129,7 +133,7 @@ export function FixPunchesPage({ start: startParam, end: endParam }: { start?: s
                   const ready = days.filter((d) => d.approvable && !d.approved);
                   return (
                     <div key={date} className="overflow-hidden rounded-xl border border-card-border bg-card shadow-card" data-testid={`group-day-${date}`}>
-                      <div className="flex items-center justify-between gap-2 border-b border-border/70 px-4 py-2">
+                      <div className="flex min-h-[2.75rem] items-center justify-between gap-2 border-b border-border/70 bg-foreground/[0.02] px-4 py-1.5">
                         <span className="text-[13px] font-semibold">{formatDayLabel(date, app.prefs.dateFormat)}</span>
                         {editable && ready.length > 1 && (
                           <Button variant="ghost" size="sm" className="text-primary" disabled={busy === "many"} onClick={() => approve(ready)}>Approve {ready.length}</Button>
@@ -137,12 +141,14 @@ export function FixPunchesPage({ start: startParam, end: endParam }: { start?: s
                       </div>
                       <ul className="divide-y divide-border/70">
                         {days.map((d) => (
-                          <li key={d.employeeId} className="flex min-h-[3rem] flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2 text-[13px]" data-testid={`row-day-${d.date}-${d.employeeId}`}>
-                            <span className="min-w-[8rem] flex-1 truncate font-medium">{d.employeeName}</span>
-                            <span className="tabular text-muted-foreground">
-                              {d.shifts.map((s) => `${t(s.in)} – ${s.open ? (s.superseded ? "no clock-out" : "now") : t(s.out)}`).join(", ")}
+                          <li key={d.employeeId} className="flex min-h-[3rem] flex-wrap items-center gap-x-3 gap-y-2 px-4 py-2.5 text-[13px]" data-testid={`row-day-${d.date}-${d.employeeId}`}>
+                            <span className="flex min-w-0 flex-1 basis-40 flex-col sm:flex-row sm:items-center sm:gap-3">
+                              <span className="min-w-0 truncate font-medium sm:flex-1" title={d.employeeName}>{d.employeeName}</span>
+                              <span className="tabular text-xs text-muted-foreground sm:text-[13px]">
+                                {d.shifts.map((s) => `${t(s.in)} – ${s.open ? (s.superseded ? "no clock-out" : "now") : t(s.out)}`).join(", ")}
+                              </span>
                             </span>
-                            <span className="w-16 text-right tabular font-semibold">{hm(d.workedMinutes)}</span>
+                            <span className="w-16 shrink-0 text-right tabular font-semibold">{hm(d.workedMinutes)}</span>
                             <span className="flex w-full items-center justify-end gap-1.5 sm:w-auto sm:min-w-[11rem]">
                               {d.issues.length > 0 && !d.approved && <Badge variant={d.issues.some((i) => i.severity === "fix") ? "destructive" : "warning"}>{d.issues.length} issue{d.issues.length === 1 ? "" : "s"}</Badge>}
                               <ApprovalControl day={d} editable={editable} busy={busy === `${d.date}|${d.employeeId}`} onApprove={(yes) => approve([d], yes)} />
@@ -177,19 +183,19 @@ function Stat({ label, value, tone, hint }: { label: string; value: number | str
 function IssueList({ title, issues, editable, onFix, dateLabel }: { title: string; issues: PunchIssue[]; editable: boolean; onFix: (i: PunchIssue, f: IssueFix) => void; dateLabel: (d: string) => string }) {
   return (
     <section>
-      <SectionLabel action={<span className="text-xs text-muted-foreground">{issues.length}</span>}>{title}</SectionLabel>
+      <SectionLabel action={<span className="tabular text-xs text-muted-foreground">{issues.length}</span>}>{title}</SectionLabel>
       <ul className="divide-y divide-border/70 overflow-hidden rounded-xl border border-card-border bg-card shadow-card" data-testid={`list-issues-${title.toLowerCase().replace(/\W+/g, "-")}`}>
         {issues.map((i) => (
           <li key={i.id} className="flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-3" data-testid={`issue-${i.id}`}>
             <span className={cn("flex h-8 w-8 shrink-0 items-center justify-center rounded-full", i.severity === "fix" ? "bg-danger-soft text-danger" : "bg-warning-soft text-warning")}>
               {i.severity === "fix" ? <Wrench className="h-4 w-4" /> : <CircleDashed className="h-4 w-4" />}
             </span>
-            <div className="min-w-0 flex-1">
-              <p className="text-[14px] font-medium">{i.employeeName} <span className="font-normal text-muted-foreground">· {dateLabel(i.date)}</span></p>
+            <div className="min-w-0 flex-1 basis-56">
+              <p className="break-words text-[14px] font-medium">{i.employeeName} <span className="whitespace-nowrap font-normal text-muted-foreground">· {dateLabel(i.date)}</span></p>
               <p className="text-[13px] text-muted-foreground"><b className="font-medium text-foreground">{i.title}.</b> {i.detail}</p>
             </div>
             {editable && (
-              <div className="flex flex-wrap gap-1.5">
+              <div className="flex flex-wrap gap-1.5 pl-11 sm:pl-0">
                 {i.fixes.map((f, k) => (
                   <Button key={k} size="sm" variant={k === 0 ? "tinted" : "ghost"} className={cn(f.kind === "delete" && "text-destructive")} onClick={() => onFix(i, f)} data-testid={`button-fix-${i.id}-${k}`}>{f.label}</Button>
                 ))}

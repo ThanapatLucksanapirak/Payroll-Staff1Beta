@@ -36,11 +36,11 @@ export function CategoriesSettings() {
 
   return (
     <Section
-      title="Pay categories"
-      description="Shared rate templates (e.g. Chef, Server). Employees in a category always use its current rates. Limit a category to one location if rates differ."
+      title="Rate templates"
+      description="Shared rates for a role, like Chef or Server. Employees in a category always use its current rates. Limit a category to one location if rates differ."
       actions={<Button variant="outline" size="sm" onClick={() => setList([...list, { id: uid("c"), name: "", siteId: null, payBasis: "day_rate", fullDayRate: 0, halfDayRate: 0, hourlyRate: 0, isNetPay: true }])} data-testid="button-add-category"><Plus /> Add category</Button>}
     >
-      {list.length === 0 ? <p className="rounded-lg border border-dashed border-border px-4 py-8 text-center text-[13px] text-muted-foreground">No categories yet. Add one for each role that shares a rate, like Chef or Server.</p> : (
+      {list.length === 0 ? <p className="rounded-lg border border-dashed border-border px-4 py-6 text-center text-[13px] text-muted-foreground">No categories yet. Add one for each role that shares a rate.</p> : (
         <div className="overflow-x-auto -mx-5 px-5">
           <table className="w-full text-sm min-w-[50rem]">
             <thead>
@@ -76,8 +76,8 @@ export function CategoriesSettings() {
           </table>
         </div>
       )}
-      <div className="mt-4 flex items-center justify-end gap-2">
-        {dirty && <span className="mr-auto text-xs text-muted-foreground">Unsaved changes · employees using a removed category fall back to Custom</span>}
+      <div className="mt-4 flex flex-wrap items-center justify-end gap-2">
+        {dirty && <span className="mr-auto basis-full text-xs text-muted-foreground sm:basis-auto">Unsaved changes · employees using a removed category fall back to Custom</span>}
         <Button variant="outline" disabled={!dirty || saving} onClick={() => setList(app.categories)}>Discard</Button>
         <Button disabled={!dirty || saving} onClick={save} data-testid="button-save-categories">{saving && <Loader2 className="animate-spin" />}Save categories</Button>
       </div>

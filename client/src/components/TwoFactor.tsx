@@ -30,7 +30,7 @@ export function EnrollStep({ secret, otpauthUrl, busy, error, onSubmit, submitLa
   const [showKey, setShowKey] = useState(false);
   return (
     <form className="space-y-4" onSubmit={(e) => { e.preventDefault(); if (code.trim()) onSubmit(code.trim()); }}>
-      <ol className="space-y-1 text-[13px] text-muted-foreground">
+      <ol className="space-y-1 text-[13px] leading-snug text-muted-foreground">
         <li>1. Open an authenticator app on your phone (Apple Passwords, Google Authenticator, 1Password, Authy…).</li>
         <li>2. Scan this code.</li>
         <li>3. Enter the 6-digit code it shows.</li>
@@ -40,7 +40,7 @@ export function EnrollStep({ secret, otpauthUrl, busy, error, onSubmit, submitLa
         {showKey ? (
           <p className="select-all break-all font-mono text-[13px] tracking-wider" data-testid="text-2fa-secret">{groups(secret)}</p>
         ) : (
-          <button type="button" className="text-[13px] font-medium text-primary hover:underline" onClick={() => setShowKey(true)}>Can't scan? Enter a key instead</button>
+          <button type="button" className="rounded px-1 py-0.5 text-[13px] font-medium text-primary underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/35" onClick={() => setShowKey(true)}>Can't scan? Enter a key instead</button>
         )}
       </div>
       <div className="space-y-1.5">

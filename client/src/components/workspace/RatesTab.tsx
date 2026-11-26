@@ -26,7 +26,7 @@ export function PaymentPicker({ method, cash, defaultMethod, disabled, onChange,
   return (
     <div className="flex items-center gap-2">
       <Select value={method} onValueChange={(v) => onChange({ paymentMethod: v as any })} disabled={disabled}>
-        <SelectTrigger className="h-8 w-[9.5rem]" data-testid={`select-payment-${testid}`}><SelectValue /></SelectTrigger>
+        <SelectTrigger className="h-8 w-[13rem]" data-testid={`select-payment-${testid}`}><SelectValue /></SelectTrigger>
         <SelectContent>
           <SelectItem value="default">Default ({PAYMENT_LABELS[defaultMethod]})</SelectItem>
           <SelectItem value="cash">Cash</SelectItem>
@@ -36,7 +36,7 @@ export function PaymentPicker({ method, cash, defaultMethod, disabled, onChange,
         </SelectContent>
       </Select>
       {method === "split" && (
-        <NumberInput className="h-8 w-28" prefix={app.prefs.currencySymbol} value={cash} disabled={disabled} aria-label="Cash amount" title="Paid in cash; the rest goes by bank transfer"
+        <NumberInput className="w-28 [&_input]:h-8" prefix={app.prefs.currencySymbol} value={cash} disabled={disabled} aria-label="Cash amount" title="Paid in cash; the rest goes by bank transfer"
           onChange={(n) => onChange({ splitCashAmount: Math.max(0, n) }, `split:${testid}`)} data-testid={`input-split-cash-${testid}`} />
       )}
     </div>
@@ -115,9 +115,9 @@ export function RatesTab(p: WsProps) {
                           <SelectContent><SelectItem value="day_rate">Day rate</SelectItem><SelectItem value="hourly">Hourly</SelectItem></SelectContent>
                         </Select>
                       </td>
-                      <td className="py-2 pr-2 w-28"><NumberInput className="h-8" prefix={app.prefs.currencySymbol} value={cat ? cat.fullDayRate : e.fullDayRate} disabled={locked || !!cat || basis === "hourly"} onChange={(n) => setEmp(e.name, { fullDayRate: n }, `full:${k}`)} data-testid={`input-full-${k}`} /></td>
-                      <td className="py-2 pr-2 w-28"><NumberInput className="h-8" prefix={app.prefs.currencySymbol} value={cat ? cat.halfDayRate : e.halfDayRate} disabled={locked || !!cat || basis === "hourly"} onChange={(n) => setEmp(e.name, { halfDayRate: n }, `half:${k}`)} data-testid={`input-half-${k}`} /></td>
-                      <td className="py-2 pr-2 w-28"><NumberInput className="h-8" prefix={app.prefs.currencySymbol} value={cat ? cat.hourlyRate : e.hourlyRate} disabled={locked || !!cat || basis !== "hourly"} onChange={(n) => setEmp(e.name, { hourlyRate: n }, `hourly:${k}`)} data-testid={`input-hourly-${k}`} /></td>
+                      <td className="py-2 pr-2 w-28"><NumberInput className="[&_input]:h-8" prefix={app.prefs.currencySymbol} value={cat ? cat.fullDayRate : e.fullDayRate} disabled={locked || !!cat || basis === "hourly"} onChange={(n) => setEmp(e.name, { fullDayRate: n }, `full:${k}`)} data-testid={`input-full-${k}`} /></td>
+                      <td className="py-2 pr-2 w-28"><NumberInput className="[&_input]:h-8" prefix={app.prefs.currencySymbol} value={cat ? cat.halfDayRate : e.halfDayRate} disabled={locked || !!cat || basis === "hourly"} onChange={(n) => setEmp(e.name, { halfDayRate: n }, `half:${k}`)} data-testid={`input-half-${k}`} /></td>
+                      <td className="py-2 pr-2 w-28"><NumberInput className="[&_input]:h-8" prefix={app.prefs.currencySymbol} value={cat ? cat.hourlyRate : e.hourlyRate} disabled={locked || !!cat || basis !== "hourly"} onChange={(n) => setEmp(e.name, { hourlyRate: n }, `hourly:${k}`)} data-testid={`input-hourly-${k}`} /></td>
                       <td className="py-2 text-center"><Switch checked={e.isNetPay} disabled={locked} onCheckedChange={(v) => setEmp(e.name, { isNetPay: v })} aria-label="Net pay" /></td>
                       <td className="py-2 pr-2"><PaymentPicker method={e.paymentMethod} cash={e.splitCashAmount} defaultMethod={doc.rules.defaultPaymentMethod} disabled={locked} testid={k} onChange={(patch, key) => setEmp(e.name, patch, key)} /></td>
                       <td className="py-2 text-center"><Switch checked={!e.excluded} disabled={locked} onCheckedChange={(v) => setEmp(e.name, { excluded: !v })} aria-label="Include in totals" /></td>

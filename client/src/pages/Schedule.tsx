@@ -187,22 +187,24 @@ export function SchedulePage() {
               <Button variant="outline" disabled={isThisWeek} onClick={() => setWeekStart(weekStartOf(today, site.rules.weekStartsOn))}>This week</Button>
               <Button variant="outline" size="icon" aria-label="Next week" onClick={() => setWeekStart(addDays(ws, 7))} data-testid="button-next-week"><ChevronRight /></Button>
             </div>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild><Button variant="outline" size="icon" aria-label="More" data-testid="button-schedule-more"><MoreHorizontal /></Button></DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem onClick={printPdf} disabled={!data}><Download />Print / PDF</DropdownMenuItem>
-                {editable && <DropdownMenuItem onClick={copyLast} disabled={!data || !data.previousWeekShifts || busy === "copy"} data-testid="menu-copy-last-week"><Copy />Copy last week</DropdownMenuItem>}
-                {editable && <DropdownMenuItem onClick={() => setTimeOff({})} disabled={!data}><CalendarOff />Add time off</DropdownMenuItem>}
-                {editable && week?.publishedAt && <DropdownMenuItem onClick={() => publish(false)}><EyeOff />Unpublish</DropdownMenuItem>}
-                {admin && <><DropdownMenuSeparator /><DropdownMenuItem onClick={() => setShowSettings(true)} disabled={!data}><Settings2 />Schedule settings</DropdownMenuItem></>}
-              </DropdownMenuContent>
-            </DropdownMenu>
-            {editable && <Button variant="outline" onClick={() => setEditing({ draft: { person: null, date: dates.includes(today) ? today : dates[0], start: 540, end: 1020, station: "", note: "" } })} disabled={!data || !people.length} data-testid="button-add-shift"><Plus /> Add shift</Button>}
-            {editable && (!week?.publishedAt || week.changedSincePublish) && (
-              <Button onClick={() => publish(true)} disabled={!week || !week.shifts.length || busy === "publish"} data-testid="button-publish">
-                {busy === "publish" ? <Loader2 className="animate-spin" /> : <Send />}{week?.publishedAt ? "Publish changes" : "Publish"}
-              </Button>
-            )}
+            <div className="flex items-center gap-2">
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild><Button variant="outline" size="icon" aria-label="More" data-testid="button-schedule-more"><MoreHorizontal /></Button></DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onClick={printPdf} disabled={!data}><Download />Print / PDF</DropdownMenuItem>
+                  {editable && <DropdownMenuItem onClick={copyLast} disabled={!data || !data.previousWeekShifts || busy === "copy"} data-testid="menu-copy-last-week"><Copy />Copy last week</DropdownMenuItem>}
+                  {editable && <DropdownMenuItem onClick={() => setTimeOff({})} disabled={!data}><CalendarOff />Add time off</DropdownMenuItem>}
+                  {editable && week?.publishedAt && <DropdownMenuItem onClick={() => publish(false)}><EyeOff />Unpublish</DropdownMenuItem>}
+                  {admin && <><DropdownMenuSeparator /><DropdownMenuItem onClick={() => setShowSettings(true)} disabled={!data}><Settings2 />Schedule settings</DropdownMenuItem></>}
+                </DropdownMenuContent>
+              </DropdownMenu>
+              {editable && <Button variant="outline" onClick={() => setEditing({ draft: { person: null, date: dates.includes(today) ? today : dates[0], start: 540, end: 1020, station: "", note: "" } })} disabled={!data || !people.length} data-testid="button-add-shift"><Plus /> Add shift</Button>}
+              {editable && (!week?.publishedAt || week.changedSincePublish) && (
+                <Button onClick={() => publish(true)} disabled={!week || !week.shifts.length || busy === "publish"} data-testid="button-publish">
+                  {busy === "publish" ? <Loader2 className="animate-spin" /> : <Send />}{week?.publishedAt ? "Publish changes" : "Publish"}
+                </Button>
+              )}
+            </div>
           </>
         }
       />
@@ -234,14 +236,14 @@ export function SchedulePage() {
             <table className="w-full min-w-[56rem] border-collapse text-[13px]">
               <thead>
                 <tr className="border-b border-border/70">
-                  <th scope="col" className="sticky left-0 z-10 w-32 bg-card px-3 py-3 text-left text-xs font-semibold text-muted-foreground sm:w-44 sm:px-4">Employee</th>
+                  <th scope="col" className="sticky left-0 z-10 w-32 bg-card px-3 py-3 text-left align-bottom text-xs font-semibold text-muted-foreground shadow-[inset_-1px_0_0_hsl(var(--border)/0.7)] sm:w-48 sm:px-4">Employee</th>
                   {dates.map((d) => (
-                    <th key={d} scope="col" className={cn("px-2 py-3 text-left text-xs font-semibold", d === today ? "text-primary" : "text-muted-foreground")}>
+                    <th key={d} scope="col" className={cn("px-3.5 py-3 text-left text-xs font-semibold", d === today ? "bg-primary/[0.03] text-primary" : "text-muted-foreground")}>
                       <span className="block">{WEEKDAYS_SHORT[dayOfWeek(d)]}</span>
                       <span className={cn("block text-[15px] font-semibold tabular", d === today ? "text-primary" : "text-foreground")}>{Number(d.slice(8))}</span>
                     </th>
                   ))}
-                  <th scope="col" className="w-16 px-4 py-3 text-right text-xs font-semibold text-muted-foreground">Hours</th>
+                  <th scope="col" className="w-16 px-4 py-3 text-right align-bottom text-xs font-semibold text-muted-foreground">Hours</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border/70">
@@ -249,8 +251,8 @@ export function SchedulePage() {
                   const pk = personKeyOf(p);
                   return (
                     <tr key={pk} data-testid={`row-schedule-${p.employeeId || p.employeeName}`}>
-                      <th scope="row" className="sticky left-0 z-10 max-w-[8rem] bg-card px-3 py-2 text-left align-top font-normal sm:max-w-none sm:px-4">
-                        <span className="block truncate font-medium">{p.employeeName}</span>
+                      <th scope="row" className="sticky left-0 z-10 max-w-[8rem] bg-card px-3 py-2.5 text-left align-top font-normal shadow-[inset_-1px_0_0_hsl(var(--border)/0.7)] sm:max-w-[12rem] sm:px-4">
+                        <span className="block truncate font-medium" title={p.employeeName}>{p.employeeName}</span>
                         {p.role && <span className="block truncate text-xs text-muted-foreground">{p.role}</span>}
                       </th>
                       {dates.map((d) => {
@@ -264,7 +266,7 @@ export function SchedulePage() {
                                   type="button"
                                   disabled={!editable}
                                   onClick={() => setTimeOff({ entry: off })}
-                                  className="rounded-md bg-neutral-soft px-2 py-1 text-left text-xs text-neutral disabled:cursor-default"
+                                  className="rounded-md bg-neutral-soft px-2 py-1 text-left text-xs text-neutral outline-none focus-visible:ring-[3px] focus-visible:ring-ring/35 disabled:cursor-default"
                                   title={off.reason || "Time off"}
                                   data-testid={`timeoff-${p.employeeId || p.employeeName}-${d}`}
                                 >
@@ -278,7 +280,7 @@ export function SchedulePage() {
                                   type="button"
                                   disabled={!editable}
                                   onClick={() => setEditing({ shift: s, draft: { id: s.id, person: p, date: s.date, start: s.start, end: s.end, station: s.station, note: s.note } })}
-                                  className={cn("rounded-md px-2 py-1 text-left text-xs transition-colors disabled:cursor-default", off ? "bg-warning-soft text-warning" : "bg-primary/10 text-primary hover:bg-primary/15")}
+                                  className={cn("rounded-md px-2 py-1 text-left text-xs outline-none transition-colors focus-visible:ring-[3px] focus-visible:ring-ring/35 disabled:cursor-default", off ? "bg-warning-soft text-warning" : "bg-primary/10 text-primary hover:bg-primary/15")}
                                   title={[off ? "Overlaps time off" : "", s.note].filter(Boolean).join(" · ") || undefined}
                                   data-testid={`shift-${s.id}`}
                                 >
@@ -290,7 +292,7 @@ export function SchedulePage() {
                                 <button
                                   type="button"
                                   onClick={() => setEditing({ draft: { person: p, date: d, start: list.at(-1) ? Math.min(1380, list.at(-1)!.end % 1440) : 540, end: list.at(-1) ? Math.min(1439, (list.at(-1)!.end % 1440) + 240) : 1020, station: "", note: "" } })}
-                                  className={cn("flex h-7 items-center justify-center rounded-md text-muted-foreground/70 transition-opacity hover:bg-accent hover:text-foreground focus-visible:opacity-100", list.length || off ? "opacity-0 group-hover:opacity-100" : "opacity-60 sm:opacity-0 sm:group-hover:opacity-100")}
+                                  className={cn("flex h-7 items-center justify-center rounded-md text-muted-foreground/70 outline-none transition-opacity hover:bg-accent hover:text-foreground focus-visible:opacity-100 focus-visible:ring-[3px] focus-visible:ring-ring/35", list.length || off ? "opacity-0 group-hover:opacity-100" : "opacity-60 sm:opacity-0 sm:group-hover:opacity-100")}
                                   aria-label={`Add a shift for ${p.employeeName} on ${app.date(d)}`}
                                   data-testid={`button-add-${p.employeeId || p.employeeName}-${d}`}
                                 >
@@ -301,15 +303,15 @@ export function SchedulePage() {
                           </td>
                         );
                       })}
-                      <td className="px-4 py-2 text-right align-top font-medium tabular">{totals.byPerson.get(pk) ? hoursText(totals.byPerson.get(pk)!) : "—"}</td>
+                      <td className="px-4 py-2.5 text-right align-top font-medium tabular">{totals.byPerson.get(pk) ? hoursText(totals.byPerson.get(pk)!) : "—"}</td>
                     </tr>
                   );
                 })}
               </tbody>
               <tfoot>
                 <tr className="border-t border-border">
-                  <th scope="row" className="sticky left-0 z-10 bg-card px-4 py-2.5 text-left text-xs font-semibold text-muted-foreground">Total hours</th>
-                  {dates.map((d) => <td key={d} className="px-3 py-2.5 text-xs font-semibold tabular">{totals.byDay.get(d) ? hoursText(totals.byDay.get(d)!) : ""}</td>)}
+                  <th scope="row" className="sticky left-0 z-10 bg-card px-3 py-2.5 text-left text-xs font-semibold text-muted-foreground shadow-[inset_-1px_0_0_hsl(var(--border)/0.7)] sm:px-4">Total hours</th>
+                  {dates.map((d) => <td key={d} className={cn("px-3.5 py-2.5 text-xs font-semibold tabular", d === today && "bg-primary/[0.03]")}>{totals.byDay.get(d) ? hoursText(totals.byDay.get(d)!) : ""}</td>)}
                   <td className="px-4 py-2.5 text-right font-semibold tabular">{hoursText(totals.all)}</td>
                 </tr>
               </tfoot>

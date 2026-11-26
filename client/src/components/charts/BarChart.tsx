@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 
 export interface Bar {
@@ -24,25 +24,39 @@ export function BarChart({ bars, format, height = 180, className, highlightLast,
   ariaLabel: string;
 }) {
   const [hover, setHover] = useState<number | null>(null);
+  // Fit the x labels to the real width: every label gets at least ~48px, so none is cut off.
+  const plotRef = useRef<HTMLDivElement>(null);
+  const [plotWidth, setPlotWidth] = useState(0);
+  useEffect(() => {
+    const el = plotRef.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(([e]) => setPlotWidth(e.contentRect.width));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
   const max = Math.max(0, ...bars.map((b) => b.value));
   const top = niceMax(max);
   const ticks = [top, top / 2, 0];
-  const showLabelEvery = Math.max(1, Math.ceil(bars.length / 8));
+  const fitLabels = plotWidth > 0 ? Math.max(1, Math.floor(plotWidth / 48)) : 8;
+  const showLabelEvery = Math.max(1, Math.ceil(bars.length / Math.min(8, fitLabels)));
+  // Show a label on the last bar and every Nth bar counting back from it, so the latest period is always named.
+  const labelled = (i: number) => (bars.length - 1 - i) % showLabelEvery === 0;
+  const yLabel = (n: number) => format(n).replace(/\.00$/, "");
 
   return (
     <div className={cn("relative select-none", className)} role="group" aria-label={ariaLabel}>
       <div className="flex">
         {/* Y axis */}
-        <div className="relative mr-2 shrink-0 text-right text-[11px] text-muted-foreground tabular" style={{ height }} aria-hidden>
+        <div className="relative mr-3 shrink-0 text-right text-[11px] text-muted-foreground tabular" style={{ height }} aria-hidden>
           {ticks.map((t, i) => (
-            <span key={i} className="absolute right-0 -translate-y-1/2 whitespace-nowrap" style={{ top: `${(i / (ticks.length - 1)) * 100}%` }}>{format(t).replace(/\.00$/, "")}</span>
+            <span key={i} className="absolute right-0 -translate-y-1/2 whitespace-nowrap" style={{ top: `${(i / (ticks.length - 1)) * 100}%` }}>{yLabel(t)}</span>
           ))}
-          <span className="invisible block whitespace-nowrap">{format(top).replace(/\.00$/, "")}</span>
+          <span className="invisible block whitespace-nowrap">{yLabel(top)}</span>
         </div>
         {/* Plot */}
-        <div className="relative min-w-0 flex-1" style={{ height }}>
+        <div ref={plotRef} className="relative min-w-0 flex-1" style={{ height }}>
           {ticks.map((_, i) => (
-            <div key={i} className={cn("absolute inset-x-0 border-t", i === ticks.length - 1 ? "border-border" : "border-dashed border-border/60")} style={{ top: `${(i / (ticks.length - 1)) * 100}%` }} aria-hidden />
+            <div key={i} className={cn("absolute inset-x-0 border-t", i === ticks.length - 1 ? "border-border" : "border-border/50")} style={{ top: `${(i / (ticks.length - 1)) * 100}%` }} aria-hidden />
           ))}
           <div className="absolute inset-0 flex items-end gap-[2px] sm:gap-1">
             {bars.map((b, i) => {
@@ -62,7 +76,7 @@ export function BarChart({ bars, format, height = 180, className, highlightLast,
                   aria-label={`${b.detail ?? b.label}: ${format(b.value)}`}
                 >
                   <span
-                    className={cn("block w-full max-w-[2.75rem] rounded-t-[4px] transition-[height,background-color] duration-300", strong ? "bg-primary" : "bg-primary/35 dark:bg-primary/45")}
+                    className={cn("block w-full max-w-[2.75rem] rounded-t-[4px] transition-[height,background-color] duration-200", strong ? "bg-chart-1" : "bg-chart-1/35 dark:bg-chart-1/40")}
                     style={{ height: `${Math.max(h, b.value > 0 ? 1.5 : 0)}%` }}
                   />
                 </button>
@@ -71,7 +85,11 @@ export function BarChart({ bars, format, height = 180, className, highlightLast,
           </div>
           {hover !== null && bars[hover] && (
             <div
-              className="pointer-events-none absolute z-10 -translate-x-1/2 -translate-y-full rounded-lg border border-popover-border/80 bg-popover/95 px-2.5 py-1.5 text-xs shadow-float backdrop-blur"
+              className={cn(
+                "pointer-events-none absolute z-10 -translate-y-full rounded-lg border border-popover-border bg-popover px-2.5 py-1.5 text-xs shadow-float",
+                // Keep the tooltip inside the card at both ends of the axis.
+                bars.length > 2 && hover === 0 ? "-translate-x-2" : bars.length > 2 && hover === bars.length - 1 ? "-translate-x-[calc(100%-0.5rem)]" : "-translate-x-1/2",
+              )}
               style={{ left: `${((hover + 0.5) / bars.length) * 100}%`, top: `${Math.max(0, 100 - (top > 0 ? (bars[hover].value / top) * 100 : 0))}%`, marginTop: -6 }}
               role="status"
             >
@@ -82,11 +100,15 @@ export function BarChart({ bars, format, height = 180, className, highlightLast,
         </div>
       </div>
       {/* X labels */}
-      <div className="mt-1.5 flex gap-[2px] sm:gap-1" style={{ marginLeft: 0 }} aria-hidden>
-        <div className="invisible mr-2 shrink-0 text-[11px]">{format(top).replace(/\.00$/, "")}</div>
-        {bars.map((b, i) => (
-          <span key={b.key} className="min-w-0 flex-1 truncate text-center text-[11px] text-muted-foreground">{i % showLabelEvery === 0 || i === bars.length - 1 ? b.label : ""}</span>
-        ))}
+      <div className="mt-2 flex" aria-hidden>
+        <div className="invisible mr-3 shrink-0 text-[11px] tabular">{yLabel(top)}</div>
+        <div className="flex min-w-0 flex-1 gap-[2px] sm:gap-1">
+          {bars.map((b, i) => (
+            <span key={b.key} className={cn("min-w-0 flex-1 overflow-visible whitespace-nowrap text-center text-[11px] tabular", hover === i ? "font-medium text-foreground" : "text-muted-foreground")}>
+              {labelled(i) ? b.label : ""}
+            </span>
+          ))}
+        </div>
       </div>
     </div>
   );
@@ -116,7 +138,7 @@ export function BarList({ items, format }: { items: { key: string; label: string
             <span className="shrink-0 font-semibold tabular">{format(i.value)}</span>
           </div>
           <div className="h-2 overflow-hidden rounded-full bg-foreground/[0.06]" aria-hidden>
-            <div className="h-full rounded-full transition-[width] duration-500" style={{ width: `${max > 0 ? (i.value / max) * 100 : 0}%`, background: i.color ?? "hsl(var(--primary))" }} />
+            <div className="h-full rounded-full transition-[width] duration-200" style={{ width: `${max > 0 ? (i.value / max) * 100 : 0}%`, background: i.color ?? "hsl(var(--chart-1))" }} />
           </div>
         </li>
       ))}

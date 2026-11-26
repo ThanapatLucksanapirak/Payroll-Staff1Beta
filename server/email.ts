@@ -287,34 +287,46 @@ export interface BrandedEmail {
  */
 export function brandedHtml(e: BrandedEmail): string {
   const x = escapeHtml;
+  // Every colour the email uses, in one place (light only). Text colours are
+  // at least 4.5:1 on the surfaces they sit on (C.card, C.page, C.panel).
+  const C = {
+    // Shijiri: warm rice-paper page, plum accent (DESIGN.md → Emails).
+    page: "#f4f1ee", card: "#ffffff", border: "#e6e2de",
+    text: "#201d1f", body: "#3d3639", muted: "#6a6266",
+    panel: "#f7f5f3", divider: "#ebe7e3",
+    accent: "#7a295e", accentText: "#ffffff",
+    tile: "#7a295e", tileText: "#f7f1e9",
+    codeBg: "#f8eff4", codeBorder: "#ecdbe5", codeText: "#5c1f47",
+  };
   const font = "-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif";
   const initial = x((e.brand.trim()[0] || "P").toUpperCase());
-  const para = (t: string) => `<p style="margin:0 0 14px;font-size:15px;line-height:23px;color:#3a3a3c">${x(t)}</p>`;
+  const para = (t: string) => `<p style="margin:0 0 14px;font-size:15px;line-height:23px;color:${C.body}">${x(t)}</p>`;
   const code = e.code
-    ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:6px 0 20px"><tr><td align="center" style="background:#f2f6ff;border:1px solid #dbe6ff;border-radius:14px;padding:18px 12px">
-<div style="font-family:'SF Mono',Menlo,Consolas,monospace;font-size:34px;line-height:40px;letter-spacing:10px;font-weight:700;color:#0a2a66">${x(e.code)}</div></td></tr></table>`
+    ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:8px 0 16px"><tr><td align="center" style="background:${C.codeBg};border:1px solid ${C.codeBorder};border-radius:14px;padding:18px 12px">
+<div style="font-family:'SF Mono',Menlo,Consolas,monospace;font-size:34px;line-height:40px;letter-spacing:10px;padding-left:10px;font-weight:700;color:${C.codeText}">${x(e.code)}</div></td></tr></table>`
     : "";
+  const cell = (i: number) => `padding:11px 16px;vertical-align:top;${i ? `border-top:1px solid ${C.divider};` : ""}`;
   const details = e.details?.length
-    ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:4px 0 20px;background:#f7f7f9;border-radius:12px">${e.details.map(([k, v], i) =>
-      `<tr><td style="padding:11px 16px;font-size:13px;color:#86868b;${i ? "border-top:1px solid #ececf0;" : ""}">${x(k)}</td><td align="right" style="padding:11px 16px;font-size:14px;font-weight:600;color:#1d1d1f;${i ? "border-top:1px solid #ececf0;" : ""}">${x(v)}</td></tr>`).join("")}</table>`
+    ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:4px 0 20px;background:${C.panel};border-radius:12px">${e.details.map(([k, v], i) =>
+      `<tr><td style="${cell(i)}font-size:13px;line-height:20px;color:${C.muted};white-space:nowrap">${x(k)}</td><td align="right" style="${cell(i)}font-size:14px;line-height:20px;font-weight:600;color:${C.text};font-variant-numeric:tabular-nums;word-break:break-word">${x(v)}</td></tr>`).join("")}</table>`
     : "";
   const button = e.button
-    ? `<table role="presentation" cellpadding="0" cellspacing="0" style="margin:8px 0 8px"><tr><td style="border-radius:12px;background:#0a84ff"><a href="${x(e.button.url)}" style="display:inline-block;padding:13px 22px;font-size:15px;font-weight:600;color:#ffffff;text-decoration:none;border-radius:12px">${x(e.button.label)}</a></td></tr></table>`
+    ? `<table role="presentation" cellpadding="0" cellspacing="0" style="margin:8px 0 4px"><tr><td style="border-radius:12px;background:${C.accent}"><a href="${x(e.button.url)}" style="display:inline-block;padding:13px 24px;font-size:15px;line-height:20px;font-weight:600;color:${C.accentText};text-decoration:none;border-radius:12px">${x(e.button.label)}</a></td></tr></table>`
     : "";
   return `<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light"><title>${x(e.heading)}</title></head>
-<body style="margin:0;padding:0;background:#f2f2f7;font-family:${font}">
+<body style="margin:0;padding:0;background:${C.page};font-family:${font}">
 ${e.preheader ? `<div style="display:none;max-height:0;overflow:hidden;opacity:0">${x(e.preheader)}</div>` : ""}
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f2f2f7"><tr><td align="center" style="padding:32px 16px">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:${C.page}"><tr><td align="center" style="padding:32px 16px">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:520px">
 <tr><td style="padding:0 4px 18px"><table role="presentation" cellpadding="0" cellspacing="0"><tr>
-<td style="width:36px;height:36px;border-radius:10px;background:linear-gradient(135deg,#3a8dff,#0a5bd8);background-color:#0a84ff;color:#ffffff;font-size:18px;font-weight:700;text-align:center;vertical-align:middle">${initial}</td>
-<td style="padding-left:10px;font-size:15px;font-weight:600;color:#1d1d1f">${x(e.brand)}</td></tr></table></td></tr>
-<tr><td style="background:#ffffff;border-radius:18px;padding:32px 28px;border:1px solid #e5e5ea">
-<h1 style="margin:0 0 14px;font-size:22px;line-height:28px;font-weight:700;color:#1d1d1f">${x(e.heading)}</h1>
+<td width="36" height="36" style="width:36px;height:36px;border-radius:10px;background:${C.tile};color:${C.tileText};font-family:Georgia,'Times New Roman',serif;font-size:20px;line-height:36px;font-weight:400;text-align:center;vertical-align:middle">${initial}</td>
+<td style="padding-left:10px;font-size:15px;font-weight:600;color:${C.text}">${x(e.brand)}</td></tr></table></td></tr>
+<tr><td style="background:${C.card};border-radius:18px;padding:32px 28px;border:1px solid ${C.border}">
+<h1 style="margin:0 0 14px;font-size:22px;line-height:28px;font-weight:700;color:${C.text}">${x(e.heading)}</h1>
 ${e.paragraphs.map(para).join("\n")}${code}${details}${button}
 </td></tr>
-<tr><td style="padding:18px 8px 0;font-size:12px;line-height:18px;color:#8e8e93;text-align:center">${x(e.footer ?? `Sent by ${e.brand}.`)}${NOTE_SLOT}</td></tr>
+<tr><td style="padding:18px 8px 0;font-size:12px;line-height:18px;color:${C.muted};text-align:center">${x(e.footer ?? `Sent by ${e.brand}.`)}${NOTE_SLOT}</td></tr>
 </table></td></tr></table></body></html>`;
 }
 

@@ -8,10 +8,11 @@ import {
 } from "./api";
 import { type CameraStatus, useCamera } from "./camera";
 import { ACTION_STYLE, BigSecondary, duration, firstName, fmt, initials, timeOf, useIdle } from "./ui";
+import { Mark } from "@/components/Logo";
 import { type Confirm, type FixInput, BreakNudge, ConfirmScreen, FixRequestScreen, GuardScreen, MessageScreen, NoteScreen, StationScreen } from "./screens";
 
 const STATUS_TEXT: Record<ClockStatus, string> = { in: "Working", break: "On break", out: "Not clocked in" };
-const STATUS_DOT: Record<ClockStatus, string> = { in: "bg-emerald-600", break: "bg-amber-400", out: "bg-neutral-400" };
+const STATUS_DOT: Record<ClockStatus, string> = { in: "bg-emerald-600", break: "bg-amber-400", out: "bg-stone-400" };
 const DEFAULT_OPTIONS: KioskOptions = { photo: false, idleSeconds: 10, stations: [], breakReminderHours: null };
 
 /** Who is at the kiosk right now, and how they signed in. */
@@ -281,8 +282,8 @@ export function KioskApp() {
         ) : !state.site.enabled ? (
           <Centered>
             <BigClock tz={tz} />
-            <p className="mt-10 text-xl text-neutral-700">The time clock is turned off for this location.</p>
-            <p className="mt-2 text-neutral-600">A manager can turn it on in Settings → Locations → Time clock.</p>
+            <p className="mt-10 text-2xl font-medium text-stone-800">The time clock is turned off for this location.</p>
+            <p className="mt-2 max-w-xl text-lg text-stone-700">A manager can turn it on in Settings → Locations → Time clock.</p>
           </Centered>
         ) : screen.k === "home" ? (
           loginMode === "pin" ? (
@@ -356,10 +357,10 @@ function BigClock({ tz, compact }: { tz: string; compact?: boolean }) {
   const date = fmt(tz, { weekday: "long", month: "long", day: "numeric" }).format(new Date(now));
   return (
     <div className="select-none" aria-live="off">
-      <div className={`tabular font-light tracking-tight text-neutral-950 ${compact ? "text-6xl sm:text-7xl" : "text-7xl sm:text-8xl lg:text-9xl"}`} data-testid="kiosk-clock">
-        {main}{period && <span className={`ml-2 font-normal text-neutral-600 ${compact ? "text-2xl" : "text-3xl sm:text-4xl"}`}>{period}</span>}
+      <div className={`tabular font-light tracking-tight text-stone-950 ${compact ? "text-6xl sm:text-7xl" : "text-7xl sm:text-8xl lg:text-9xl"}`} data-testid="kiosk-clock">
+        {main}{period && <span className={`ml-2 font-normal text-stone-700 ${compact ? "text-2xl" : "text-3xl sm:text-4xl"}`}>{period}</span>}
       </div>
-      <div className={`mt-2 font-medium text-neutral-700 ${compact ? "text-lg" : "text-xl sm:text-2xl"}`}>{date}</div>
+      <div className={`mt-2 font-medium text-stone-800 ${compact ? "text-lg" : "text-xl sm:text-2xl"}`}>{date}</div>
     </div>
   );
 }
@@ -367,22 +368,23 @@ function BigClock({ tz, compact }: { tz: string; compact?: boolean }) {
 function TopBar({ state, online, pending, onInfo, onExitFullscreen }: { state: KioskState; online: boolean; pending: number; onInfo: () => void; onExitFullscreen: (exit: () => void) => void }) {
   const fs = useFullscreen();
   return (
-    <header className="flex items-center gap-3 px-5 pt-4 sm:px-8 sm:pt-6">
-      <span className="h-3 w-3 rounded-full" style={{ background: state.site.color }} aria-hidden />
-      <span className="truncate text-lg font-semibold text-neutral-800" data-testid="kiosk-location">{state.site.name}</span>
-      <div className="ml-auto flex items-center gap-2">
+    <header className="flex items-center gap-3 px-5 pt-2 sm:px-8 sm:pt-4">
+      <Mark className="h-[22px] w-auto shrink-0 text-[#7a295e]" aria-hidden />
+      <span className="text-lg text-stone-600" aria-hidden>·</span>
+      <span className="truncate text-lg font-semibold text-stone-800" data-testid="kiosk-location">{state.site.name}</span>
+      <div className="-mr-4 ml-auto flex items-center gap-1">
         {(!online || pending > 0) && (
-          <span className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-base font-semibold ${online ? "bg-sky-100 text-sky-900" : "bg-amber-100 text-amber-950"}`} data-testid="kiosk-offline">
+          <span className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-base font-semibold ${online ? "bg-stone-100 text-stone-700" : "bg-amber-100 text-amber-950"}`} data-testid="kiosk-offline">
             {!online && <WifiOff className="h-4 w-4" />}
             {online ? `Sending ${pending}…` : pending ? `Offline · ${pending} saved` : "Offline"}
           </span>
         )}
         {fs.supported && (
-          <button onClick={() => (fs.active ? onExitFullscreen(fs.toggle) : fs.toggle())} className="rounded-full p-3 text-neutral-500 transition hover:bg-neutral-100 hover:text-neutral-800" aria-label={fs.active ? "Exit full screen" : "Full screen"} data-testid="kiosk-fullscreen">
+          <button onClick={() => (fs.active ? onExitFullscreen(fs.toggle) : fs.toggle())} className="kiosk-tap flex w-16 items-center justify-center rounded-full text-stone-800 transition active:scale-95 active:bg-stone-200 [@media(hover:hover)]:hover:bg-stone-100" aria-label={fs.active ? "Exit full screen" : "Full screen"} data-testid="kiosk-fullscreen">
             {fs.active ? <Minimize className="h-6 w-6" /> : <Maximize className="h-6 w-6" />}
           </button>
         )}
-        <button onClick={onInfo} className="rounded-full p-3 text-neutral-400 transition hover:bg-neutral-100 hover:text-neutral-700" aria-label="Device settings">
+        <button onClick={onInfo} className="kiosk-tap flex w-16 items-center justify-center rounded-full text-stone-800 transition active:scale-95 active:bg-stone-200 [@media(hover:hover)]:hover:bg-stone-100" aria-label="Device settings">
           <Settings2 className="h-6 w-6" />
         </button>
       </div>
@@ -395,13 +397,13 @@ function CameraPreview({ attach, status, faceSeen }: { attach: (el: HTMLVideoEle
   const broken = status === "blocked" || status === "unavailable";
   const warn = broken || faceSeen === false;
   return (
-    <div className={`pointer-events-none fixed bottom-4 left-4 z-40 flex items-center gap-3 rounded-2xl p-2 pr-4 shadow-lg ring-1 ${warn ? "bg-red-50 ring-red-300" : "bg-white/95 ring-neutral-200"}`} data-testid="kiosk-camera" data-status={status} data-face={faceSeen === null ? "" : faceSeen ? "yes" : "no"}>
+    <div className={`pointer-events-none fixed bottom-4 left-4 z-40 flex items-center gap-3 rounded-2xl p-2 pr-4 shadow-lg ring-1 ${warn ? "bg-red-50 ring-red-300" : "bg-white/95 ring-stone-200"}`} data-testid="kiosk-camera" data-status={status} data-face={faceSeen === null ? "" : faceSeen ? "yes" : "no"}>
       {broken ? (
         <span className="flex h-16 w-16 items-center justify-center rounded-xl bg-red-100 text-red-700"><CameraOff className="h-7 w-7" /></span>
       ) : (
-        <video ref={attach} className={`h-16 w-16 -scale-x-100 rounded-xl bg-neutral-200 object-cover ${faceSeen === false ? "ring-2 ring-red-400" : faceSeen ? "ring-2 ring-emerald-400" : ""}`} muted playsInline autoPlay />
+        <video ref={attach} className={`h-16 w-16 -scale-x-100 rounded-xl bg-stone-200 object-cover ${faceSeen === false ? "ring-2 ring-red-400" : faceSeen ? "ring-2 ring-emerald-400" : ""}`} muted playsInline autoPlay />
       )}
-      <span className={`text-sm font-medium ${warn ? "text-red-900" : "text-neutral-700"}`}>
+      <span className={`text-sm font-medium ${warn ? "text-red-900" : "text-stone-700"}`}>
         {status === "blocked" ? <>Camera blocked<br /><span className="font-normal">Punching needs the camera</span></>
           : status === "unavailable" ? <>Camera not available<br /><span className="font-normal">Punching needs the camera</span></>
           : faceSeen === false ? <>Face not detected<br /><span className="font-normal">Look at the camera</span></>
@@ -437,40 +439,40 @@ function PinScreen({ tz, employee, heading, error, shake, maxLength = 6, idleMs,
   }, [pin, press, back, submit, onBack]);
 
   return (
-    <div className="flex flex-1 flex-col items-center justify-center gap-6 px-6 pb-6 lg:flex-row lg:gap-24">
+    <div className="flex flex-1 flex-col items-center justify-center gap-4 px-6 pb-6 sm:gap-6 lg:flex-row lg:gap-24">
       <div className="text-center lg:text-left">
         {heading ? (
           <div className="kiosk-fade-up">
-            <p className="text-4xl font-bold tracking-tight text-neutral-950">{heading.title}</p>
-            <p className="mt-1 text-xl text-neutral-700">{heading.sub}</p>
+            <p className="text-4xl font-display font-normal tracking-[-0.01em] text-stone-950">{heading.title}</p>
+            <p className="mt-1 text-xl text-stone-700">{heading.sub}</p>
           </div>
         ) : employee ? (
           <div className="kiosk-fade-up">
             <Avatar name={employee.name} big />
-            <p className="mt-4 text-4xl font-bold tracking-tight text-neutral-950">Hi, {firstName(employee.name)}</p>
-            <p className="mt-1 text-xl text-neutral-700">Enter your PIN</p>
+            <p className="mt-4 text-4xl font-display font-normal tracking-[-0.01em] text-stone-950">Hi, {firstName(employee.name)}</p>
+            <p className="mt-1 text-xl text-stone-700">Enter your PIN</p>
           </div>
         ) : (
           <>
             <BigClock tz={tz} />
-            <p className="mt-6 text-2xl font-medium text-neutral-700 lg:mt-10">Enter your PIN to clock in or out</p>
+            <p className="mt-4 text-xl font-medium text-stone-700 [text-wrap:balance] sm:mt-6 sm:text-2xl lg:mt-10">Enter your PIN to clock in or out</p>
           </>
         )}
       </div>
       <div className="flex flex-col items-center">
         <div key={shake} className={`flex h-10 items-center gap-4 ${shake ? "kiosk-shake" : ""}`} aria-label={`${pin.length} digits entered`} data-testid="kiosk-pin-dots">
           {Array.from({ length: Math.max(4, pin.length) }).map((_, i) => (
-            <span key={i} className={`h-5 w-5 rounded-full transition-all duration-150 ${i < pin.length ? "scale-110 bg-neutral-950" : "bg-neutral-300"}`} />
+            <span key={i} className={`h-5 w-5 rounded-full transition-all duration-150 ${i < pin.length ? "scale-110 bg-[#7a295e]" : "bg-stone-300"}`} />
           ))}
         </div>
         <p className={`mt-2 min-h-7 text-lg font-medium ${error ? "text-red-700" : "text-transparent"}`} role="alert">{error || "·"}</p>
-        <div className="mt-3 grid grid-cols-3 gap-4 sm:gap-5">
+        <div className="mt-3 grid grid-cols-3 gap-3 sm:gap-5">
           {["1", "2", "3", "4", "5", "6", "7", "8", "9"].map((d) => <Key key={d} onPress={() => press(d)} label={d} />)}
           {onBack && employee ? <Key onPress={onBack} label={<ArrowLeft className="h-8 w-8" />} subtle aria="Back" /> : <Key onPress={back} label={<Delete className="h-8 w-8" />} subtle aria="Delete" />}
           <Key onPress={() => press("0")} label="0" />
           <Key onPress={() => void submit(pin)} label={busy ? <Spinner /> : <Check className="h-9 w-9" strokeWidth={2.5} />} primary disabled={pin.length < 4 || busy} aria="OK" />
         </div>
-        {onBack && employee && pin.length > 0 && <button className="kiosk-tap mt-3 px-6 text-lg font-medium text-neutral-700" onClick={back}>Delete last digit</button>}
+        {onBack && employee && pin.length > 0 && <button className="kiosk-tap mt-3 rounded-2xl px-6 text-lg font-medium text-stone-800 active:bg-stone-100" onClick={back}>Delete last digit</button>}
         {onBack && !employee && <BigSecondary className="mt-4" onClick={onBack}>Cancel</BigSecondary>}
       </div>
     </div>
@@ -485,8 +487,8 @@ function Key({ label, onPress, primary, subtle, disabled, aria }: { label: React
       disabled={disabled}
       onPointerDown={(e) => { e.preventDefault(); if (!disabled) onPress(); }}
       onKeyDown={(e) => { if (e.key === " ") onPress(); }}
-      className={`kiosk-tap flex h-[5.5rem] w-[5.5rem] items-center justify-center rounded-full text-4xl font-normal transition-all duration-100 active:scale-95 sm:h-28 sm:w-28 sm:text-5xl ${
-        primary ? "bg-neutral-950 text-white disabled:bg-neutral-200 disabled:text-neutral-500" : subtle ? "text-neutral-700 active:bg-neutral-100" : "bg-neutral-100 text-neutral-950 ring-2 ring-neutral-200 active:bg-neutral-300"
+      className={`kiosk-tap flex h-20 w-20 items-center justify-center rounded-full text-4xl font-normal transition-all duration-100 active:scale-95 sm:h-28 sm:w-28 sm:text-5xl ${
+        primary ? "kiosk-primary kiosk-go shadow-sm disabled:shadow-none" : subtle ? "text-stone-800 active:bg-stone-200" : "bg-stone-100 text-stone-950 ring-2 ring-stone-200 active:bg-stone-300 active:ring-stone-300"
       }`}
       data-testid={`kiosk-key-${aria ?? label}`}
     >
@@ -501,7 +503,7 @@ function Spinner() {
 
 function Avatar({ name, big, status }: { name: string; big?: boolean; status?: ClockStatus }) {
   return (
-    <span className={`relative inline-flex shrink-0 items-center justify-center rounded-full bg-neutral-200 font-semibold text-neutral-800 ${big ? "h-24 w-24 text-3xl" : "h-14 w-14 text-lg"}`}>
+    <span className={`relative inline-flex shrink-0 items-center justify-center rounded-full bg-stone-200 font-semibold text-stone-800 ${big ? "h-24 w-24 text-3xl" : "h-14 w-14 text-lg"}`}>
       {initials(name)}
       {status && <span className={`absolute bottom-0.5 right-0.5 h-4 w-4 rounded-full ring-2 ring-white ${STATUS_DOT[status]}`} />}
     </span>
@@ -520,24 +522,24 @@ function NamesScreen({ tz, employees, onPick }: { tz: string; employees: RosterE
       <div className="flex flex-wrap items-end justify-between gap-4 py-4 sm:py-6">
         <BigClock tz={tz} compact />
         {employees.length > 12 && (
-          <label className="flex w-full max-w-xs items-center gap-2 rounded-2xl bg-neutral-100 px-4 py-4 text-xl ring-2 ring-neutral-200">
-            <Search className="h-6 w-6 text-neutral-600" />
-            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Find your name" className="w-full bg-transparent outline-none placeholder:text-neutral-500" />
+          <label className="flex w-full max-w-xs items-center gap-2 rounded-2xl bg-stone-100 px-4 py-4 text-xl ring-2 ring-stone-200">
+            <Search className="h-6 w-6 text-stone-600" />
+            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Find your name" className="w-full bg-transparent outline-none placeholder:text-stone-600" />
           </label>
         )}
       </div>
-      <p className="mb-3 text-xl font-medium text-neutral-700">Tap your name</p>
+      <p className="mb-3 text-xl font-medium text-stone-700">Tap your name</p>
       {employees.length === 0 ? (
-        <p className="mt-10 text-center text-xl text-neutral-600">No employees are set up yet. A manager can add them in the admin app under Employees.</p>
+        <p className="mt-10 text-center text-xl text-stone-600">No employees are set up yet. A manager can add them in the admin app under Employees.</p>
       ) : (
-        <div className="-mx-1 grid min-h-0 flex-1 auto-rows-min grid-cols-1 gap-3 overflow-y-auto px-1 pb-4 min-[440px]:grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+        <div className="-mx-1 -mt-1 grid min-h-0 flex-1 auto-rows-min grid-cols-1 gap-3 overflow-y-auto px-1 pb-4 pt-1 min-[440px]:grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
           {list.map((e) => (
-            <button key={e.id} onClick={() => onPick(e)} className="kiosk-tap flex min-h-24 min-w-0 items-center gap-3 rounded-3xl bg-neutral-50 p-3 text-left ring-2 ring-neutral-200 transition active:scale-[0.98] active:bg-neutral-200 sm:gap-4 sm:p-4" data-testid={`kiosk-name-${e.id}`}>
+            <button key={e.id} onClick={() => onPick(e)} className="kiosk-tap flex min-h-24 min-w-0 items-center gap-3 rounded-3xl bg-stone-50 p-3 text-left ring-2 ring-stone-200 transition active:scale-[0.98] active:bg-stone-200 sm:gap-4 sm:p-4" data-testid={`kiosk-name-${e.id}`}>
               <Avatar name={e.name} status={e.status} />
               {/* Names wrap (never cut off): people must recognise their own name. */}
               <span className="min-w-0 flex-1">
-                <span className="block text-lg font-semibold leading-tight text-neutral-950 [overflow-wrap:anywhere] sm:text-xl">{e.name}</span>
-                <span className="mt-0.5 block text-sm leading-snug text-neutral-700 [overflow-wrap:anywhere] sm:text-base">{e.status === "out" ? e.role || STATUS_TEXT.out : `${STATUS_TEXT[e.status]}${e.since ? ` since ${timeOf(e.since, tz)}` : ""}`}</span>
+                <span className="block text-lg font-semibold leading-tight text-stone-950 [overflow-wrap:anywhere] sm:text-xl">{e.name}</span>
+                <span className="mt-0.5 block text-sm leading-snug text-stone-700 [overflow-wrap:anywhere] sm:text-base">{e.status === "out" ? e.role || STATUS_TEXT.out : `${STATUS_TEXT[e.status]}${e.since ? ` since ${timeOf(e.since, tz)}` : ""}`}</span>
               </span>
             </button>
           ))}
@@ -554,8 +556,8 @@ function ActionsScreen({ tz, who, offline, error, busy, idleMs, onPunch, onCance
   return (
     <div className="flex flex-1 flex-col items-center justify-center px-6 pb-10 text-center kiosk-fade-up">
       <Avatar name={who.employee.name} big status={who.status} />
-      <h1 className="mt-5 max-w-full text-4xl font-bold tracking-tight text-neutral-950 [overflow-wrap:anywhere] sm:text-5xl" data-testid="kiosk-employee-name">{who.employee.name}</h1>
-      <p className="mt-2 text-2xl text-neutral-700">
+      <h1 className="mt-5 max-w-full text-4xl font-display font-normal tracking-[-0.01em] text-stone-950 [overflow-wrap:anywhere] sm:text-5xl" data-testid="kiosk-employee-name">{who.employee.name}</h1>
+      <p className="mt-2 text-2xl text-stone-700">
         {statusLine}{!offline && who.todayMinutes > 0 ? ` · ${duration(who.todayMinutes)} today` : ""}{!offline && who.station && who.status !== "out" ? ` · ${who.station}` : ""}
       </p>
       {offline && <p className="mt-3 rounded-full bg-amber-100 px-5 py-2 text-lg font-medium text-amber-950"><WifiOff className="mr-1.5 inline h-5 w-5" />Offline: your punch will be saved on this tablet</p>}
@@ -595,8 +597,8 @@ function PairScreen({ notice, onPaired }: { notice: string | null; onPaired: () 
   return (
     <Centered>
       <div className="w-full max-w-md kiosk-fade-up">
-        <h1 className="text-4xl font-bold tracking-tight text-neutral-950">Set up this time clock</h1>
-        <p className="mt-3 text-lg text-neutral-700">In the admin app, open <b className="font-semibold text-neutral-900">Settings → Locations → Time clock</b>, add a device, then open its pairing link here or type its code.</p>
+        <h1 className="text-4xl font-display font-normal tracking-[-0.01em] text-stone-950">Set up this time clock</h1>
+        <p className="mt-3 text-lg text-stone-700">In the admin app, open <b className="font-semibold text-stone-900">Settings → Locations → Time clock</b>, add a device, then open its pairing link here or type its code.</p>
         {notice && <p className="mt-4 rounded-2xl bg-amber-50 px-4 py-3 text-amber-950 ring-2 ring-amber-200">{notice}</p>}
         <form className="mt-8 space-y-4" onSubmit={(e) => { e.preventDefault(); if (code.trim().length >= 8) void submit(); }}>
           <input
@@ -606,11 +608,11 @@ function PairScreen({ notice, onPaired }: { notice: string | null; onPaired: () 
             autoCapitalize="characters"
             autoComplete="off"
             spellCheck={false}
-            className="w-full rounded-2xl bg-neutral-100 px-5 py-4 text-center font-mono text-3xl tracking-[0.2em] outline-none ring-2 ring-neutral-200 focus:ring-neutral-900"
+            className="w-full rounded-2xl bg-stone-100 px-5 py-4 kiosk-field text-center font-mono text-3xl tracking-[0.2em] text-stone-950 outline-none ring-2 ring-stone-300 placeholder:text-stone-600"
             data-testid="kiosk-pair-code"
           />
           {error && <p className="text-lg font-medium text-red-700" role="alert">{error}</p>}
-          <button disabled={busy || code.replace(/-/g, "").length < 8} className="kiosk-tap h-16 w-full rounded-2xl bg-neutral-950 text-xl font-bold text-white transition active:scale-[0.99] disabled:bg-neutral-200 disabled:text-neutral-500" data-testid="kiosk-pair-submit">
+          <button disabled={busy || code.replace(/-/g, "").length < 8} className="kiosk-tap kiosk-primary h-16 w-full rounded-2xl text-xl font-bold transition active:scale-[0.99]" data-testid="kiosk-pair-submit">
             {busy ? "Pairing…" : "Pair device"}
           </button>
         </form>
@@ -622,10 +624,10 @@ function PairScreen({ notice, onPaired }: { notice: string | null; onPaired: () 
 function Splash({ online, onRetry }: { online: boolean; onRetry: () => void }) {
   return (
     <Centered>
-      {online ? <span className="h-10 w-10 animate-spin rounded-full border-2 border-neutral-200 border-t-neutral-600" /> : (
+      {online ? <span className="h-10 w-10 animate-spin rounded-full border-2 border-stone-200 border-t-[#7a295e]" /> : (
         <>
-          <WifiOff className="h-10 w-10 text-neutral-500" />
-          <p className="mt-4 text-xl text-neutral-700">Can't reach the server.</p>
+          <WifiOff className="h-10 w-10 text-stone-600" />
+          <p className="mt-4 text-xl text-stone-700">Can't reach the server.</p>
           <BigSecondary className="mt-6" onClick={onRetry}>Try again</BigSecondary>
         </>
       )}
@@ -654,35 +656,35 @@ function InfoSheet({ state, options, pending, online, canUnpair, guarded, idleMs
       <div className="w-full max-w-md rounded-3xl bg-white p-6 shadow-2xl kiosk-fade-up" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-start justify-between">
           <div>
-            <h2 className="text-2xl font-bold text-neutral-950">{state.device.name}</h2>
-            <p className="text-neutral-700">{state.site.name} · {state.site.timezone}</p>
+            <h2 className="text-2xl font-bold text-stone-950">{state.device.name}</h2>
+            <p className="text-stone-700">{state.site.name} · {state.site.timezone}</p>
           </div>
-          <button onClick={onClose} className="rounded-full p-3 text-neutral-500 hover:bg-neutral-100" aria-label="Close"><X className="h-6 w-6" /></button>
+          <button onClick={onClose} className="kiosk-tap -mr-2 -mt-2 flex w-16 items-center justify-center rounded-full text-stone-700 hover:bg-stone-100 active:bg-stone-200" aria-label="Close"><X className="h-6 w-6" /></button>
         </div>
         <dl className="mt-5 space-y-2 text-lg">
-          <div className="flex justify-between"><dt className="text-neutral-600">Connection</dt><dd>{online ? "Online" : "Offline"}</dd></div>
-          <div className="flex justify-between"><dt className="text-neutral-600">Punches waiting to send</dt><dd className="tabular">{pending}</dd></div>
-          <div className="flex justify-between"><dt className="text-neutral-600">Sign-in</dt><dd>{state.site.loginMode === "pin" ? "PIN" : "Name, then PIN"}</dd></div>
-          <div className="flex justify-between"><dt className="text-neutral-600">Photo with each punch</dt><dd>{options.photo ? "On" : "Off"}</dd></div>
-          <div className="flex justify-between"><dt className="text-neutral-600">Back to start after</dt><dd>{options.idleSeconds} seconds</dd></div>
-          {options.stations.length > 0 && <div className="flex justify-between gap-4"><dt className="text-neutral-600">Stations</dt><dd className="truncate">{options.stations.join(", ")}</dd></div>}
+          <div className="flex justify-between"><dt className="text-stone-600">Connection</dt><dd>{online ? "Online" : "Offline"}</dd></div>
+          <div className="flex justify-between"><dt className="text-stone-600">Punches waiting to send</dt><dd className="tabular">{pending}</dd></div>
+          <div className="flex justify-between"><dt className="text-stone-600">Sign-in</dt><dd>{state.site.loginMode === "pin" ? "PIN" : "Name, then PIN"}</dd></div>
+          <div className="flex justify-between"><dt className="text-stone-600">Photo with each punch</dt><dd>{options.photo ? "On" : "Off"}</dd></div>
+          <div className="flex justify-between"><dt className="text-stone-600">Back to start after</dt><dd>{options.idleSeconds} seconds</dd></div>
+          {options.stations.length > 0 && <div className="flex justify-between gap-4"><dt className="text-stone-600">Stations</dt><dd className="truncate">{options.stations.join(", ")}</dd></div>}
         </dl>
-        <p className="mt-3 text-sm text-neutral-600">These options are changed in the admin app: Settings → Locations → Time clock.</p>
+        <p className="mt-3 text-base text-stone-600">These options are changed in the admin app: Settings → Locations → Time clock.</p>
         <div className="mt-6 grid gap-3">
-          {pending > 0 && <button onClick={onSync} className="kiosk-tap h-14 rounded-2xl bg-neutral-100 text-lg font-semibold">Send now</button>}
+          {pending > 0 && <button onClick={onSync} className="kiosk-tap kiosk-primary rounded-2xl text-lg font-semibold transition active:scale-[0.99]">Send now</button>}
           {!guarded && (
-            <p className="rounded-2xl bg-amber-50 px-4 py-3 text-sm font-medium text-amber-950 ring-2 ring-amber-300" role="status" data-testid="kiosk-no-manager-pin">
+            <p className="rounded-2xl bg-amber-50 px-4 py-3 text-base font-medium text-amber-950 ring-2 ring-amber-300" role="status" data-testid="kiosk-no-manager-pin">
               No manager PIN is set, so anyone can open this screen and leave full screen. Unpairing is only possible from the admin app until a PIN is set: Settings → Locations → Time clock.
             </p>
           )}
           {guarded && !canUnpair && (
-            <p className="rounded-2xl bg-neutral-50 px-4 py-3 text-sm text-neutral-700">Unpairing needs the manager PIN, which needs a connection. Try again when online.</p>
+            <p className="rounded-2xl bg-stone-50 px-4 py-3 text-base text-stone-700">Unpairing needs the manager PIN, which needs a connection. Try again when online.</p>
           )}
-          {canUnpair && <button onClick={() => void unpairNow()} disabled={busy} className="kiosk-tap h-14 rounded-2xl text-lg font-semibold text-red-700 ring-2 ring-red-200 disabled:opacity-60">
+          {canUnpair && <button onClick={() => void unpairNow()} disabled={busy} className="kiosk-tap rounded-2xl text-lg font-semibold text-red-700 ring-2 ring-red-300 transition active:bg-red-50 disabled:opacity-60">
             {busy ? "Unpairing…" : "Unpair this device"}
           </button>}
           {unpairError && (
-            <div className="space-y-2 rounded-2xl bg-red-50 px-4 py-3 text-sm text-red-900 ring-2 ring-red-200" role="alert">
+            <div className="space-y-2 rounded-2xl bg-red-50 px-4 py-3 text-base text-red-900 ring-2 ring-red-200" role="alert">
               <p className="font-medium">{unpairError}</p>
               <p>This tablet is still paired. You can try again, or forget the pairing on this tablet only; then remove the device in the admin app (Settings → Locations → Time clock) so its old pairing stops working.</p>
               <button onClick={() => { if (window.confirm("Forget the pairing on this tablet only? Punches not yet sent will be lost.")) onForget(); }} className="kiosk-tap h-12 w-full rounded-xl bg-white font-semibold text-red-700 ring-2 ring-red-200" data-testid="kiosk-forget-anyway">

@@ -39,10 +39,11 @@ function useLabor(from: string, to: string) {
 
 function Tile({ icon: Icon, label, value, sub, badge, to, testid, children }: { icon: any; label: string; value: string; sub?: React.ReactNode; badge?: React.ReactNode; to: string; testid: string; children?: React.ReactNode }) {
   return (
-    <Link href={to} className="flex min-w-0 flex-col rounded-xl border border-card-border bg-card p-5 text-left shadow-card transition-shadow duration-200 hover:shadow-float focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/35" data-testid={testid}>
-      <span className="flex items-center gap-1.5 text-[13px] font-medium text-muted-foreground"><Icon className="h-4 w-4" />{label}{badge}</span>
-      <span className="mt-3 text-[28px] font-semibold leading-none tracking-tight tabular">{value}</span>
-      <span className="mt-2 min-h-[1rem] text-xs text-muted-foreground">{sub}</span>
+    // One cell of the Home "Labor" strip; same label / figure / meta rhythm as "At a glance".
+    <Link href={to} className="flex min-w-0 flex-col bg-card p-4 text-left transition-colors duration-150 hover:bg-foreground/[0.02] focus-visible:relative focus-visible:z-10 focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-inset focus-visible:ring-ring/35 sm:p-5" data-testid={testid}>
+      <span className="flex min-w-0 items-center gap-1.5 text-[13px] font-medium text-muted-foreground"><Icon className="h-4 w-4 shrink-0" /><span className="truncate">{label}</span>{badge}</span>
+      <span className="mt-3 text-[26px] font-semibold leading-none tracking-tight tabular">{value}</span>
+      <span className="mt-2 min-h-[1rem] text-xs leading-snug text-muted-foreground tabular">{sub}</span>
       {children}
     </Link>
   );
@@ -68,7 +69,7 @@ export function HomeLaborTiles() {
   return (
     <section className="mb-8">
       <SectionLabel>Labor</SectionLabel>
-      <div className="grid gap-4 sm:grid-cols-2">
+      <div className={cn("grid grid-cols-1 gap-px overflow-hidden rounded-xl border border-card-border bg-border/70 shadow-card", showLabor && showForecast && "sm:grid-cols-2")}>
         {showLabor && (
           <Tile
             icon={Percent}
@@ -130,8 +131,8 @@ export function LaborSection({ className }: { className?: string }) {
           <div className="rounded-xl border border-card-border bg-card p-5 shadow-card" data-testid="card-forecast">
             <div className="flex flex-wrap items-end justify-between gap-4">
               <div>
-                <p className="flex items-center gap-2 text-[13px] font-medium text-muted-foreground">Current pay period · {app.date(f.start)} – {app.date(f.end)} <Badge variant="secondary">Estimate</Badge></p>
-                <p className="mt-2 text-[32px] font-semibold leading-none tracking-tight tabular">{app.money(f.projected)}</p>
+                <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[13px] font-medium text-muted-foreground"><span className="tabular">Current pay period · {app.date(f.start)} – {app.date(f.end)}</span> <Badge variant="secondary">Estimate</Badge></p>
+                <p className="mt-2 text-[28px] font-semibold leading-none tracking-tight tabular">{app.money(f.projected)}</p>
               </div>
               <dl className="grid grid-cols-2 gap-x-8 gap-y-1 text-[13px] sm:grid-cols-4">
                 <div><dt className="text-xs text-muted-foreground">Earned so far</dt><dd className="font-semibold tabular">{app.money(f.paidSoFar)}</dd></div>
@@ -168,8 +169,8 @@ export function LaborSection({ className }: { className?: string }) {
         ) : l && (
           <div className="overflow-hidden rounded-xl border border-card-border bg-card shadow-card">
             {l.square.message && (
-              <div className="flex items-start gap-2 border-b border-border/70 bg-warning-soft px-4 py-2.5 text-[13px]" role="status">
-                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" />{l.square.message}
+              <div className="flex items-start gap-2 border-b border-border/70 bg-warning-soft px-4 py-2.5 text-[13px] text-warning" role="status">
+                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" /><span>{l.square.message}</span>
               </div>
             )}
             <div className="grid grid-cols-3 divide-x divide-border/70 border-b border-border/70">
@@ -243,8 +244,8 @@ function SalesCell({ siteId, date, value, source, editable, squareOk }: { siteId
     return (
       <span className="flex items-center gap-1.5">
         <NumberInput className="w-28" prefix={app.prefs.currencySymbol} value={draft} onChange={setDraft} autoFocus onKeyDown={(e) => { if (e.key === "Enter") void save(draft); if (e.key === "Escape") setEditing(false); }} aria-label={`Sales on ${date}`} data-testid={`input-sales-${date}`} />
-        <button type="button" className="text-xs font-medium text-primary" disabled={busy} onClick={() => save(draft)}>{busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Save"}</button>
-        {source === "manual" && <button type="button" className="text-xs text-muted-foreground" disabled={busy} onClick={() => save(null)} title={squareOk ? "Use Square's number again" : "Clear"}>Clear</button>}
+        <button type="button" className="rounded-sm px-1 py-0.5 focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/35 disabled:opacity-45 text-xs font-medium text-primary hover:underline" disabled={busy} onClick={() => save(draft)}>{busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Save"}</button>
+        {source === "manual" && <button type="button" className="rounded-sm px-1 py-0.5 focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/35 disabled:opacity-45 text-xs text-muted-foreground hover:text-foreground" disabled={busy} onClick={() => save(null)} title={squareOk ? "Use Square's number again" : "Clear"}>Clear</button>}
       </span>
     );
   }
@@ -252,7 +253,7 @@ function SalesCell({ siteId, date, value, source, editable, squareOk }: { siteId
     <span className="flex items-center gap-1.5">
       <span className="tabular">{value != null ? app.money(value) : "—"}</span>
       {source && <span className="text-[11px] text-muted-foreground">{source === "square" ? "Square" : "manual"}</span>}
-      {editable && <button type="button" className="ml-1 text-xs font-medium text-primary hover:underline" onClick={() => { setDraft(value ?? 0); setEditing(true); }} data-testid={`button-edit-sales-${date}`}>{value != null ? "Edit" : "Add"}</button>}
+      {editable && <button type="button" className="rounded-sm px-1 py-0.5 focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/35 disabled:opacity-45 ml-0.5 text-xs font-medium text-primary hover:underline" onClick={() => { setDraft(value ?? 0); setEditing(true); }} data-testid={`button-edit-sales-${date}`}>{value != null ? "Edit" : "Add"}</button>}
     </span>
   );
 }

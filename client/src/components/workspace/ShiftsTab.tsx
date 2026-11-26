@@ -10,6 +10,8 @@ import { useToast } from "@/hooks/use-toast";
 import { useConfirm } from "@/components/ConfirmDialog";
 import { ImportDialog, type ImportResult } from "@/components/import/ImportDialog";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -18,6 +20,9 @@ import { EmptyState } from "@/components/ui/empty-state";
 import type { WsProps } from "./types";
 
 const ALL = "__all__";
+const SOURCE_LABELS: Record<string, string> = { csv: "CSV", square: "Square", toast: "Toast", manual: "Manual", legacy: "Imported", kiosk: "Kiosk" };
+/** Table cell on md+, labelled block on phones. */
+const cell = "py-1.5 pr-2 max-md:block max-md:p-0 max-md:before:mb-1 max-md:before:block max-md:before:text-xs max-md:before:font-medium max-md:before:text-muted-foreground max-md:before:content-[attr(data-label)]";
 const PAGE = 150;
 
 export function ShiftsTab(p: WsProps) {
@@ -77,35 +82,36 @@ export function ShiftsTab(p: WsProps) {
         </div>
 
         {rows.length === 0 ? <EmptyState compact icon={Clock} title="No shifts yet" description={locked ? "This timesheet has no shifts." : "Add a shift by hand or import more from Square, a CSV or a PDF."} /> : (
-          <div className="overflow-x-auto -mx-5 px-5">
-            <table className="w-full text-sm min-w-[48rem]">
-              <thead>
+          <div className="md:-mx-5 md:overflow-x-auto md:px-5">
+            {/* Phone: each shift is a small stacked card (labels from data-label). md+: a regular table. */}
+            <table className="w-full text-sm max-md:block md:min-w-[48rem]">
+              <thead className="max-md:hidden">
                 <tr className="text-left text-xs text-muted-foreground">
-                  <th className="pb-2 font-medium">Employee</th><th className="pb-2 font-medium">Date</th><th className="pb-2 font-medium">In</th>
-                  <th className="pb-2 font-medium">Out</th><th className="pb-2 font-medium">Break</th><th className="pb-2 font-medium text-right">Hours</th>
-                  <th className="pb-2 font-medium pl-2">Role</th><th className="pb-2 font-medium">Source</th><th />
+                  <th className="pb-2 pr-2 font-medium">Employee</th><th className="pb-2 pr-2 font-medium">Date</th><th className="pb-2 pr-2 font-medium">In</th>
+                  <th className="pb-2 pr-2 font-medium">Out</th><th className="pb-2 pr-2 font-medium">Break (min)</th><th className="pb-2 pr-4 font-medium text-right">Hours</th>
+                  <th className="pb-2 pr-2 font-medium">Role</th><th className="pb-2 pr-2 font-medium">Source</th><th className="pb-2"><span className="sr-only">Actions</span></th>
                 </tr>
               </thead>
-              <tbody>
+              <tbody className="max-md:block">
                 {rows.slice(0, limit).map((s) => {
                   const hrs = round2((s.end - s.start - s.breakMinutes) / 60);
                   return (
-                    <tr key={s.id} className="border-t border-border/60" data-testid={`row-shift-${s.id}`}>
-                      <td className="py-1.5 pr-2 font-medium whitespace-nowrap max-w-[12rem] truncate">{s.employee}</td>
-                      <td className="py-1.5 pr-2 w-40"><Input type="date" className="h-8" value={s.date} disabled={locked} onChange={(e) => /^\d{4}-\d{2}-\d{2}$/.test(e.target.value) && setShift({ ...s, date: e.target.value })} /></td>
-                      <td className="py-1.5 pr-2 w-32"><TimeInput className="h-8" value={s.start} disabled={locked} onChange={(m) => setShift({ ...s, start: m, end: rollEnd(m, s.end) })} /></td>
-                      <td className="py-1.5 pr-2 w-32">
+                    <tr key={s.id} className="border-t border-border/60 max-md:grid max-md:grid-cols-6 max-md:gap-x-2 max-md:gap-y-2.5 max-md:py-3" data-testid={`row-shift-${s.id}`}>
+                      <td className="max-w-[12rem] truncate whitespace-nowrap py-1.5 pr-2 font-medium max-md:col-span-5 max-md:max-w-none max-md:self-center max-md:p-0 max-md:text-[15px]">{s.employee}</td>
+                      <td data-label="Date" className={cn(cell, "w-40 max-md:order-2 max-md:col-span-4 max-md:w-auto")}><Input type="date" className="h-8 max-md:h-10" aria-label={`Date, ${s.employee}`} value={s.date} disabled={locked} onChange={(e) => /^\d{4}-\d{2}-\d{2}$/.test(e.target.value) && setShift({ ...s, date: e.target.value })} /></td>
+                      <td data-label="In" className={cn(cell, "w-32 max-md:order-4 max-md:col-span-3 max-md:w-auto")}><TimeInput className="h-8 max-md:h-10" aria-label={`Clock in, ${s.employee}`} value={s.start} disabled={locked} onChange={(m) => setShift({ ...s, start: m, end: rollEnd(m, s.end) })} /></td>
+                      <td data-label="Out" className={cn(cell, "w-32 max-md:order-5 max-md:col-span-3 max-md:w-auto")}>
                         <div className="flex items-center gap-1">
-                          <TimeInput className="h-8" value={s.end} disabled={locked} onChange={(m) => setShift({ ...s, end: rollEnd(s.start, m) })} />
-                          {s.end > 1440 && <span className="text-[10px] text-muted-foreground" title="Ends the next day">+1</span>}
+                          <TimeInput className="h-8 max-md:h-10" aria-label={`Clock out, ${s.employee}`} value={s.end} disabled={locked} onChange={(m) => setShift({ ...s, end: rollEnd(s.start, m) })} />
+                          {s.end > 1440 && <span className="shrink-0 text-[11px] font-medium text-muted-foreground" title="Ends the next day">+1 day</span>}
                         </div>
                       </td>
-                      <td className="py-1.5 pr-2 w-20"><NumberInput className="h-8" step="1" value={s.breakMinutes} disabled={locked} onChange={(n) => setShift({ ...s, breakMinutes: Math.round(n) }, `brk:${s.id}`)} /></td>
-                      <td className={`py-1.5 pr-2 text-right tabular ${hrs <= 0 ? "text-destructive" : ""}`}>{hrs}</td>
-                      <td className="py-1.5 pl-2 pr-2 w-32"><Input className="h-8" value={s.role} disabled={locked} onChange={(e) => setShift({ ...s, role: e.target.value }, `role:${s.id}`)} /></td>
-                      <td className="py-1.5 pr-2"><span className="rounded-full bg-foreground/[0.05] px-2 py-0.5 text-[11px] font-medium capitalize text-muted-foreground">{s.source}</span></td>
-                      <td className="py-1.5 text-right">
-                        {!locked && <Button variant="ghost" size="icon" className="h-8 w-8" aria-label="Delete shift" onClick={() => edit((d) => deleteShifts(d, [s.id]))} data-testid={`button-delete-shift-${s.id}`}><Trash2 /></Button>}
+                      <td data-label="Break (min)" className={cn(cell, "w-20 max-md:order-3 max-md:col-span-2 max-md:w-auto")}><NumberInput className="[&_input]:h-8 max-md:[&_input]:h-10" aria-label={`Break minutes, ${s.employee}`} step="1" value={s.breakMinutes} disabled={locked} onChange={(n) => setShift({ ...s, breakMinutes: Math.round(n) }, `brk:${s.id}`)} /></td>
+                      <td data-label="Hours" className={cn(cell, "pr-4 text-right tabular max-md:order-7 max-md:col-span-1 max-md:pr-0 max-md:text-[15px] max-md:font-semibold", hrs <= 0 && "text-destructive")}>{hrs}</td>
+                      <td data-label="Role" className={cn(cell, "w-32 max-md:order-6 max-md:col-span-3 max-md:w-auto")}><Input className="h-8 max-md:h-10" aria-label={`Role, ${s.employee}`} value={s.role} disabled={locked} onChange={(e) => setShift({ ...s, role: e.target.value }, `role:${s.id}`)} /></td>
+                      <td data-label="Source" className={cn(cell, "max-md:order-8 max-md:col-span-2")}><Badge variant="secondary" className="font-medium">{SOURCE_LABELS[s.source] ?? s.source}</Badge></td>
+                      <td className="py-1.5 text-right max-md:order-1 max-md:col-span-1 max-md:-my-1.5 max-md:p-0">
+                        {!locked && <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive max-md:h-10 max-md:w-10" aria-label={`Delete shift, ${s.employee} ${s.date}`} onClick={() => edit((d) => deleteShifts(d, [s.id]))} data-testid={`button-delete-shift-${s.id}`}><Trash2 /></Button>}
                       </td>
                     </tr>
                   );

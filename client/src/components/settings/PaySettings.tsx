@@ -34,8 +34,8 @@ export function PaySettings() {
   const pay = usePaySettings(site.id);
   if (pay.isLoading) return <div className="space-y-4"><Skeleton className="h-40 rounded-xl" /><Skeleton className="h-40 rounded-xl" /></div>;
   return (
-    <div className="space-y-6" key={site.id}>
-      <p className="flex items-center gap-1.5 text-[13px] text-muted-foreground"><SiteDot color={site.color} />Settings for <b className="font-medium text-foreground">{site.name}</b>. Switch location in the sidebar to change another.</p>
+    <div className="space-y-5" key={site.id}>
+      <p className="flex items-start gap-2 px-1 text-[13px] text-muted-foreground"><SiteDot color={site.color} className="mt-[5px]" /><span className="min-w-0">Settings for <b className="font-medium text-foreground [overflow-wrap:anywhere]">{site.name}</b>. Switch location in the sidebar to change another.</span></p>
       <CashSection siteId={site.id} settings={pay.settings} />
       <HolidaysSection siteId={site.id} settings={pay.settings} />
       <RecurringSection siteId={site.id} settings={pay.settings} />
@@ -95,9 +95,9 @@ function CashSection({ siteId, settings }: { siteId: string; settings: PaySettin
         </div>
         <div className="flex flex-wrap items-end gap-2">
           <Field label="Add a bill or coin"><NumberInput className="w-28" prefix={sym} value={add} onChange={setAdd} data-testid="input-add-denomination" /></Field>
-          <Button variant="outline" size="sm" className="mb-0.5" disabled={!(add > 0)} onClick={() => { set([...draft.denominations, add]); setAdd(0); }}><Plus />Add</Button>
+          <Button variant="outline" disabled={!(add > 0)} onClick={() => { set([...draft.denominations, add]); setAdd(0); }}><Plus />Add</Button>
           <Select onValueChange={(v) => set(PRESETS[Number(v)].values)}>
-            <SelectTrigger className="mb-0.5 h-8 w-44"><SelectValue placeholder="Use a currency set" /></SelectTrigger>
+            <SelectTrigger className="w-44" aria-label="Use a currency set"><SelectValue placeholder="Use a currency set" /></SelectTrigger>
             <SelectContent>{PRESETS.map((p, i) => <SelectItem key={p.label} value={String(i)}>{p.label}</SelectItem>)}</SelectContent>
           </Select>
         </div>
@@ -123,7 +123,7 @@ function HolidaysSection({ siteId, settings }: { siteId: string; settings: PaySe
       description="People who work on a holiday get a premium: their day's pay times a multiplier, or a flat amount on top. It shows on pay statements."
       actions={<Button variant="outline" size="sm" onClick={() => setDraft([...draft, { id: uid("hol"), date: todayISO(tz), name: "", kind: "multiplier", multiplier: 1.5, flatBonus: 0 }])} data-testid="button-add-holiday"><Plus />Add holiday</Button>}
     >
-      {draft.length === 0 ? <p className="text-[13px] text-muted-foreground">No holidays yet.</p> : (
+      {draft.length === 0 ? <p className="rounded-lg border border-dashed border-border px-4 py-6 text-center text-[13px] text-muted-foreground">No holidays yet. Add one to pay a premium to people who work that day.</p> : (
         <div className="-mx-5 overflow-x-auto px-5">
           <table className="w-full min-w-[38rem] text-sm">
             <thead><tr className="text-left text-xs text-muted-foreground"><th className="pb-2 font-medium">Date</th><th className="pb-2 font-medium">Name</th><th className="pb-2 font-medium">Premium</th><th className="pb-2 font-medium">Amount</th><th /></tr></thead>
@@ -179,7 +179,7 @@ function RecurringSection({ siteId, settings }: { siteId: string; settings: PayS
       actions={<Button variant="outline" size="sm" onClick={() => setDraft([...draft, { id: uid("rec"), employee: "", kind: "deduction", description: "", amount: 0, active: true }])} data-testid="button-add-recurring"><Plus />Add item</Button>}
     >
       <datalist id="pay-names">{names.map((n) => <option key={n} value={n} />)}</datalist>
-      {draft.length === 0 ? <p className="text-[13px] text-muted-foreground">No standing items yet.</p> : (
+      {draft.length === 0 ? <p className="rounded-lg border border-dashed border-border px-4 py-6 text-center text-[13px] text-muted-foreground">No standing items yet. Add a bonus or deduction that repeats every pay period.</p> : (
         <div className="-mx-5 overflow-x-auto px-5">
           <table className="w-full min-w-[44rem] text-sm">
             <thead><tr className="text-left text-xs text-muted-foreground"><th className="pb-2 font-medium">Employee</th><th className="pb-2 font-medium">Type</th><th className="pb-2 font-medium">Description</th><th className="pb-2 font-medium">Each period</th><th className="pb-2 text-center font-medium">On</th><th /></tr></thead>
@@ -258,13 +258,13 @@ function AdvancesSection({ siteId }: { siteId: string }) {
       description="Money paid ahead of payday. It comes off the person's next timesheets here until repaid (never more than they earn). Repayments are recorded when a timesheet is finalized and put back if it is reopened."
       actions={<Button variant="outline" size="sm" onClick={() => setAdding(true)} data-testid="button-settings-add-advance"><HandCoins />Record advance</Button>}
     >
-      {q.isLoading ? <Skeleton className="h-16" /> : list.length === 0 ? <p className="text-[13px] text-muted-foreground">No advances recorded.</p> : (
+      {q.isLoading ? <Skeleton className="h-16 rounded-xl" /> : list.length === 0 ? <p className="rounded-lg border border-dashed border-border px-4 py-6 text-center text-[13px] text-muted-foreground">No advances recorded. Use Record advance when someone is paid ahead of payday.</p> : (
         <div className="space-y-3">
           {open.length > 0 && <p className="text-[13px]"><b className="font-semibold">{app.money(outstanding)}</b> <span className="text-muted-foreground">still owed by {open.length} {open.length === 1 ? "person" : "people"}</span></p>}
           {open.length > 0 && <ul className="divide-y divide-border/70 rounded-xl border border-border/80" data-testid="list-advances">{open.map(row)}</ul>}
           {done.length > 0 && (
             <>
-              <button className="text-[13px] font-medium text-primary" onClick={() => setShowDone(!showDone)}>{showDone ? "Hide" : "Show"} repaid and written off ({done.length})</button>
+              <button className="rounded-sm text-[13px] font-medium text-primary hover:underline focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/35" onClick={() => setShowDone(!showDone)}>{showDone ? "Hide" : "Show"} repaid and written off ({done.length})</button>
               {showDone && <ul className="divide-y divide-border/70 rounded-xl border border-border/80">{done.map(row)}</ul>}
             </>
           )}

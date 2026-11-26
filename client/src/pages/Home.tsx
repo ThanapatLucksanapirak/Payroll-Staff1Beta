@@ -65,22 +65,21 @@ export function HomePage() {
   const editable = canEdit(app.user);
   const admin = isAdmin(app.user);
   const quick = [
-    ...(timeSource !== "square" ? [{ icon: Tablet, tint: "bg-[#5e5ce6]", title: "Time clock", sub: "Hours from the kiosk", source: "kiosk" as const, testid: "kiosk" }] : []),
-    ...(timeSource !== "kiosk" ? [{ icon: CalendarRange, tint: "bg-[#0a84ff]", title: "Pull from Square", sub: squareOn ? "Fetch timecards" : "Not connected", source: "square" as const, testid: "square" }] : []),
-    { icon: FileSpreadsheet, tint: "bg-[#30d158]", title: "Upload CSV", sub: "Square, Toast, Sling…", source: "csv" as const, testid: "csv" },
-    { icon: FileText, tint: "bg-[#ff9f0a]", title: "Toast PDF", sub: "Schedule or time entries", source: "pdf" as const, testid: "pdf" },
-    { icon: Plus, tint: "bg-[#8e8e93]", title: "New timesheet", sub: "Blank or any source", source: undefined, testid: "new" },
-    ...(timeSource !== "square" ? [{ icon: ListChecks, tint: "bg-[#ff375f]", title: "Payroll checklist", sub: "What's left to fix", source: undefined, testid: "checklist", action: () => setChecklist(true) }] : []),
+    ...(timeSource !== "square" ? [{ icon: Tablet, tint: "bg-foreground/[0.06] text-foreground/70 dark:bg-foreground/10", title: "Time clock", sub: "Hours from the kiosk", source: "kiosk" as const, testid: "kiosk" }] : []),
+    ...(timeSource !== "kiosk" ? [{ icon: CalendarRange, tint: "bg-foreground/[0.06] text-foreground/70 dark:bg-foreground/10", title: "Pull from Square", sub: squareOn ? "Fetch timecards" : "Not connected", source: "square" as const, testid: "square" }] : []),
+    { icon: FileSpreadsheet, tint: "bg-foreground/[0.06] text-foreground/70 dark:bg-foreground/10", title: "Upload CSV", sub: "Square, Toast, Sling…", source: "csv" as const, testid: "csv" },
+    { icon: FileText, tint: "bg-foreground/[0.06] text-foreground/70 dark:bg-foreground/10", title: "Toast PDF", sub: "Schedule or time entries", source: "pdf" as const, testid: "pdf" },
+    { icon: Plus, tint: "bg-foreground/[0.06] text-foreground/70 dark:bg-foreground/10", title: "New timesheet", sub: "Blank or any source", source: undefined, testid: "new" },
+    ...(timeSource !== "square" ? [{ icon: ListChecks, tint: "bg-foreground/[0.06] text-foreground/70 dark:bg-foreground/10", title: "Payroll checklist", sub: "What's left to fix", source: undefined, testid: "checklist", action: () => setChecklist(true) }] : []),
   ] as { icon: any; tint: string; title: string; sub: string; source: Parameters<typeof newTimesheet>[0]; testid: string; action?: () => void }[];
   const today = new Date(`${todayISO(site.rules.timezone)}T12:00:00`).toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" });
 
   return (
     <Page>
       <PageHeader
-        eyebrow={today}
         title={greeting()}
         titleTestId="text-page-title"
-        subtitle={<span className="inline-flex items-center gap-1.5"><SiteDot color={site.color} />{site.name}{site.address ? ` · ${site.address}` : ""}</span>}
+        subtitle={<span className="inline-flex min-w-0 flex-wrap items-center gap-x-1.5"><span className="inline-flex items-center gap-1.5"><SiteDot color={site.color} />{site.name}</span><span aria-hidden>·</span><span>{today}</span></span>}
         actions={editable && <Button onClick={() => newTimesheet()} data-testid="button-new-timesheet"><Plus /> New timesheet</Button>}
       />
 
@@ -89,7 +88,7 @@ export function HomePage() {
 
       {/* Quick actions */}
       {editable && (
-        <div className={cn("mb-8 grid grid-cols-2 gap-3", quick.length > 5 ? "sm:grid-cols-3 lg:grid-cols-6" : quick.length > 4 ? "lg:grid-cols-5" : "lg:grid-cols-4")}>
+        <div className={cn("mb-8 grid grid-cols-2 gap-3", quick.length > 4 ? "lg:grid-cols-3" : "xl:grid-cols-4")}>
           {quick.map((a) => <QuickAction key={a.testid} icon={a.icon} tint={a.tint} title={a.title} sub={a.sub} onClick={() => (a.action ? a.action() : newTimesheet(a.source))} testid={a.testid} />)}
         </div>
       )}
@@ -98,7 +97,7 @@ export function HomePage() {
       {!isAccountant(app.user) && <HomeLaborTiles />}
 
       {list.isLoading ? (
-        <div className="space-y-4"><div className="grid gap-4 sm:grid-cols-3">{[0, 1, 2].map((i) => <Skeleton key={i} className="h-32 rounded-xl" />)}</div><Skeleton className="h-64 rounded-xl" /></div>
+        <div className="space-y-8"><Skeleton className="h-[8.5rem] rounded-xl sm:h-[7.75rem]" /><div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)]"><Skeleton className="h-72 rounded-xl" /><Skeleton className="h-72 rounded-xl" /></div></div>
       ) : list.error ? (
         <EmptyState icon={AlertTriangle} title="Couldn't load timesheets" description={errorMessage(list.error)} action={<Button variant="outline" size="sm" onClick={() => list.refetch()}>Try again</Button>} />
       ) : !siteRows.length ? (
@@ -121,14 +120,14 @@ export function HomePage() {
         <>
           {/* At a glance */}
           <SectionLabel>At a glance</SectionLabel>
-          <div className="mb-8 grid gap-4 sm:grid-cols-3">
+          <div className="mb-8 grid grid-cols-1 gap-px overflow-hidden rounded-xl border border-card-border bg-border/70 shadow-card sm:grid-cols-3">
             <StatCard
               icon={Wallet}
               label="Latest pay period"
               value={latest ? app.money(latest.totalPay) : "—"}
               sub={latest ? `${app.date(latest.periodStart)} – ${app.date(latest.periodEnd)}` : "No dated timesheets"}
               extra={change !== null && (
-                <span className={cn("inline-flex items-center gap-0.5 text-xs font-medium", change >= 0 ? "text-success" : "text-danger")}>
+                <span className="inline-flex items-center gap-0.5 text-xs font-medium tabular text-foreground/80">
                   {change >= 0 ? <ArrowUpRight className="h-3.5 w-3.5" /> : <ArrowDownRight className="h-3.5 w-3.5" />}
                   {Math.abs(change * 100).toFixed(1)}% vs previous
                 </span>
@@ -136,7 +135,7 @@ export function HomePage() {
               onClick={latest ? () => navigate(`/timesheet/${latest.id}`) : undefined}
               testid="stat-latest-total"
             />
-            <StatCard icon={Users} label="Employees paid" value={latest ? String(latest.employeeCount) : "—"} sub={latest ? (latest.customLabel || latest.filename) : ""} testid="stat-employees" />
+            <StatCard icon={Users} label="Employees paid" value={latest ? String(latest.employeeCount) : "—"} sub={latest ? (latest.customLabel || latest.filename) : undefined} testid="stat-employees" />
             <StatCard
               icon={Flag}
               label="Flags to review"
@@ -155,13 +154,17 @@ export function HomePage() {
               <ul className="divide-y divide-border/70 overflow-hidden rounded-xl border border-card-border bg-card shadow-card" data-testid="list-recent">
                 {recent.map((t) => (
                   <li key={t.id}>
-                    <Link href={`/timesheet/${t.id}`} className="flex items-center gap-3 px-4 py-3 transition-colors hover:bg-foreground/[0.02] focus-visible:bg-foreground/[0.03] focus-visible:outline-none" data-testid={`link-recent-${t.id}`}>
+                    <Link href={`/timesheet/${t.id}`} className="flex items-center gap-3 px-4 py-3 transition-colors hover:bg-foreground/[0.03] focus-visible:bg-foreground/[0.04] focus-visible:outline-none" data-testid={`link-recent-${t.id}`}>
                       <div className="min-w-0 flex-1">
-                        <p className="truncate text-[14px] font-medium">{t.customLabel || t.filename || "Untitled"}</p>
-                        <p className="truncate text-xs text-muted-foreground">{t.periodStart ? `${app.date(t.periodStart)} – ${app.date(t.periodEnd)}` : "No dates"} · {t.employeeCount} people · edited {timeAgo(t.updatedAt ?? t.createdAt)}</p>
+                        <p className="truncate text-[14px] font-medium" title={t.customLabel || t.filename || undefined}>{t.customLabel || t.filename || "Untitled"}</p>
+                        <p className="truncate text-xs text-muted-foreground">
+                          <span className="tabular">{t.periodStart ? `${app.date(t.periodStart)} – ${app.date(t.periodEnd)}` : "No dates"}</span>
+                          {" · "}{t.employeeCount} {t.employeeCount === 1 ? "person" : "people"}
+                          <span className="hidden sm:inline"> · edited {timeAgo(t.updatedAt ?? t.createdAt)}</span>
+                        </p>
                       </div>
-                      <span className="hidden sm:block"><StatusBadge status={t.status} publishedAt={t.publishedAt} /></span>
-                      <span className="w-24 text-right text-[14px] font-semibold tabular">{app.money(t.totalPay)}</span>
+                      <span className="hidden shrink-0 sm:block"><StatusBadge status={t.status} publishedAt={t.publishedAt} /></span>
+                      <span className="min-w-[5.5rem] shrink-0 text-right text-[14px] font-semibold tabular">{app.money(t.totalPay)}</span>
                       <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground/60" />
                     </Link>
                   </li>
@@ -220,13 +223,14 @@ function QuickAction({ icon: Icon, title, sub, onClick, testid, tint }: { icon: 
   return (
     <button
       onClick={onClick}
-      className="group flex min-w-0 flex-col items-start gap-2.5 rounded-xl border border-card-border bg-card p-3.5 text-left sm:flex-row sm:items-center sm:gap-3 shadow-card transition-[box-shadow,transform] duration-200 hover:-translate-y-px hover:shadow-float focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/35 active:scale-[0.99]"
+      type="button"
+      className="group flex min-w-0 flex-col items-start gap-3 rounded-xl border border-card-border bg-card p-3.5 text-left shadow-card transition-[box-shadow,background-color] duration-200 hover:bg-foreground/[0.015] hover:shadow-float focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/35 active:scale-[0.99] sm:flex-row sm:items-center"
       data-testid={`button-quick-${testid}`}
     >
-      <span className={cn("flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] text-white shadow-sm", tint)}><Icon className="h-[18px] w-[18px]" /></span>
-      <span className="min-w-0">
-        <span className="block text-[13.5px] font-semibold sm:truncate">{title}</span>
-        <span className="block text-xs text-muted-foreground sm:truncate">{sub}</span>
+      <span className={cn("flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px]", tint)}><Icon className="h-[18px] w-[18px]" /></span>
+      <span className="w-full min-w-0">
+        <span className="block truncate text-[13.5px] font-semibold" title={title}>{title}</span>
+        <span className="mt-0.5 block text-xs leading-snug text-muted-foreground sm:truncate" title={sub}>{sub}</span>
       </span>
     </button>
   );
@@ -239,15 +243,21 @@ function StatCard({ icon: Icon, label, value, sub, extra, tone, onClick, testid 
   return (
     <Comp
       onClick={onClick}
-      className={cn("flex min-w-0 flex-col rounded-xl border border-card-border bg-card p-5 text-left shadow-card", onClick && "transition-shadow duration-200 hover:shadow-float focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/35")}
+      type={onClick ? "button" : undefined}
+      className={cn(
+        // One cell of the "At a glance" strip: label, figure, meta on a shared left edge.
+        // Phone: label + meta left, figure right, so three facts fit in one compact card.
+        "grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-1 bg-card px-4 py-3.5 text-left sm:flex sm:flex-col sm:items-start sm:gap-0 sm:p-5",
+        onClick && "transition-colors duration-150 hover:bg-foreground/[0.02] focus-visible:relative focus-visible:z-10 focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-inset focus-visible:ring-ring/35",
+      )}
       data-testid={testid}
     >
-      <span className="flex items-center gap-1.5 text-[13px] font-medium text-muted-foreground">
-        <Icon className={cn("h-4 w-4", tone === "warn" ? "text-warning" : tone === "ok" ? "text-success" : "")} />{label}
+      <span className="col-start-1 flex min-w-0 items-center gap-1.5 text-[13px] font-medium text-muted-foreground">
+        <Icon className={cn("h-4 w-4 shrink-0", tone === "warn" ? "text-warning" : tone === "ok" ? "text-success" : "")} /><span className="truncate">{label}</span>
       </span>
-      <span className="mt-3 text-[28px] font-semibold leading-none tracking-tight tabular">{value}</span>
-      <span className="mt-2 flex min-h-[1rem] flex-wrap items-center gap-x-2 gap-y-0.5">
-        {sub && <span className="truncate text-xs text-muted-foreground">{sub}</span>}
+      <span className={cn("col-start-2 row-span-2 row-start-1 text-right text-[22px] font-semibold leading-none tracking-tight tabular sm:mt-3 sm:text-left sm:text-[26px]", tone === "warn" && "text-warning")}>{value}</span>
+      <span className="col-start-1 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 sm:mt-2 sm:min-h-[1rem]">
+        {sub && <span className="truncate text-xs text-muted-foreground tabular" title={sub}>{sub}</span>}
         {extra}
       </span>
     </Comp>

@@ -125,7 +125,7 @@ function SiteEditor({ site, onDeleted, onDirtyChange }: { site: Site; onDeleted:
         actions={
           <>
             <Button variant="outline" size="sm" onClick={() => setDraft({ ...draft, archived: !draft.archived })} data-testid="button-archive-location"><Archive /> {draft.archived ? "Unarchive" : "Archive"}</Button>
-            <Button variant="ghost" size="sm" className="text-destructive" onClick={remove} disabled={app.sites.length <= 1} data-testid="button-delete-location"><Trash2 /> Delete</Button>
+            <Button variant="outline" size="sm" className="text-danger hover:text-danger" onClick={remove} disabled={app.sites.length <= 1} data-testid="button-delete-location"><Trash2 /> Delete</Button>
           </>
         }
       >
@@ -133,9 +133,9 @@ function SiteEditor({ site, onDeleted, onDirtyChange }: { site: Site; onDeleted:
           <Field label="Name"><Input value={draft.name} maxLength={80} onChange={(e) => setDraft({ ...draft, name: e.target.value })} data-testid="input-location-name" /></Field>
           <Field label="Address (optional)"><Input value={draft.address} onChange={(e) => setDraft({ ...draft, address: e.target.value })} /></Field>
           <Field label="Color">
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-nowrap gap-1.5">
               {COLORS.map((c) => (
-                <button key={c} onClick={() => setDraft({ ...draft, color: c })} className={cn("h-7 w-7 rounded-full ring-offset-2 ring-offset-card transition-transform duration-150 hover:scale-110 focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50", draft.color === c && "scale-110 ring-2 ring-foreground/30")} style={{ background: c }} aria-label={`Color ${c}`} aria-pressed={draft.color === c}>
+                <button key={c} onClick={() => setDraft({ ...draft, color: c })} className={cn("h-7 w-7 shrink-0 rounded-full ring-offset-2 ring-offset-card transition-transform duration-150 hover:scale-110 focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50", draft.color === c && "scale-110 ring-2 ring-foreground/30")} style={{ background: c }} aria-label={`Color ${c}`} aria-pressed={draft.color === c}>
                   {draft.color === c && <Check className="mx-auto h-3.5 w-3.5 text-white" />}
                 </button>
               ))}

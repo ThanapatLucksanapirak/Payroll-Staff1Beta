@@ -121,17 +121,17 @@ export function Dashboard() {
       />
 
       <div className="mb-5 flex flex-wrap items-center gap-2">
-        <div className="relative min-w-[12rem] flex-1">
+        <div className="relative min-w-[12rem] basis-full sm:basis-auto sm:flex-1">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search by name or date" aria-label="Search timesheets" className="pl-9" data-testid="input-search" />
         </div>
         <Select value={status} onValueChange={(v) => setStatus(v as any)}>
-          <SelectTrigger className="w-[8.5rem]" aria-label="Status" data-testid="select-status-filter"><SelectValue /></SelectTrigger>
-          <SelectContent><SelectItem value="all">All</SelectItem><SelectItem value="draft">Drafts</SelectItem><SelectItem value="final">Finalized</SelectItem></SelectContent>
+          <SelectTrigger className="min-w-0 flex-1 sm:w-[9.5rem] sm:flex-none" aria-label="Status" data-testid="select-status-filter"><SelectValue /></SelectTrigger>
+          <SelectContent><SelectItem value="all">All statuses</SelectItem><SelectItem value="draft">Drafts</SelectItem><SelectItem value="final">Finalized</SelectItem></SelectContent>
         </Select>
         <Select value={sort} onValueChange={(v) => setSort(v as Sort)}>
-          <SelectTrigger className="w-[10.5rem]" aria-label="Sort by" data-testid="select-sort"><ArrowUpDown className="h-3.5 w-3.5 shrink-0 text-muted-foreground" /><SelectValue /></SelectTrigger>
-          <SelectContent><SelectItem value="updated">Recently edited</SelectItem><SelectItem value="period">Pay period</SelectItem><SelectItem value="pay">Total pay</SelectItem><SelectItem value="name">Name</SelectItem></SelectContent>
+          <SelectTrigger className="min-w-0 flex-1 sm:w-[10.5rem] sm:flex-none" aria-label="Sort by" data-testid="select-sort"><ArrowUpDown className="hidden h-3.5 w-3.5 shrink-0 text-muted-foreground min-[400px]:block" /><SelectValue /></SelectTrigger>
+          <SelectContent><SelectItem value="updated">Last edited</SelectItem><SelectItem value="period">Pay period</SelectItem><SelectItem value="pay">Total pay</SelectItem><SelectItem value="name">Name</SelectItem></SelectContent>
         </Select>
         <SegmentedControl
           label="View"
@@ -167,14 +167,14 @@ export function Dashboard() {
               <div className="pointer-events-none relative flex items-start justify-between gap-2">
                 <div className="min-w-0">
                   <p className="truncate text-[15px] font-semibold tracking-tight" title={t.customLabel || t.filename}>{t.customLabel || t.filename || "Untitled"}</p>
-                  <p className="mt-0.5 text-[13px] text-muted-foreground">{t.periodStart ? `${app.date(t.periodStart)} – ${app.date(t.periodEnd)}` : "No dates yet"}</p>
+                  <p className="mt-0.5 text-[13px] text-muted-foreground tabular">{t.periodStart ? `${app.date(t.periodStart)} – ${app.date(t.periodEnd)}` : "No dates yet"}</p>
                 </div>
                 {editable && <div className="pointer-events-auto -mr-1.5 -mt-1">{menu(t)}</div>}
               </div>
               <div className="pointer-events-none relative mt-6 flex items-end justify-between gap-2">
                 <div className="min-w-0">
                   <p className="text-[22px] font-semibold leading-none tracking-tight tabular">{app.money(t.totalPay)}</p>
-                  <p className="mt-1.5 flex items-center gap-1 text-xs text-muted-foreground"><Users className="h-3 w-3" />{t.employeeCount} · edited {timeAgo(t.updatedAt ?? t.createdAt)}</p>
+                  <p className="mt-1.5 flex min-w-0 items-center gap-1 text-xs text-muted-foreground"><Users className="h-3 w-3 shrink-0" /><span className="truncate">{t.employeeCount} {t.employeeCount === 1 ? "person" : "people"} · edited {timeAgo(t.updatedAt ?? t.createdAt)}</span></p>
                 </div>
                 <StatusBadge status={t.status} publishedAt={t.publishedAt} />
               </div>
@@ -188,13 +188,13 @@ export function Dashboard() {
           </div>
           <ul className="divide-y divide-border/70">
             {rows.map((t) => (
-              <li key={t.id} className="relative grid grid-cols-[minmax(0,1fr)_auto_2.5rem] items-center gap-3 px-4 py-3 transition-colors hover:bg-foreground/[0.02] sm:grid-cols-[minmax(0,1fr)_10rem_6rem_8rem_6rem_2.5rem]" role="row" data-testid={`card-timesheet-${t.id}`}>
+              <li key={t.id} className="relative grid grid-cols-[minmax(0,1fr)_auto_2.5rem] items-center gap-3 px-4 py-3 transition-colors hover:bg-foreground/[0.03] sm:grid-cols-[minmax(0,1fr)_10rem_6rem_8rem_6rem_2.5rem]" role="row" data-testid={`card-timesheet-${t.id}`}>
                 <button className="absolute inset-0 focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-inset focus-visible:ring-ring/35" aria-label={`Open ${t.customLabel || t.filename}`} onClick={() => navigate(`/timesheet/${t.id}`)} data-testid={`button-open-${t.id}`} />
                 <div className="pointer-events-none relative min-w-0" role="cell">
-                  <p className="truncate text-[14px] font-medium">{t.customLabel || t.filename || "Untitled"}</p>
-                  <p className="truncate text-xs text-muted-foreground">edited {timeAgo(t.updatedAt ?? t.createdAt)}<span className="sm:hidden"> · {t.periodStart ? `${app.date(t.periodStart)} – ${app.date(t.periodEnd)}` : "No dates"}</span></p>
+                  <p className="truncate text-[14px] font-medium" title={t.customLabel || t.filename || undefined}>{t.customLabel || t.filename || "Untitled"}</p>
+                  <p className="truncate text-xs text-muted-foreground"><span className="tabular sm:hidden">{t.periodStart ? `${app.date(t.periodStart)} – ${app.date(t.periodEnd)}` : "No dates"}</span><span className="hidden sm:inline">edited {timeAgo(t.updatedAt ?? t.createdAt)}</span></p>
                 </div>
-                <span className="pointer-events-none relative hidden text-[13px] text-muted-foreground sm:block" role="cell">{t.periodStart ? `${app.date(t.periodStart)} – ${app.date(t.periodEnd)}` : "—"}</span>
+                <span className="pointer-events-none relative hidden truncate text-[13px] text-muted-foreground tabular sm:block" role="cell">{t.periodStart ? `${app.date(t.periodStart)} – ${app.date(t.periodEnd)}` : "—"}</span>
                 <span className="pointer-events-none relative hidden text-right text-[13px] tabular sm:block" role="cell">{t.employeeCount}</span>
                 <span className="pointer-events-none relative text-right text-[14px] font-semibold tabular" role="cell">{app.money(t.totalPay)}</span>
                 <span className="pointer-events-none relative hidden sm:block" role="cell"><StatusBadge status={t.status} publishedAt={t.publishedAt} /></span>
@@ -252,7 +252,7 @@ function RenameDialog({ item, onClose, onSave }: { item: TimesheetSummary | null
       <DialogContent className="max-w-sm" onOpenAutoFocus={() => setValue(item?.customLabel ?? item?.filename ?? "")}>
         <DialogHeader><DialogTitle>Rename timesheet</DialogTitle></DialogHeader>
         <form onSubmit={async (e) => { e.preventDefault(); setBusy(true); try { await onSave(value); onClose(); } finally { setBusy(false); } }} className="space-y-4">
-          <Input value={value} onChange={(e) => setValue(e.target.value)} autoFocus maxLength={120} data-testid="input-rename" />
+          <Input value={value} onChange={(e) => setValue(e.target.value)} autoFocus maxLength={120} aria-label="Timesheet name" data-testid="input-rename" />
           <DialogFooter><Button type="button" variant="outline" onClick={onClose}>Cancel</Button><Button type="submit" disabled={busy} data-testid="button-rename-save">{busy && <Loader2 className="animate-spin" />}Save</Button></DialogFooter>
         </form>
       </DialogContent>
@@ -295,8 +295,8 @@ function TrashDialog({ open, onOpenChange, onRestore, confirm }: {
             {items.map((t) => (
               <li key={t.id} className="flex items-center gap-3 px-3 py-2.5">
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-medium">{t.customLabel || t.filename || "Untitled"}</p>
-                  <p className="text-xs text-muted-foreground">{app.sites.find((x) => x.id === t.siteId)?.name ?? ""}{t.periodStart ? ` · ${app.date(t.periodStart)} – ${app.date(t.periodEnd)}` : ""} · {daysLeft(t.deletedAt)} days left</p>
+                  <p className="truncate text-sm font-medium" title={t.customLabel || t.filename || undefined}>{t.customLabel || t.filename || "Untitled"}</p>
+                  <p className="truncate text-xs text-muted-foreground">{app.sites.find((x) => x.id === t.siteId)?.name ?? ""}{t.periodStart ? ` · ${app.date(t.periodStart)} – ${app.date(t.periodEnd)}` : ""} · {daysLeft(t.deletedAt)} days left</p>
                 </div>
                 {editable && <Button size="sm" variant="outline" onClick={() => { onRestore(t.id); setTimeout(refresh, 300); }} data-testid={`button-restore-${t.id}`}><RotateCcw className="h-3.5 w-3.5" />Restore</Button>}
                 {admin && <Button size="icon-sm" variant="ghost" className="text-muted-foreground hover:text-destructive" aria-label="Delete forever" onClick={() => removeForever(t)}><Trash2 /></Button>}
@@ -305,7 +305,7 @@ function TrashDialog({ open, onOpenChange, onRestore, confirm }: {
           </ul>
         )}
         <DialogFooter>
-          {admin && items.length > 0 && <Button variant="ghost" className="text-destructive mr-auto" onClick={empty}>Empty Trash</Button>}
+          {admin && items.length > 0 && <Button variant="ghost" className="mr-auto text-destructive hover:text-destructive" onClick={empty}>Empty Trash</Button>}
           <Button variant="outline" onClick={() => onOpenChange(false)}>Done</Button>
         </DialogFooter>
       </DialogContent>

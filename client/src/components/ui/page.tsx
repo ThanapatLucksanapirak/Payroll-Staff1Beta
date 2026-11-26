@@ -3,7 +3,12 @@ import { cn } from "@/lib/utils"
 
 /** Standard page container: generous margins, readable max width. */
 export function Page({ children, className, wide }: { children: ReactNode; className?: string; wide?: boolean }) {
-  return <div className={cn("mx-auto w-full px-4 pb-16 pt-6 sm:px-8 sm:pt-10", wide ? "max-w-[90rem]" : "max-w-6xl", className)}>{children}</div>
+  // Same side gutter at every width; only the content max-width differs, so titles never shift between pages.
+  return (
+    <div className="w-full px-4 sm:px-8">
+      <div className={cn("mx-auto w-full pb-16 pt-6 sm:pt-10", wide ? "max-w-[90rem]" : "max-w-6xl", className)}>{children}</div>
+    </div>
+  )
 }
 
 /** Large bold title, quiet subtitle, actions on the right. */

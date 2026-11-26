@@ -53,13 +53,16 @@ export function IssueFixDialog({ siteId, tz, issue, fix, onClose }: { siteId: st
       <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle>{fix.label}</DialogTitle>
-          <DialogDescription>{issue.employeeName} · {issue.detail}</DialogDescription>
+          <DialogDescription className="break-words">{issue.employeeName} · {issue.detail}</DialogDescription>
         </DialogHeader>
         <div className="space-y-3">
           {fix.kind !== "delete" && (
-            <div className="grid grid-cols-2 gap-3">
-              <Field label="Date"><Input type="date" value={date} onChange={(e) => setDate(e.target.value)} data-testid="input-fix-date" /></Field>
-              <Field label={`${label} (${tz})`}><Input type="time" value={time} onChange={(e) => setTime(e.target.value)} autoFocus data-testid="input-fix-time" /></Field>
+            <div className="space-y-1.5">
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="Date"><Input type="date" value={date} onChange={(e) => setDate(e.target.value)} data-testid="input-fix-date" /></Field>
+                <Field label={label}><Input type="time" value={time} onChange={(e) => setTime(e.target.value)} autoFocus data-testid="input-fix-time" /></Field>
+              </div>
+              <p className="text-xs text-muted-foreground">Time at the location ({tz}).</p>
             </div>
           )}
           {fix.kind === "delete" && <p className="text-[13px] text-muted-foreground">Deletes {fix.punchIds.length === 1 ? "this punch" : `these ${fix.punchIds.length} punches`}. The note is kept in the server log.</p>}

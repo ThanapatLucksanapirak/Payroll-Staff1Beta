@@ -5,6 +5,7 @@ import { ArrowUpRight, CheckCircle2, ChevronRight, Loader2, RotateCcw, XCircle }
 import { timeAgo } from "@/lib/doc";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Section } from "@/components/workspace/fields";
 import { cn } from "@/lib/utils";
 
@@ -106,8 +107,8 @@ export function AboutSettings() {
   const [all, setAll] = useState(false);
   const d = q.data;
 
-  if (q.isLoading) return <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />;
-  if (!d) return <p className="text-[13px] text-muted-foreground">Version information isn't available right now.</p>;
+  if (q.isLoading) return <div className="space-y-5"><Skeleton className="h-44 rounded-xl" /><Skeleton className="h-72 rounded-xl" /></div>;
+  if (!d) return <p className="rounded-xl border border-dashed border-border px-4 py-8 text-center text-[13px] text-muted-foreground">Version information isn't available right now. Try again in a minute.</p>;
 
   const list: Change[] = d.history.length ? [...d.history, ...d.changelog] : d.changelog;
   const prevIdx = d.history.findIndex((c) => same(c.sha, d.previousVersion));
@@ -170,7 +171,7 @@ export function AboutSettings() {
               ))}
             </ol>
             {list.length > PAGE && (
-              <Button variant="ghost" size="sm" className="mt-3" onClick={() => setAll(!all)} data-testid="button-about-all">
+              <Button variant="link" size="sm" className="mt-3 h-auto px-0 pl-[23px]" onClick={() => setAll(!all)} data-testid="button-about-all">
                 {all ? "Show fewer" : `Show all ${list.length} updates`}
               </Button>
             )}

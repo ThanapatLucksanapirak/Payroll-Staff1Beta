@@ -33,7 +33,7 @@ export function YtdPanel({ siteId, siteName }: { siteId: string; siteName: strin
       </div>
       <div className="overflow-hidden rounded-xl border border-card-border bg-card shadow-card">
         {q.isLoading ? <div className="p-4"><Skeleton className="h-16" /></div> : q.error ? (
-          <p className="px-4 py-6 text-center text-[13px] text-muted-foreground">{errorMessage(q.error)}</p>
+          <p className="px-4 py-6 text-center text-[13px] text-destructive" role="alert">Couldn't load year-to-date totals: {errorMessage(q.error)} Reload the page to try again.</p>
         ) : !rows.length ? (
           <p className="px-4 py-6 text-center text-[13px] text-muted-foreground">No finalized timesheets for {year} yet. Totals appear once a pay period is marked final.</p>
         ) : (

@@ -43,7 +43,7 @@ export function PortalSettingsCard({ site }: { site: Site }) {
   };
 
   return (
-    <div className="space-y-3 rounded-xl border border-border/80 p-3" data-testid="settings-employee-portal">
+    <div className="space-y-3 border-t border-border/70 pt-4" data-testid="settings-employee-portal">
       <div className="flex items-start gap-3">
         <Smartphone className="mt-0.5 h-4 w-4 text-muted-foreground" />
         <div className="min-w-0 flex-1">
@@ -61,7 +61,7 @@ export function PortalSettingsCard({ site }: { site: Site }) {
       </div>
       {dirty && !on && <p className="text-xs text-muted-foreground">When you save, everyone signed in to the portal here is signed out.</p>}
       {savedOn && on && (
-        <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border/80 px-3.5 py-2.5">
+        <div className="flex flex-wrap items-center gap-2 rounded-lg bg-foreground/[0.04] px-3.5 py-2.5">
           <span className="min-w-0 grow basis-full truncate text-[13px] font-medium tabular sm:basis-0" data-testid="text-portal-url">{url}</span>
           <Button variant="outline" size="sm" onClick={copy}><Copy />Copy link</Button>
           <Button asChild variant="ghost" size="sm"><a href="/me" target="_blank" rel="noreferrer"><ExternalLink />Open</a></Button>
