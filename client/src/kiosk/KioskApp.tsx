@@ -571,7 +571,7 @@ function ActionsScreen({ tz, who, offline, error, busy, idleMs, onPunch, onCance
   const statusLine = who.status === "out" ? "You're not clocked in" : `${STATUS_TEXT[who.status]} since ${who.since ? timeOf(who.since, tz) : "—"}`;
   const breakDue = !offline && who.status === "in" && !!who.breakDue;
   return (
-    <div className="flex flex-1 flex-col items-center justify-center px-6 pb-10 text-center kiosk-fade-up">
+    <div className="kiosk-actions flex flex-1 flex-col items-center justify-center px-6 pb-10 text-center kiosk-fade-up">
       <Avatar name={who.employee.name} big status={who.status} />
       <h1 className="mt-5 max-w-full text-4xl font-display font-normal tracking-[-0.01em] text-stone-950 [overflow-wrap:anywhere] sm:text-5xl" data-testid="kiosk-employee-name">{who.employee.name}</h1>
       <p className="mt-2 text-2xl text-stone-700">

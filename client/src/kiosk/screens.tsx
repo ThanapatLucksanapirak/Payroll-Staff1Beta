@@ -97,25 +97,25 @@ export function GuardScreen({ name, message, question, suggest, also, busy, erro
   useIdle(idleMs, onCancel);
   const st = suggest ? ACTION_STYLE[suggest] : null;
   return (
-    <div className="flex flex-1 flex-col items-center justify-center px-6 pb-10 text-center kiosk-fade-up" data-testid="kiosk-guard">
-      <span className="flex h-20 w-20 items-center justify-center rounded-full bg-amber-100 text-amber-700 [@media(max-height:700px)]:h-14 [@media(max-height:700px)]:w-14"><AlertTriangle className="h-10 w-10 [@media(max-height:700px)]:h-7 [@media(max-height:700px)]:w-7" /></span>
-      <p className="mt-5 max-w-full text-2xl font-medium [@media(max-height:700px)]:mt-3 text-stone-700 [overflow-wrap:anywhere]">{name}</p>
-      <h1 className="mt-2 text-4xl font-display font-normal tracking-[-0.01em] text-stone-950 sm:text-5xl" data-testid="kiosk-guard-message">{message}</h1>
-      {question && <p className="mt-3 text-3xl font-semibold text-stone-800">{question}</p>}
-      <div className="mt-10 grid w-full max-w-xl gap-4 [@media(max-height:700px)]:mt-5 [@media(max-height:700px)]:gap-3">
+    <div className="kiosk-guard flex flex-1 flex-col items-center justify-center px-6 pb-10 text-center kiosk-fade-up" data-testid="kiosk-guard">
+      <span className="kiosk-guard-icon flex h-20 w-20 items-center justify-center rounded-full bg-amber-100 text-amber-700"><AlertTriangle className="h-10 w-10" /></span>
+      <p className="kiosk-guard-name mt-5 max-w-full text-2xl font-medium text-stone-700 [overflow-wrap:anywhere]">{name}</p>
+      <h1 className="kiosk-guard-title mt-2 text-4xl font-display font-normal tracking-[-0.01em] text-stone-950 sm:text-5xl" data-testid="kiosk-guard-message">{message}</h1>
+      {question && <p className="kiosk-guard-q mt-3 text-3xl font-semibold text-stone-800">{question}</p>}
+      <div className="kiosk-guard-actions mt-10 grid w-full max-w-xl gap-4">
         {suggest && st && (
-          <button type="button" disabled={busy} onClick={() => onSuggest(suggest)} className={`kiosk-tap flex h-32 [@media(max-height:700px)]:h-24 items-center justify-center gap-4 rounded-3xl text-3xl font-bold shadow-md transition active:scale-[0.98] disabled:opacity-60 ${st.cls}`} data-testid={`kiosk-suggest-${suggest}`}>
+          <button type="button" disabled={busy} onClick={() => onSuggest(suggest)} className={`kiosk-tap kiosk-guard-main flex h-32 items-center justify-center gap-4 rounded-3xl text-3xl font-bold shadow-md transition active:scale-[0.98] disabled:opacity-60 ${st.cls}`} data-testid={`kiosk-suggest-${suggest}`}>
             <st.icon className="h-10 w-10" />{PUNCH_LABELS[suggest]}
           </button>
         )}
         {also && (
-          <button type="button" disabled={busy} onClick={() => onSuggest(also)} className="kiosk-tap flex h-20 [@media(max-height:700px)]:h-16 items-center justify-center gap-3 rounded-3xl border-2 border-stone-300 bg-white text-2xl font-bold text-stone-900 transition active:scale-[0.98] disabled:opacity-60" data-testid={`kiosk-also-${also}`}>
+          <button type="button" disabled={busy} onClick={() => onSuggest(also)} className="kiosk-tap kiosk-guard-alt flex h-20 items-center justify-center gap-3 rounded-3xl border-2 border-stone-300 bg-white text-2xl font-bold text-stone-900 transition active:scale-[0.98] disabled:opacity-60" data-testid={`kiosk-also-${also}`}>
             {(() => { const I = ACTION_STYLE[also].icon; return <I className="h-8 w-8" />; })()}{PUNCH_LABELS[also]}
           </button>
         )}
         <BigSecondary onClick={onCancel} testid="kiosk-guard-cancel">Cancel</BigSecondary>
       </div>
-      <p className={`mt-5 min-h-7 text-xl font-medium ${error ? "text-red-700" : "text-transparent"}`} role="alert">{error || "·"}</p>
+      <p className={`kiosk-guard-err mt-5 min-h-7 text-xl font-medium ${error ? "text-red-700" : "text-transparent"}`} role="alert">{error || "·"}</p>
     </div>
   );
 }
