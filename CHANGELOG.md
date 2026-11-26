@@ -6,6 +6,10 @@ Settings → About, next to the matching update.
 Add an entry with every pull request: a `## YYYY-MM-DD · Title (#PR)` heading and a
 few short bullets written for the people who use the app, not for developers.
 
+## 2026-11-26 · Clearer camera messages on the time clock (#34)
+- When the camera has been denied for the time clock, the screen now says "Camera blocked" (with how to fix it) instead of "Camera not available", also on Android tablets.
+- The no-face messages all say the same thing: show your face to the camera and try again.
+
 ## 2026-11-26 · The time clock checks for a face before a punch (#30)
 - With photos on, the time clock now always checks that a face is in the photo, also on Android tablets where the check could switch itself off. Covering the camera no longer goes through unnoticed.
 - New time clock devices take a photo with each punch from the start, so the face check is on by default. Devices you already set up keep their setting. Turning photos off also turns off the face check.
