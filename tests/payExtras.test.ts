@@ -292,7 +292,7 @@ test("YTD totals and CSV", () => {
   assert.deepEqual(rows, [{ key: "ana", name: "Ana", gross: 215.5, deductions: 10, net: 205.5, tips: 15.5, timesheets: 2 }]);
   const csv = ytdCsv(rows, 2026);
   assert.equal(csv.split("\r\n")[1], "Ana,2026,2,215.50,10.00,205.50,15.50");
-  assert.equal(ytdCsv([{ ...rows[0], name: "=cmd" }], 2026).split("\r\n")[1].startsWith('"=cmd"'), true, "formula-looking names are quoted");
+  assert.equal(ytdCsv([{ ...rows[0], name: "=cmd" }], 2026).split("\r\n")[1].startsWith("'=cmd"), true, "formula-looking names are neutralized");
 });
 
 test("period over period variance names the drivers", () => {
