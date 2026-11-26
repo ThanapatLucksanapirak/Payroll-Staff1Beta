@@ -6,7 +6,7 @@ Settings → About, next to the matching update.
 Add an entry with every pull request: a `## YYYY-MM-DD · Title (#PR)` heading and a
 few short bullets written for the people who use the app, not for developers.
 
-## 2026-11-26 · Clearer camera messages on the time clock (#PR)
+## 2026-11-26 · Clearer camera messages on the time clock (#34)
 - When the camera has been denied for the time clock, the screen now says "Camera blocked" (with how to fix it) instead of "Camera not available", also on Android tablets.
 - The no-face messages all say the same thing: show your face to the camera and try again.
 
