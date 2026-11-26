@@ -7,8 +7,8 @@ import {
   flushQueue, queue, request, serverNow, token, uuid,
 } from "./api";
 import { useCamera } from "./camera";
-import { Mark } from "@/components/Logo";
 import { ACTION_STYLE, BigSecondary, duration, firstName, fmt, initials, timeOf, useIdle } from "./ui";
+import { Mark } from "@/components/Logo";
 import { type Confirm, type FixInput, BreakNudge, ConfirmScreen, FixRequestScreen, GuardScreen, MessageScreen, NoteScreen, StationScreen } from "./screens";
 
 const STATUS_TEXT: Record<ClockStatus, string> = { in: "Working", break: "On break", out: "Not clocked in" };
@@ -385,14 +385,14 @@ function TopBar({ state, online, pending, onInfo, onExitFullscreen }: { state: K
 /** Small live preview so people know a photo is taken with each punch. */
 function CameraPreview({ attach, status }: { attach: (el: HTMLVideoElement | null) => void; status: string }) {
   return (
-    <div className="pointer-events-none fixed bottom-4 left-4 z-40 flex items-center gap-3 rounded-2xl bg-white/95 p-2 pr-4 shadow-lg ring-1 ring-stone-200" data-testid="kiosk-camera">
+    <div className="pointer-events-none fixed bottom-4 left-4 z-40 flex items-center gap-3 rounded-2xl bg-white/95 p-2 pr-4 shadow-lg ring-1 ring-neutral-200" data-testid="kiosk-camera">
       {status === "unavailable" ? (
-        <span className="flex h-16 w-16 items-center justify-center rounded-xl bg-stone-100 text-stone-500"><CameraOff className="h-7 w-7" /></span>
+        <span className="flex h-16 w-16 items-center justify-center rounded-xl bg-neutral-100 text-neutral-500"><CameraOff className="h-7 w-7" /></span>
       ) : (
-        <video ref={attach} className="h-16 w-16 -scale-x-100 rounded-xl bg-stone-200 object-cover" muted playsInline autoPlay />
+        <video ref={attach} className="h-16 w-16 -scale-x-100 rounded-xl bg-neutral-200 object-cover" muted playsInline autoPlay />
       )}
-      <span className="text-sm font-medium text-stone-700">
-        {status === "unavailable" ? <>Camera unavailable<br /><span className="font-normal text-stone-600">Punches still work</span></> : <><Camera className="mr-1 inline h-4 w-4" />Photo taken<br />with your punch</>}
+      <span className="text-sm font-medium text-neutral-700">
+        {status === "unavailable" ? <>Camera unavailable<br /><span className="font-normal text-neutral-600">Punches still work</span></> : <><Camera className="mr-1 inline h-4 w-4" />Photo taken<br />with your punch</>}
       </span>
     </div>
   );
