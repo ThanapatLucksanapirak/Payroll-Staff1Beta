@@ -172,3 +172,20 @@ test("restores in the same second each keep their own pre-restore backup", async
   for (let i = 0; i < 3; i++) assert.equal((await call("POST", "/api/backup/restore", snap)).status, 200);
   assert.equal(count(), n0 + 3);
 });
+
+test("backup and restore keep a punch's face flags", async () => {
+  const boot = await call("GET", "/api/bootstrap");
+  const siteId = boot.body.sites[0].id;
+  const snap = (await call("GET", "/api/backup")).body;
+  const flagged = [
+    { id: "face0001", siteId, employeeId: "e1", employeeName: "Ana Ruiz", type: "in", at: "2026-02-02T14:00:00Z", source: "kiosk", meta: { face: "missing", photo: "none" } },
+    { id: "face0002", siteId, employeeId: "e1", employeeName: "Ana Ruiz", type: "out", at: "2026-02-02T22:00:00Z", source: "kiosk", meta: { face: "unchecked", photo: "saved" } },
+  ];
+  assert.equal((await call("POST", "/api/backup/restore", { ...snap, punches: [...snap.punches, ...flagged] })).status, 200);
+  const again = (await call("GET", "/api/backup")).body;
+  assert.equal((await call("POST", "/api/backup/restore", again)).status, 200, "round trip");
+  const { db } = await import("../server/db");
+  const store = await db();
+  assert.deepEqual((await store.getPunch("face0001"))?.meta, { face: "missing", photo: "none" });
+  assert.deepEqual((await store.getPunch("face0002"))?.meta, { face: "unchecked", photo: "saved" });
+});
