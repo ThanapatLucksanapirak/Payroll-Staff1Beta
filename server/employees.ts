@@ -281,9 +281,26 @@ export function registerEmployeeRoutes(app: Express) {
     const site = await siteOr404(req, res); if (!site) return;
     const id = String(req.params.id);
     const before = (await listEmployees(site.id)).find((x) => x.id === id);
+    // Clocked in? Don't leave an open shift behind: refuse, unless the caller
+    // asked to clock them out now (the remove dialog says so first).
+    let clockedOut: string | null = null;
+    if (before) {
+      const { openShift, recordPunch } = await import("./punches");
+      const open = await openShift(site.id, id);
+      if (open) {
+        if (req.query.clockOut !== "1") {
+          return res.status(409).json({ error: `${before.name} is clocked in. Clock them out before removing them.`, code: "clocked_in" });
+        }
+        const r = await recordPunch({
+          id: `adm_${randomUUID().replace(/-/g, "")}`, site, employee: before, type: "out", at: new Date().toISOString(), source: "admin", deviceId: null,
+          note: "Clocked out when removed from the employee list.", audience: "admin",
+        });
+        clockedOut = r.punch.at;
+      }
+    }
     const ok = await deleteEmployee(site.id, id);
-    if (ok) audit({ ...actorOf(req, res), action: "employee.delete", target: `employee:${id}`, detail: `${before?.name ?? id} at ${site.name}` });
-    res.json({ ok });
+    if (ok) audit({ ...actorOf(req, res), action: "employee.delete", target: `employee:${id}`, detail: `${before?.name ?? id} at ${site.name}${clockedOut ? ` (clocked out at ${clockedOut})` : ""}` });
+    res.json({ ok, clockedOut });
   }));
   // Owners: show the location's PINs after re-entering their password. Every
   // look-up is written to Settings → Activity.

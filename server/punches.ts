@@ -149,6 +149,19 @@ export async function cancelOpenShift(site: Site, employeeId: string, opts: { no
   });
 }
 
+/**
+ * Someone's open shift at this location right now (clocked in or on a break),
+ * with the name on their latest punch, or null when they're clocked out. Works
+ * for people no longer in the employee list, from their punches alone.
+ */
+export async function openShift(siteId: string, employeeId: string, now = Date.now()): Promise<{ status: "in" | "break"; name: string; shiftStart: string } | null> {
+  const from = new Date(now - STALE_SHIFT_HOURS * 3600_000 - DAY).toISOString();
+  const list = (await (await db()).listPunches({ siteId, employeeId, from, to: new Date(now + 1).toISOString() })).sort(byTime);
+  const st = clockState(list, now);
+  if (st.status === "out" || !st.shiftStart) return null;
+  return { status: st.status, name: list[list.length - 1]!.employeeName, shiftStart: st.shiftStart };
+}
+
 export interface EmployeeNow {
   id: string;
   name: string;
@@ -261,8 +274,20 @@ export function registerPunchRoutes(app: Express) {
       note: z.string().trim().min(1, "Add a short note saying why.").max(300), force: z.boolean().optional(),
     }).parse(req.body);
     notFuture(body.at);
-    const employee = await getEmployee(site.id, body.employeeId);
-    if (!employee) return res.status(404).json({ error: "Employee not found at this location." });
+    let employee: Pick<StoredEmployee, "id" | "name"> | null | undefined = await getEmployee(site.id, body.employeeId);
+    if (!employee) {
+      // Removed from the list while still clocked in: a manager can still clock
+      // them out, so the hours they worked are paid. Nothing else.
+      const open = body.type === "out" ? await openShift(site.id, body.employeeId) : null;
+      if (!open) {
+        return res.status(404).json({
+          error: body.type === "out"
+            ? "That person isn't in the employee list and isn't clocked in here."
+            : "Employee not found at this location. Someone who has been removed can only be clocked out.",
+        });
+      }
+      employee = { id: body.employeeId, name: open.name };
+    }
     const r = await recordPunch({
       id: `adm_${randomUUID().replace(/-/g, "")}`, site, employee, type: body.type, at: body.at, source: "admin", deviceId: null,
       note: body.note, audience: "admin", force: body.force,

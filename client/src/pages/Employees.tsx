@@ -92,11 +92,19 @@ export function EmployeesPage() {
   };
 
   const remove = async (e: EmployeeRow) => {
-    if (!(await confirm({ title: `Remove ${e.name}?`, description: "They can no longer use the time clock. Their face data (if any) is deleted now. Their past punches, timesheets and punch photos are kept, because they're pay records; punch photos are deleted at the end of the photo retention period (Settings → Locations & rules). To pause someone instead, turn off Active.", confirmLabel: "Remove", destructive: true }))) return;
+    // Clocked in right now? Removing them clocks them out now, so no open shift is left behind (the server refuses otherwise).
+    let clockedIn = false;
+    if (site.timeSource !== "square") {
+      try {
+        const day = await api<{ employees: { id: string; status: string }[] }>("GET", `/api/sites/${site.id}/timeclock`);
+        clockedIn = day.employees.some((x) => x.id === e.id && x.status !== "out");
+      } catch { /* not knowing doesn't block removing */ }
+    }
+    if (!(await confirm({ title: `Remove ${e.name}?`, description: (clockedIn ? `${e.name} is clocked in right now. Removing them clocks them out now, so the hours they've worked are kept. ` : "") + "They can no longer use the time clock. Their face data (if any) is deleted now. Their past punches, timesheets and punch photos are kept, because they're pay records; punch photos are deleted at the end of the photo retention period (Settings → Locations & rules). To pause someone instead, turn off Active.", confirmLabel: clockedIn ? "Clock out and remove" : "Remove", destructive: true }))) return;
     try {
-      await api("DELETE", `/api/sites/${site.id}/employees/${e.id}`);
+      const r = await api<{ clockedOut?: string | null }>("DELETE", `/api/sites/${site.id}/employees/${e.id}${clockedIn ? "?clockOut=1" : ""}`);
       await queryClient.invalidateQueries({ queryKey: key });
-      toast({ title: `${e.name} removed` });
+      toast({ title: `${e.name} removed`, ...(r?.clockedOut ? { description: "They were clocked out first." } : {}) });
     } catch (err) { toast({ title: "Couldn't remove", description: errorMessage(err), variant: "destructive" }); }
   };
 

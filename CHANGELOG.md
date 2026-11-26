@@ -6,6 +6,11 @@ Settings → About, next to the matching update.
 Add an entry with every pull request: a `## YYYY-MM-DD · Title (#PR)` heading and a
 few short bullets written for the people who use the app, not for developers.
 
+## 2026-11-27 · Clearer face match alerts and removed staff on Live (#46)
+- Live → Face match refused now labels each refusal: "Face didn't match", or "Face profile needs redoing" when someone's face data can't be read, with the steps to set it up again.
+- Removing someone who is clocked in now clocks them out first (the dialog says so and the button reads "Clock out and remove"), so no open shift is left behind. The server refuses to remove a clocked-in employee without that.
+- Anyone already removed while still clocked in shows on Live as "Removed" (not "Working") and no longer counts in "working". Clock out on their card now works: a manager who can add punches can record a clock-out for a removed person with an open shift (only a clock-out), so their hours are kept.
+
 ## 2026-11-27 · Face match at the time clock (#45)
 - Employees → camera button → Face match: once someone has three reference photos, turn on **Require face match at the time clock** for just that person.
 - With it on, a punch is refused if the face doesn't match their reference photos. They're asked to try again or ask a manager, and Live shows it under "Face didn't match" with the photo, until you dismiss it.
