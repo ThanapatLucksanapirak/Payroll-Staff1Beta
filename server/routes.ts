@@ -16,6 +16,7 @@ import { currentUser, requireAuth, resetTagCache } from "./auth";
 import { authorize, csrfGuard } from "./access";
 import { AUDIT_PREFIX, auditTrail } from "./audit";
 import { registerAuthRoutes } from "./authRoutes";
+import { registerUpdateRoutes } from "./updates";
 import { USERS_KEY, canAccessSite, toPublic } from "./users";
 import { NEVER_BACKED_UP, backupPath, listBackups, readBackup, runBackup } from "./backup";
 import { listLocations, pullTimecards } from "./square";
@@ -31,6 +32,8 @@ import { registerPermissionRoutes } from "./permissions";
 import { TWO_FACTOR_PUBLIC, registerTwoFactorRoutes } from "./twofactor";
 import { registerOffsiteRoutes } from "./offsite";
 import { registerPortalAdminRoutes, registerPortalRoutes } from "./portal";
+import { registerEmailRoutes } from "./email";
+import { getPublishedMap, invalidatePublishedCache, publishedRecord, registerPublishRoutes } from "./publish";
 
 type Handler = (req: Request, res: Response) => Promise<unknown>;
 const h = (fn: Handler) => (req: Request, res: Response, next: NextFunction) => { fn(req, res).catch(next); };
@@ -120,7 +123,7 @@ const restoreSchema = z.object({
 /**
  * Restore an export: afterwards the data matches the backup exactly (timesheets
  * and settings added since are removed, edited punches go back). The current
- * user accounts, activity log and manager PINs are always kept.
+ * user accounts, activity log, manager PINs and email settings are always kept.
  */
 async function restoreFrom(raw: unknown) {
   const body = restoreSchema.parse(raw);
@@ -134,7 +137,7 @@ async function restoreFrom(raw: unknown) {
     throw Object.assign(new Error(`Restore cancelled: could not back up the current data first (${err.message}).`), { status: 500 });
   });
   const store = await db();
-  const keepSetting = (k: string) => k === "password_hash" || k === USERS_KEY || k === "revoked_sessions" || k.startsWith(AUDIT_PREFIX) || k.startsWith("kiosk_manager_pin:") || NEVER_BACKED_UP(k);
+  const keepSetting = (k: string) => k === "password_hash" || k === USERS_KEY || k === "revoked_sessions" || k.startsWith(AUDIT_PREFIX) || k.startsWith("kiosk_manager_pin:") || k.startsWith("email:") || NEVER_BACKED_UP(k);
   const result = await store.importAll({
     settings: body.settings.filter((x) => !NEVER_BACKED_UP(x.key)),
     timesheets: body.timesheets.map(({ updated_at: _u, ...rest }: any) => rest),
@@ -142,6 +145,7 @@ async function restoreFrom(raw: unknown) {
     punches: hasPunches ? punches : undefined,
   }, { replace: true, keepSetting });
   settings.invalidateSettingsCache();
+  invalidatePublishedCache();
   invalidateEmployeeCache();
   resetTagCache();
   return result;
@@ -164,6 +168,8 @@ export function registerRoutes(app: Express) {
   registerPayRoutes(app, { rowFromDoc }); // pay extras, lock on finalized timesheets (before the timesheet routes)
   registerTwoFactorRoutes(app);
   registerOffsiteRoutes(app);
+  registerEmailRoutes(app); // Settings → Email (owner / admin)
+  registerPublishRoutes(app); // publish finalized payroll to accountants
 
   // ── Public ──────────────────────────────────────────────────────────────────
   app.get("/api/health", h(async (_req, res) => {
@@ -173,6 +179,7 @@ export function registerRoutes(app: Express) {
 
   // ── Sign-in, users, activity log ────────────────────────────────────────────
   registerAuthRoutes(app);
+  registerUpdateRoutes(app); // "Update now" (admin only: not in the access policy)
 
   // ── Bootstrap ───────────────────────────────────────────────────────────────
   app.get("/api/bootstrap", h(async (_req, res) => {
@@ -276,7 +283,12 @@ export function registerRoutes(app: Express) {
     const def = await settings.defaultSiteId();
     const trash = req.query.trash === "1";
     const user = currentUser(res)!;
-    const list = (await store.listTimesheets()).filter((t) => (trash ? !!t.deletedAt : !t.deletedAt) && canAccessSite(user, t.siteId ?? def));
+    const published = await getPublishedMap();
+    const pub = (t: { id: string; status: string; deletedAt?: string | null }) => publishedRecord(published, t.id, t.status, t.deletedAt);
+    const accountant = user.role === "accountant";
+    // Accountants only see published payroll (and never the Trash).
+    if (accountant && trash) return res.json([]);
+    const list = (await store.listTimesheets()).filter((t) => (trash ? !!t.deletedAt : !t.deletedAt) && canAccessSite(user, t.siteId ?? def) && (!accountant || !!pub(t)));
     // Keep the cache to rows that still exist in their current version.
     const live = new Set(list.map((t) => `${t.id}|${t.updatedAt}`));
     for (const k of legacyCache.keys()) if (!live.has(k) && !trash) legacyCache.delete(k);
@@ -296,7 +308,7 @@ export function registerRoutes(app: Express) {
         } catch { /* keep stored values */ }
       }));
     }
-    res.json(list.map((t) => ({ ...t, siteId: t.siteId ?? def, ...(legacyCache.get(`${t.id}|${t.updatedAt}`) ?? {}) })));
+    res.json(list.map((t) => ({ ...t, siteId: t.siteId ?? def, publishedAt: pub(t)?.at ?? null, ...(legacyCache.get(`${t.id}|${t.updatedAt}`) ?? {}) })));
   }));
 
   app.get("/api/timesheets/:id", h(async (req, res) => {
@@ -305,7 +317,8 @@ export function registerRoutes(app: Express) {
     if (!row) return res.status(404).json({ error: "This timesheet no longer exists." });
     const sites = await settings.getSites();
     const doc = rowToDoc(row, ctxFor(sites, row.site_id));
-    res.json({ id: row.id, doc, createdAt: row.created_at, updatedAt: row.updated_at, deletedAt: row.meta_json?.deletedAt ?? null, legacy: !(row.meta_json?.version >= 2) });
+    const published = publishedRecord(await getPublishedMap(), row.id, row.meta_json?.status, row.meta_json?.deletedAt);
+    res.json({ id: row.id, doc, createdAt: row.created_at, updatedAt: row.updated_at, deletedAt: row.meta_json?.deletedAt ?? null, legacy: !(row.meta_json?.version >= 2), publishedAt: published?.at ?? null });
   }));
 
   app.post("/api/timesheets", h(async (req, res) => {
@@ -415,6 +428,7 @@ export function registerRoutes(app: Express) {
     const { config, copyData } = z.object({ config: databaseConfigSchema, copyData: z.boolean().default(false) }).parse(req.body);
     const result = await switchDatabase(config, { copyData });
     settings.invalidateSettingsCache();
+    invalidatePublishedCache();
     resetTagCache();
     await settings.getSites();
     res.json(result);
@@ -428,7 +442,7 @@ export function registerRoutes(app: Express) {
   app.get("/api/backup", h(async (req, res) => {
     const includeSecrets = req.query.secrets === "1";
     const store = await db();
-    const secret = (k: string) => k === "password_hash" || k === USERS_KEY || k.startsWith("square_token:") || k.startsWith("kiosk_manager_pin:") || k === "square_access_token";
+    const secret = (k: string) => k === "password_hash" || k === USERS_KEY || k.startsWith("square_token:") || k.startsWith("kiosk_manager_pin:") || k === "square_access_token" || k.startsWith("email:");
     const all = await store.allSettings();
     res.json({
       app: "payroll-admin", version: 2, exportedAt: new Date().toISOString(),

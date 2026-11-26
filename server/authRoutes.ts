@@ -7,7 +7,7 @@ import { clearSessionCookie, clearSetupCode, currentUser, loginThrottle, recordL
 import { actorOf, audit, queryAudit } from "./audit";
 import {
   type UserRecord, ROLE_LABELS, bumpSessionVersion, createUser, createUserSchema, deleteUser, displayNameSchema, getUser, listUsers,
-  passwordSchema, setUserPassword, setupRequired, toPublic, updateProfile, updateUser, updateUserSchema, usernameSchema, authenticate,
+  notificationEmailSchema, passwordSchema, setUserPassword, setupRequired, toPublic, updateProfile, updateUser, updateUserSchema, usernameSchema, authenticate,
 } from "./users";
 import { verifyHash } from "./passwords";
 import { loginStep } from "./twofactor";
@@ -116,9 +116,9 @@ export function registerAuthRoutes(app: Express) {
 
   app.put("/api/auth/profile", h(async (req, res) => {
     const u = me(res);
-    const body = z.object({ displayName: displayNameSchema.optional(), username: usernameSchema.optional() }).parse(req.body);
+    const body = z.object({ displayName: displayNameSchema.optional(), username: usernameSchema.optional(), notificationEmail: notificationEmailSchema.optional() }).parse(req.body ?? {});
     const updated = await updateProfile(u.id, body);
-    const what = [body.username && updated.username !== u.username ? `username ${u.username} → ${updated.username}` : "", body.displayName !== undefined ? "display name" : ""].filter(Boolean).join("; ");
+    const what = [body.username && updated.username !== u.username ? `username ${u.username} → ${updated.username}` : "", body.displayName !== undefined ? "display name" : "", body.notificationEmail !== undefined ? "notification email" : ""].filter(Boolean).join("; ");
     audit({ ...actorOf(req, res, updated), action: "user.update", target: `user:${u.id}`, detail: what || "no changes" });
     res.json(toPublic(updated));
   }));
@@ -146,6 +146,7 @@ export function registerAuthRoutes(app: Express) {
     if (before.role !== after.role) changes.push(`role ${before.role} → ${after.role}`);
     if (before.siteIds.join() !== after.siteIds.join()) changes.push(`locations: ${after.siteIds.length ? after.siteIds.join(", ") : "all"}`);
     if (before.active !== after.active) changes.push(after.active ? "activated" : "deactivated");
+    if ((before.notificationEmail ?? "") !== (after.notificationEmail ?? "")) changes.push(after.notificationEmail ? "notification email set" : "notification email removed");
     audit({ ...actorOf(req, res), action: "user.update", target: `user:${after.id}`, detail: `${after.username}: ${changes.join("; ") || "no changes"}` });
     res.json(toPublic(after));
   }));

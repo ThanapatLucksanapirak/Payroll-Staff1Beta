@@ -466,16 +466,55 @@ cmd_tunnel() {
     setup)  cf_setup_interactive ;;
     status) cf_status ;;
     remove) confirm "Remove the Cloudflare Tunnel from this server?" n && cf_remove ;;
-    *) die "Usage: sudo payroll tunnel setup|status|remove" ;;
+    hosts)  shift; cmd_tunnel_hosts "$@" ;;
+    *) die "Usage: sudo payroll tunnel setup|status|hosts|remove" ;;
   esac
 }
 
+# payroll tunnel hosts [--app HOST] [--kiosk HOST]
+# Tell the app which web addresses are the admin and the kiosk (the kiosk address
+# then serves only the kiosk). Asks when no flags are given.
+cmd_tunnel_hosts() {
+  local app="" kiosk="" flags=0
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --app) app="${2:-}"; flags=1; shift 2 || shift ;;
+      --kiosk) kiosk="${2:-}"; flags=1; shift 2 || shift ;;
+      *) die "Usage: sudo payroll tunnel hosts [--app payroll.example.com] [--kiosk kiosk.example.com]" ;;
+    esac
+  done
+  if (( ! flags )); then
+    app="$(env_get APP_HOST)"; kiosk="$(env_get KIOSK_HOST)"
+    local a="" k=""
+    ask a "Admin address (e.g. payroll.example.com)" "$app"; app="$a"
+    ask k "Kiosk address (e.g. kiosk.example.com)" "$kiosk"; kiosk="$k"
+  fi
+  [[ -n "$app" ]] && { app="$(cf_clean_host "$app")"; [[ -n "$app" ]] || die "That admin address is not a valid hostname."; }
+  [[ -n "$kiosk" ]] && { kiosk="$(cf_clean_host "$kiosk")"; [[ -n "$kiosk" ]] || die "That kiosk address is not a valid hostname."; }
+  [[ -n "$app" || -n "$kiosk" ]] || die "Nothing to set."
+  if [[ -n "$app" && "$app" == "$kiosk" ]]; then die "The admin and kiosk addresses must be different."; fi
+  cf_record_hosts "$app" "$kiosk"
+  [[ -n "$app" ]] && ok "Admin   https://$app"
+  [[ -n "$kiosk" ]] && ok "Kiosk   https://$kiosk  (serves only the kiosk)"
+  wait_healthy 60 || warn "The app is slow to come back; check: payroll status"
+}
+
 # ── admin accounts ────────────────────────────────────────────────────────────
+# List accounts (exact usernames, roles, active/disabled).
+admin_list() {
+  [[ -f "$PAYROLL_CURRENT/dist/index.cjs" ]] || die "The app is not installed yet."
+  grep -q -- "--password-stdin" "$PAYROLL_CURRENT/dist/index.cjs" 2>/dev/null \
+    || die "This version of the app cannot list accounts from the command line yet."
+  # shellcheck disable=SC1090
+  ( set -a; . "$PAYROLL_ENV_FILE"; set +a; cd "$PAYROLL_CURRENT" \
+      && as_payroll timeout 60 "$(node_bin)" dist/index.cjs admin list )
+}
+
 cmd_admin() {
   local sub="${1:-}" user="" pw="" pw2="" rc=0 out
   shift || true
   local from="" to=""
-  case "$sub" in create|reset-password|disable-2fa|rename|list) ;; *) die "Usage: sudo payroll admin create|reset-password|disable-2fa|list [--username NAME]  or  admin rename --from OLD --to NEW" ;; esac
+  case "$sub" in create|reset-password|disable-2fa|rename) ;; list) admin_list; return $? ;; *) die "Usage: sudo payroll admin list|create|reset-password|disable-2fa [--username NAME]  or  admin rename --from OLD --to NEW" ;; esac
   while (( $# )); do
     case "$1" in
       --username) [[ $# -ge 2 ]] || die "--username needs a value."; user="$2"; shift ;;
@@ -490,7 +529,6 @@ cmd_admin() {
   done
   [[ -f "$PAYROLL_CURRENT/dist/index.cjs" ]] || die "The app is not installed yet."
   if [[ $sub == disable-2fa ]]; then admin_disable_2fa "$user"; return $?; fi
-  if [[ $sub == list ]]; then admin_simple list; return $?; fi
   if [[ $sub == rename ]]; then
     grep -q -- "admin rename" "$PAYROLL_CURRENT/dist/index.cjs" 2>/dev/null || die "This version of the app can't rename accounts yet. Update it first: sudo payroll update"
     ask from "Current username" ""
@@ -713,11 +751,12 @@ cmd_help() {
   h "restore <file>" "Replace the data with a backup (current data is saved first)"
   t "Server"
   h "start | stop | restart" "Control the app service"
-  h "admin create|reset-password" "Owner account / new password  [--username NAME]"
+  h "admin create|reset-password" "Administrator account  [--username NAME]"
   h "admin rename" "Change a sign-in username  --from OLD --to NEW"
-  h "admin list" "List accounts (username, role, display name)"
+  h "admin list" "Show every account's exact username and status"
   h "admin disable-2fa" "Turn off two-factor sign-in for an account  [--username NAME]"
   h "tunnel setup|status|remove" "Cloudflare Tunnel for access from anywhere"
+  h "tunnel hosts" "Set the admin and kiosk web addresses"
   h "version" "Installed version"
   h "uninstall [--purge]" "Remove the program (--purge also erases all data)"
   echo

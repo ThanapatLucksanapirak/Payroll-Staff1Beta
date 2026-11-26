@@ -4,7 +4,7 @@
 //   - an S3-compatible bucket (Amazon S3, Backblaze B2, Cloudflare R2, MinIO),
 //     uploaded with a SigV4-signed PUT (node:crypto, no SDK).
 // Each destination keeps the newest N copies. The copies leave out secrets
-// (passwords, two-factor secrets, Square tokens, these credentials), which a
+// (passwords, two-factor secrets, Square tokens, email settings, these credentials), which a
 // restore never uses anyway. The configuration and last result live in app
 // settings under "offsite:*", which are never put in any backup, and the
 // secret key is never sent back to the browser.
@@ -106,7 +106,7 @@ export function failing(cfg: OffsiteConfig, st: OffsiteStatus): { target: Target
 /** Settings left out of offsite copies (restore never uses them). */
 export const isSecretSetting = (k: string) =>
   k === "password_hash" || k === "users" || k === "square_access_token" || k.startsWith("square_token:") ||
-  k.startsWith("kiosk_manager_pin:") || k.startsWith("offsite:");
+  k.startsWith("kiosk_manager_pin:") || k.startsWith("offsite:") || k.startsWith("email:");
 
 /** A backup export without secrets, gzipped. */
 export function sanitizedExport(file: string): Buffer {

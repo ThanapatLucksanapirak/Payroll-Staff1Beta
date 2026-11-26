@@ -4,12 +4,12 @@ import { useHashLocation } from "wouter/use-hash-location";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Loader2, RefreshCw, ServerCrash } from "lucide-react";
 import { api, queryClient, session, signOut } from "@/lib/api";
-import type { SessionUser } from "@/lib/roles";
+import { type SessionUser, isAccountant } from "@/lib/roles";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ConfirmProvider } from "@/components/ConfirmDialog";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
-import { AppDataProvider, applyTheme } from "@/context/AppData";
+import { AppDataProvider, applyTheme, useApp } from "@/context/AppData";
 import { AppShell } from "@/components/AppShell";
 import { LoginPage } from "@/pages/Login";
 import { Button } from "@/components/ui/button";
@@ -24,6 +24,12 @@ const LivePage = lazy(() => import("@/pages/Live").then((m) => ({ default: m.Liv
 const EmployeesPage = lazy(() => import("@/pages/Employees").then((m) => ({ default: m.EmployeesPage })));
 const SchedulePage = lazy(() => import("@/pages/Schedule").then((m) => ({ default: m.SchedulePage })));
 const FixPunchesPage = lazy(() => import("@/pages/FixPunches").then((m) => ({ default: m.FixPunchesPage })));
+
+/** Live, schedule and employees aren't for accountants: they land on Home instead. */
+function StaffOnly({ children }: { children: React.ReactNode }) {
+  const app = useApp();
+  return isAccountant(app.user) ? <HomePage /> : <>{children}</>;
+}
 
 function PageFallback() {
   return (
@@ -92,10 +98,10 @@ function Gate() {
               <Route path="/"><HomePage /></Route>
               <Route path="/timesheets"><Dashboard /></Route>
               <Route path="/timesheet/:id">{(p) => <WorkspacePage key={p.id} id={p.id} />}</Route>
-              <Route path="/live/fix/:start?/:end?">{(p) => <FixPunchesPage start={p.start} end={p.end} />}</Route>
-              <Route path="/live"><LivePage /></Route>
-              <Route path="/employees"><EmployeesPage /></Route>
-              <Route path="/schedule"><SchedulePage /></Route>
+              <Route path="/live/fix/:start?/:end?">{(p) => <StaffOnly><FixPunchesPage start={p.start} end={p.end} /></StaffOnly>}</Route>
+              <Route path="/live"><StaffOnly><LivePage /></StaffOnly></Route>
+              <Route path="/employees"><StaffOnly><EmployeesPage /></StaffOnly></Route>
+              <Route path="/schedule"><StaffOnly><SchedulePage /></StaffOnly></Route>
               <Route path="/reports"><ReportsPage /></Route>
               <Route path="/settings/:section?">{(p) => <SettingsPage section={p.section} />}</Route>
               <Route><HomePage /></Route>

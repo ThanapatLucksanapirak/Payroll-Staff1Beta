@@ -6,10 +6,12 @@ import { CategoriesSettings } from "@/components/settings/CategoriesSettings";
 import { DatabaseSettings } from "@/components/settings/DatabaseSettings";
 import { SecuritySettings } from "@/components/settings/SecuritySettings";
 import { DataSettings } from "@/components/settings/DataSettings";
+import { UpdateSettings } from "@/components/settings/UpdateSettings";
 import { PreferencesSettings } from "@/components/settings/PreferencesSettings";
 import { UsersSettings } from "@/components/settings/UsersSettings";
 import { AuditSettings } from "@/components/settings/AuditSettings";
 import { PaySettings } from "@/components/settings/PaySettings";
+import { EmailSettings } from "@/components/settings/EmailSettings";
 import { useApp } from "@/context/AppData";
 import { SETTINGS_GROUPS, visibleSettingsSections, type SettingsSectionMeta } from "@/pages/settings-sections";
 import { cn } from "@/lib/utils";
@@ -20,11 +22,13 @@ const PANES: Record<string, ComponentType> = {
   categories: CategoriesSettings,
   pay: PaySettings,
   preferences: PreferencesSettings,
+  email: EmailSettings,
   database: DatabaseSettings,
   security: SecuritySettings,
   users: UsersSettings,
   activity: AuditSettings,
   data: DataSettings,
+  updates: UpdateSettings,
 };
 
 function IconTile({ s, size = "md" }: { s: SettingsSectionMeta; size?: "md" | "lg" }) {

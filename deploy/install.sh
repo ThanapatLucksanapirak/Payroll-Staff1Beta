@@ -270,6 +270,7 @@ write_env() {
   env_set HOST "$host"
   env_set PORT "$port"
   env_set DATA_DIR "$PAYROLL_DATA"
+  env_set PAYROLL_MANAGED 1
   [[ -n "$(env_get TRUST_PROXY)" ]] || env_set TRUST_PROXY loopback
   env_set REPO_URL "$REPO_URL"
   env_set BRANCH "$BRANCH"
@@ -312,19 +313,42 @@ build_and_start() {
   systemctl restart payroll.service
   info "Starting…"
   if ! wait_healthy 90; then
-    journalctl -u payroll -n 30 --no-pager >&2 || true
+    show_start_error
     if [[ -L "$PAYROLL_PREVIOUS" ]]; then
       warn "The new version did not start. Going back to the previous one."
       activate_release "$(readlink -f "$PAYROLL_PREVIOUS")"
       # The crashing version used up systemd's start limit; clear it first.
       systemctl reset-failed payroll.service 2>/dev/null || true
       systemctl restart payroll.service
-      wait_healthy 60 && die "Rolled back to the previous version. The new version's error is shown above."
+      wait_healthy 60 && die "Rolled back to the previous version, which is running. The newest version will be tried again when a fix is published."
+    elif try_older_versions "$want"; then
+      return 0
     fi
-    die "The app did not start. The error is shown above (more with: journalctl -u payroll)."
+    die "The app did not start. The reason is shown above (full log: sudo payroll logs)."
   fi
   ok "App is running"
   prune_releases
+}
+
+# Nothing to roll back to (first install, or reinstall after uninstall) and the
+# newest commit doesn't start: try the few commits before it instead.
+try_older_versions() {
+  local bad="$1" c dir
+  for c in $(git_repo rev-list --first-parent --skip=1 --max-count=3 "$bad" 2>/dev/null); do
+    warn "Trying the version before it (${c:0:7})…"
+    if ! dir="$(build_release "$c" | tail -n1)" || [[ ! -f "$dir/dist/index.cjs" ]]; then continue; fi
+    activate_release "$dir"
+    systemctl reset-failed payroll.service 2>/dev/null || true
+    systemctl restart payroll.service
+    if wait_healthy 90; then
+      echo "$bad" >"$PAYROLL_ROOT/.update-skip"   # automatic updates skip the broken one
+      warn "Installed ${c:0:7} instead, because the newest version (${bad:0:7}) did not start. Automatic updates will move to a newer version once one is published."
+      ok "App is running"
+      prune_releases
+      return 0
+    fi
+  done
+  return 1
 }
 
 # ── 8. First administrator (done here, on this machine, before going online) ──

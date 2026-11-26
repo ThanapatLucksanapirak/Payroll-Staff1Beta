@@ -18,6 +18,8 @@ export function SecuritySettings() {
   const confirm = useConfirm();
   const [displayName, setDisplayName] = useState(app.user.displayName);
   const [username, setUsername] = useState(app.user.username);
+  const [email, setEmail] = useState(app.user.notificationEmail ?? "");
+  const emailOk = !email.trim() || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
   const [current, setCurrent] = useState("");
   const [next, setNext] = useState("");
   const [confirmPw, setConfirmPw] = useState("");
@@ -36,11 +38,11 @@ export function SecuritySettings() {
     } finally { setBusy(false); }
   };
 
-  const profileChanged = username.trim() !== app.user.username || displayName.trim() !== app.user.displayName;
+  const profileChanged = username.trim() !== app.user.username || displayName.trim() !== app.user.displayName || email.trim() !== (app.user.notificationEmail ?? "");
   const saveProfile = async () => {
     const u = username.trim();
     try {
-      await api("PUT", "/api/auth/profile", { username: u, displayName: displayName.trim() });
+      await api("PUT", "/api/auth/profile", { username: u, displayName: displayName.trim(), notificationEmail: email.trim() });
       await app.refresh();
       toast({ title: "Saved", description: u !== app.user.username ? `From now on, sign in as "${u}".` : undefined });
     } catch (e) { toast({ title: "Couldn't save", description: errorMessage(e), variant: "destructive" }); }
@@ -54,10 +56,13 @@ export function SecuritySettings() {
   return (
     <div className="space-y-5">
       <Section title="Your account" description={`You sign in as "${app.user.username}" · ${ROLE_LABELS[app.user.role]}`}>
-        <form className="grid gap-3 sm:grid-cols-2 items-start" onSubmit={(e) => { e.preventDefault(); if (profileChanged && username.trim().length >= 2) void saveProfile(); }}>
+        <form className="grid gap-3 sm:grid-cols-2 items-start" onSubmit={(e) => { e.preventDefault(); if (profileChanged && username.trim().length >= 2 && emailOk) void saveProfile(); }}>
           <Field label="Sign-in username" hint="What you type on the sign-in screen."><Input value={username} maxLength={64} autoCapitalize="none" autoCorrect="off" spellCheck={false} autoComplete="username" onChange={(e) => setUsername(e.target.value)} data-testid="input-profile-username" /></Field>
           <Field label="Display name" hint="Shown in the app and on reports. Not used to sign in."><Input value={displayName} maxLength={100} autoComplete="off" onChange={(e) => setDisplayName(e.target.value)} data-testid="input-profile-name" /></Field>
-          <div className="sm:col-span-2"><Button type="submit" variant="outline" disabled={!profileChanged || username.trim().length < 2 || !displayName.trim()} data-testid="button-profile-save">Save</Button></div>
+          <Field label="Notification email" className="sm:col-span-2" hint={!emailOk ? <span className="text-destructive">Enter a valid email address</span> : app.user.role === "accountant" ? "You get an email here when payroll is published." : "Optional. Where the app sends you emails."}>
+            <Input type="email" inputMode="email" autoCapitalize="none" spellCheck={false} maxLength={200} value={email} onChange={(e) => setEmail(e.target.value)} placeholder="name@example.com" data-testid="input-profile-email" />
+          </Field>
+          <div className="sm:col-span-2"><Button type="submit" variant="outline" disabled={!profileChanged || username.trim().length < 2 || !displayName.trim() || !emailOk} data-testid="button-profile-save">Save</Button></div>
         </form>
       </Section>
       <Section title="Change password" description={`For signing in as "${app.user.username}". Changing it signs out every other device.`}>

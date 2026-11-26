@@ -44,13 +44,14 @@ Running the installer again is safe: it repairs or upgrades the install and keep
 | `sudo payroll backup` / `backups` / `restore FILE` | Save, list and restore data backups |
 | `sudo payroll auto-update on\|off` | Turn automatic updates on or off |
 | `sudo payroll tunnel setup\|status\|remove` | Manage the Cloudflare Tunnel |
+| `sudo payroll tunnel hosts --kiosk kiosk.example.com` | Tell the app which address is the kiosk (and `--app` for the admin) |
 | `sudo payroll admin reset-password` | Reset an administrator's password |
 | `sudo payroll admin disable-2fa` | Turn off two-factor sign-in for an account (lost phone) |
 | `payroll logs -f` | Follow the app's log |
 | `sudo payroll doctor` | Check for common problems and how to fix them |
 | `sudo payroll uninstall` | Remove the app (keeps your data unless `--purge`) |
 
-The app can also ask for an update itself (an **Update now** button): it writes `/var/lib/payroll/update-request`, which the `payroll-update.path` service picks up and runs `payroll update` as root. Progress is reported in `/var/lib/payroll/update-status.json`.
+Owners and admins can also update from the app: **Settings → Software update → Update now**. The button writes `/var/lib/payroll/update-request`, which the `payroll-update.path` service picks up and runs `payroll update` as root. Progress is reported in `/var/lib/payroll/update-status.json`.
 
 ## Where things live
 
