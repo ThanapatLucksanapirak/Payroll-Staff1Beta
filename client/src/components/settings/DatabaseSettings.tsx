@@ -51,17 +51,17 @@ export function DatabaseSettings() {
   const runSwitch = async () => {
     const ok = await confirm({
       title: "Switch database?",
-      description: copyData ? "Everything in the current database (timesheets, locations, rates and password) is copied to the new one first. Nothing is deleted from the old one." : "The app will use the new database as-is. Your current password is carried over so you stay signed in.",
+      description: copyData ? "Everything in the current database (timesheets, time-clock punches, locations, rates and password) is copied to the new one first. Nothing is deleted from the old one." : "The app will use the new database as-is. Your current password is carried over so you stay signed in.",
       confirmLabel: "Switch",
     });
     if (!ok) return;
     setBusy("switch");
     try {
-      const r = await api<{ token: string; copied: { settings: number; timesheets: number } | null }>("POST", "/api/database/switch", { config: cfg(), copyData });
+      const r = await api<{ token: string; copied: { settings: number; timesheets: number; punches: number } | null }>("POST", "/api/database/switch", { config: cfg(), copyData });
       session.set(r.token);
       setKey(""); setTest(null);
       await queryClient.invalidateQueries();
-      toast({ title: "Database switched", description: r.copied ? `Copied ${r.copied.timesheets} timesheets and ${r.copied.settings} settings.` : undefined });
+      toast({ title: "Database switched", description: r.copied ? `Copied ${r.copied.timesheets} timesheets, ${r.copied.punches} punches and ${r.copied.settings} settings.` : undefined });
     } catch (e) {
       toast({ title: "Couldn't switch", description: errorMessage(e), variant: "destructive" });
     } finally { setBusy(null); }
