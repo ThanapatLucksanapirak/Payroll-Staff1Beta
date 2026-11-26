@@ -86,6 +86,28 @@ Setting up face match for someone:
 The server turns each reference photo into a face template (128 numbers from
 face-api's face recognition model, on the server, no outside service).
 
+3. **Require face match at the time clock**: the switch in the Face match
+   card, available once they have three reference photos (removing one below
+   three turns it off).
+
+With face match on for someone, every punch they make on a time clock with
+photos on is checked against their reference photos: the closest must be at
+most 0.5 away (face-api's default is 0.6; 0.5 is stricter, so a lookalike
+coworker is less likely to pass, while the same person usually scores 0.25 to
+0.45). The distance is saved on the punch (`meta.faceMatch`).
+
+- **Doesn't match, live**: the punch is refused with "Face not recognized.
+  Look straight at the camera and try again. If it keeps happening, ask a
+  manager to add your punch." It shows on Live under **Face didn't match**,
+  with the photo, until a manager dismisses it. These alerts are kept for 14
+  days (200 at most); their photos follow the punch photo retention.
+- **Doesn't match, saved offline** (sent more than 2 minutes late): kept, so
+  nothing saved on the tablet is lost, but tagged **Face didn't match** on Live.
+- **No face** or the check isn't working: as for everyone (above).
+- **Time clock with photos off**: it can't check, so the punch is kept and
+  tagged **Not checked**. Turn photos on for devices those people use.
+- Turning face match off, or deleting their face data, stops the check at once.
+
 Where face data lives: `DATA_DIR/face-data/<location>/<employee>/` (set
 `FACE_DATA_DIR` to move it). The consent record and templates are in
 `profile.enc`, encrypted (AES-256-GCM, key derived from the server's PIN key);

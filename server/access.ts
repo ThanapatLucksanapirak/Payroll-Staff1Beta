@@ -140,6 +140,10 @@ const POLICY: Rule[] = [
   { method: "GET", path: /^\/sites\/[^/]+\/employees\/[^/]+\/face(\/refs\/[^/]+\/photo)?$/, need: "editor", sites: fromParam },
   { method: "POST", path: /^\/sites\/[^/]+\/employees\/[^/]+\/face\/(consent|refs)$/, need: "admin", perm: "employees.manage", sites: fromParam },
   { method: "DELETE", path: /^\/sites\/[^/]+\/employees\/[^/]+\/face(\/refs\/[^/]+)?$/, need: "admin", perm: "employees.manage", sites: fromParam },
+  { method: "PUT", path: /^\/sites\/[^/]+\/employees\/[^/]+\/face\/required$/, need: "admin", perm: "employees.manage", sites: fromParam },
+  // Refused face-match punches on Live: editors see them and their photos; managers who fix punches dismiss them.
+  { method: "GET", path: /^\/sites\/[^/]+\/face-alerts(\/[^/]+\/photo)?$/, need: "editor", sites: fromParam },
+  { method: "POST", path: /^\/sites\/[^/]+\/face-alerts\/[^/]+\/dismiss$/, need: "editor", perm: "punches.edit", sites: fromParam },
   // Employee portal on/off per location: owners and admins. (/api/portal/* itself is handled
   // before this middleware by server/portal.ts with the employee's own session.)
   { method: "GET", path: /^\/sites\/[^/]+\/portal$/, need: "admin", sites: fromParam },

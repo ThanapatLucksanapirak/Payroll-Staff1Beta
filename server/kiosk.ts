@@ -16,6 +16,7 @@ import { type KioskDeviceOptions, DEVICE_LOGIN_MODES, IDLE_MAX, IDLE_MIN, breakD
 import { getSiteConfig, listNotes } from "./kioskConfig";
 import { decodePhoto, deletePhoto, savePhoto } from "./kioskPhotos";
 import { checkFaceJpeg, loadFaceModel } from "./faceCheck";
+import { matchFace, recordFaceAlert, requiredTemplates } from "./faceData";
 import { registerKioskDeviceFeatureRoutes } from "./kioskFeatures";
 import { getAuthSecret } from "./config";
 import { db } from "./db";
@@ -520,8 +521,30 @@ export function registerKioskRoutes(app: Express) {
     if (options.photo && !queuedOffline && !photoBytes) {
       return res.status(422).json({ error: "The photo didn't come through. Show your face to the camera and try again.", code: "photo" });
     }
+    // Face match on for this person: the face must also be theirs (closest
+    // reference photo at most 0.5 away). A live punch that doesn't match is
+    // refused and shown on Live as an alert, with its photo; one queued offline
+    // is kept but flagged "Face didn't match". A device with photos off can't
+    // check, so its punches for this person are kept and flagged "Not checked".
+    const templates = requiredTemplates(site.id, e.id);
+    if (templates && !options.photo) meta.face = "unchecked";
     if (options.photo && photoBytes) {
-      const face = await checkFaceJpeg(photoBytes);
+      const face = await checkFaceJpeg(photoBytes, { descriptor: !!templates });
+      if (face.ok && templates) {
+        const m = matchFace(face.descriptor, templates);
+        if (m.distance != null) meta.faceMatch = m.distance;
+        if (!m.match) {
+          if (!queuedOffline) {
+            await recordFaceAlert(site.id, { employeeId: e.id, employeeName: e.name, type: body.type, at: new Date(at).toISOString(), distance: m.distance, deviceName: device.name }, photoBytes)
+              .catch((err) => console.error(`[face] could not record a face alert: ${err?.message ?? err}`));
+            return res.status(422).json({
+              error: "Face not recognized. Look straight at the camera and try again. If it keeps happening, ask a manager to add your punch.",
+              code: "photo", reason: "mismatch",
+            });
+          }
+          meta.face = "mismatch";
+        }
+      }
       if (!face.ok) {
         if (!queuedOffline) {
           const error = face.reason === "busy"
