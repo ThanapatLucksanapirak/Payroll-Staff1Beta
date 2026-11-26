@@ -40,6 +40,12 @@ function toBase64(buf: ArrayBuffer): string {
   return btoa(s);
 }
 
+/** The preview's links can't be followed (they would navigate the frame). */
+export function inertLinks(html: string): string {
+  const css = "<style>a{pointer-events:none!important;cursor:default!important}</style>";
+  return /<head[^>]*>/i.test(html) ? html.replace(/<head[^>]*>/i, (m) => `${m}${css}`) : `${css}${html}`;
+}
+
 export function ShareDialog({ id, open, onOpenChange, makePdf }: {
   id: string;
   open: boolean;
@@ -127,8 +133,10 @@ export function ShareDialog({ id, open, onOpenChange, makePdf }: {
               <dt className="text-muted-foreground">Attached</dt>
               <dd className="space-y-0.5">{preview.data.attachments.map((a) => <span key={a.filename} className="flex items-center gap-1.5"><FileText className="h-3.5 w-3.5 shrink-0 text-muted-foreground" /><span className="truncate">{a.filename}</span><span className="shrink-0 text-muted-foreground">{kb(a.size)}</span></span>)}</dd>
             </dl>
-            {/* The email itself, in a sandbox with no scripts. */}
-            <iframe title="Email preview" sandbox="" srcDoc={preview.data.html} className="h-[380px] w-full rounded-xl border border-border/80 bg-white" data-testid="share-preview-frame" />
+            {/* The email itself, in a sandbox with no scripts. Its links are switched off: following one would load
+                the app inside the frame, which the app refuses (no framing), and the preview went blank. */}
+            <iframe title="Email preview" sandbox="" srcDoc={inertLinks(preview.data.html)} className="h-[380px] w-full rounded-xl border border-border/80 bg-white" data-testid="share-preview-frame" />
+            <p className="text-xs text-muted-foreground">Links in the email work once it's sent. They're switched off in this preview.</p>
           </div>
         ) : (
           <div className="space-y-4 text-[13px]">
