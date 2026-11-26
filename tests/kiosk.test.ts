@@ -501,3 +501,13 @@ test("manager PIN guards kiosk settings and unpairing", async () => {
   assert.equal((await A("PUT", `/api/sites/${siteId}/kiosk-manager-pin`, { pin: null })).body.set, false);
   await A("DELETE", `/api/sites/${siteId}/kiosk-devices/${dev.body.device.id}`);
 });
+
+test("kiosk: a refusal the server sent is shown, never queued as offline", async () => {
+  const { KioskError } = await import("../client/src/kiosk/api");
+  assert.equal(new KioskError(0, "x").offline, true, "no answer");
+  assert.equal(new KioskError(502, "Bad gateway").offline, true, "proxy error, no code");
+  assert.equal(new KioskError(503, "x").offline, true, "server down, no code");
+  assert.equal(new KioskError(503, "The face check isn't working…", "photo").offline, false, "face check unavailable: shown");
+  assert.equal(new KioskError(503, "The face check is busy…", "photo").offline, false, "face check busy: shown");
+  assert.equal(new KioskError(422, "Face not detected", "photo").offline, false);
+});

@@ -504,19 +504,23 @@ export function registerKioskRoutes(app: Express) {
     }
     // Photos on: a live punch must come with a photo that shows a face. The
     // server checks the face (server/faceCheck.ts), so it's the same on every
-    // device. Punches queued while offline are still accepted without one (or
-    // without a face, flagged), so a punch saved on the tablet is never lost.
-    if (options.photo && !body.at && !body.photo) {
+    // device. A punch queued while offline is still accepted without one (or
+    // without a face), flagged "No face", so a punch saved on the tablet is never
+    // lost. The server decides what counts as offline: only an `at` more than 2
+    // minutes old. A fresher `at` is treated as live, so sending one can't skip
+    // the check.
+    const queuedOffline = !!body.at && at < now - 2 * 60_000;
+    if (options.photo && !queuedOffline && !body.photo) {
       return res.status(422).json({ error: "Face not detected. This time clock takes a photo with each punch: show your face to the camera and try again.", code: "photo" });
     }
     const photoBytes = options.photo && body.photo ? decodePhoto(body.photo) : null;
-    if (options.photo && !body.at && !photoBytes) {
+    if (options.photo && !queuedOffline && !photoBytes) {
       return res.status(422).json({ error: "The photo didn't come through. Show your face to the camera and try again.", code: "photo" });
     }
     if (options.photo && photoBytes) {
       const face = await checkFaceJpeg(photoBytes);
       if (!face.ok) {
-        if (!body.at) {
+        if (!queuedOffline) {
           const error = face.reason === "busy"
             ? "The face check is busy. Wait a moment and try again."
             : face.reason === "unavailable"
@@ -529,6 +533,7 @@ export function registerKioskRoutes(app: Express) {
         meta.face = "missing"; // a punch saved offline: kept, but flagged for the manager
       }
     }
+    if (options.photo && !photoBytes) meta.face = "missing"; // queued offline with no photo: kept, flagged
     let photoSaved = false;
     // Photos on: every punch records whether it has one ("none" for a queued punch without one).
     if (options.photo) {

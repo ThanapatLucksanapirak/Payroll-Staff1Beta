@@ -25,24 +25,25 @@ When photos are on for a device, the camera starts when someone reaches the
 action screen (a small preview in the corner says "Photo taken with your
 punch") and a 320-pixel JPEG is taken at the moment they tap.
 
-**A punch needs a face in the photo.** Before sending, the kiosk checks the
-picture on the tablet itself (MediaPipe's BlazeFace model, served by this app
-from `/face/`; nothing leaves the device). The punch is stopped, with a message
-on screen, when (the model must be at least 70% sure, on two frames a moment
-apart):
+**A punch needs a face in the photo.** The kiosk takes the photo and your
+server checks it for a face (face-api's SSD MobileNet detector on CPU, in
+`server/faceCheck.ts`; nothing is sent anywhere else). It works the same on
+every phone and tablet, and a modified kiosk can't skip it. The punch is
+refused, with a message on screen, when:
 
 - the camera is blocked (permission denied): "Camera blocked…";
 - there is no camera or it stopped: "Camera not available…";
-- the lens is covered or the picture is black: "Face not detected: the camera looks covered…";
-- nobody is in view: "Face not detected. Look at the camera and try again."
+- the lens is covered or the picture is black (checked on the tablet): "Camera covered or too dark";
+- no face is in the photo (the detector must be at least 60% sure): "Face not detected. Show your face to the camera and try again.";
+- the face check isn't working or is busy on the server: "Ask a manager to add your punch" or "Wait a moment and try again". The kiosk shows these and never saves the punch for later.
 
-The preview in the corner turns red and says "Face not detected" while no face
-is in view. The server also refuses a live punch without a photo. Punches saved
-on the tablet while it was offline are still accepted without one, so they are
-never lost; they show the "no photo" icon on Live. If a tablet's camera breaks, add the punches on Live or turn
-photos off for that device. On a very old tablet that can't run the face model,
-the covered/black check still applies. The face check runs on the tablet; the
-server checks that a photo came with the punch, not what is in it.
+A punch saved on the tablet while it was offline is still accepted, so it is
+never lost. The server only treats a punch as saved offline when its time is
+more than 2 minutes old (and less than 24 hours). If it has no photo, or the
+photo shows no face, it gets a "No face" tag on Live for a manager to check. A
+newer punch is treated as live, so sending a time can't skip the check. If a
+tablet's camera breaks, add the punches on Live or turn photos off for that
+device.
 
 - Photos are files on the server: `DATA_DIR/punch-photos/<location>/<punch>.jpg`
   (set `PUNCH_PHOTO_DIR` to move them).

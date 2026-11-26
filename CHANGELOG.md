@@ -9,7 +9,8 @@ few short bullets written for the people who use the app, not for developers.
 ## 2026-11-26 · Your server checks punch photos for a face (#37)
 - The time clock no longer tries to recognize faces on the phone or tablet. It takes the photo and your server checks it for a face before it accepts the punch, so it works the same on iPhone, iPad and Android, and can't be skipped.
 - No face, no punch: the kiosk says "Face not detected" and asks the person to try again.
-- A punch saved on a tablet while it was offline is still kept, but if its photo shows no face it gets a "No face" tag on Live.
+- A punch saved on a tablet while it was offline is still kept, but if it has no photo or its photo shows no face it gets a "No face" tag on Live.
+- If the server's face check isn't working or is busy, the kiosk says so and doesn't save the punch for later.
 
 ## 2026-11-26 · Time clock lockout countdown (#33)
 - After too many wrong PINs, the time clock counts down to when it unlocks ("Try again in 0:57") instead of a fixed message, also after it goes back to the start screen, and then says "You can try again now."

@@ -213,10 +213,10 @@ test("photos on: live punches need a photo, offline queued punches are still kep
   assert.equal(r.body.code, "photo");
   const live = await A("GET", `/api/sites/${siteId}/timeclock`);
   assert.equal(live.body.employees.find((e: any) => e.id === ana).status, "out", "no punch recorded");
-  const q = await K("POST", "/api/kiosk/punch", { id: randomUUID(), type: "in", pin: "1234", photo: null, at: new Date().toISOString() });
+  const q = await K("POST", "/api/kiosk/punch", { id: randomUUID(), type: "in", pin: "1234", photo: null, at: new Date(Date.now() - 15 * 60_000).toISOString() });
   assert.equal(q.status, 200);
   assert.equal(q.body.punch.photo, "none");
-  const ok = await K("POST", "/api/kiosk/punch", { id: randomUUID(), type: "out", pin: "1234", photo: JPEG });
+  const ok = await K("POST", "/api/kiosk/punch", { id: randomUUID(), type: "out", pin: "1234", photo: JPEG, at: new Date(Date.now() - 10 * 60_000).toISOString() });
   assert.equal(ok.status, 200);
   assert.equal(ok.body.punch.photo, "saved");
   await A("PUT", `/api/sites/${siteId}/kiosk-devices/${deviceId}/options`, { photo: false });
@@ -243,7 +243,7 @@ test("PIN_KEY must be 32 random bytes", async () => {
 test("photos on: a queued punch without a photo is marked 'no photo' for managers", async () => {
   await A("PUT", `/api/sites/${siteId}/kiosk-devices/${deviceId}/options`, { photo: true });
   try {
-    const q = await K("POST", "/api/kiosk/punch", { id: randomUUID(), type: "in", pin: "1234", at: new Date().toISOString() });
+    const q = await K("POST", "/api/kiosk/punch", { id: randomUUID(), type: "in", pin: "1234", at: new Date(Date.now() - 5 * 60_000).toISOString() });
     assert.equal(q.status, 200, JSON.stringify(q.body));
     assert.equal(q.body.punch.photo, "none", "no photo field at all still shows as no photo");
     const out = await K("POST", "/api/kiosk/punch", { id: randomUUID(), type: "out", pin: "1234", photo: JPEG });
