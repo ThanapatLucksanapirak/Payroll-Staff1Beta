@@ -182,3 +182,40 @@ test("a punch during a database switch is refused, and nothing is lost", async (
   assert.equal(again.status, 200, JSON.stringify(again.body));
   assert.ok(await (await dbMod.db()).getPunch(id), "saved in the new database");
 });
+
+test("a hung request stops counting after the limit, so restores aren't blocked until a restart", async () => {
+  const m = await import("../server/maintenance");
+  const old = { ...m.maintenanceLimits };
+  m.maintenanceLimits.requestMs = 150;
+  m.maintenanceLimits.drainMs = 1000;
+  try {
+    const { EventEmitter } = await import("node:events");
+    const res: any = new EventEmitter(); // never finishes or closes
+    m.maintenanceGate(() => false)({ method: "POST", path: "/hung", originalUrl: "/api/hung" } as any, res, () => undefined);
+    assert.equal(m.maintenanceState().inFlight, 1);
+    let ran = false;
+    await m.withMaintenance("restore", async () => { ran = true; });
+    assert.equal(ran, true, "the restore ran once the hung request stopped counting");
+    assert.equal(m.maintenanceState().inFlight, 0);
+    res.emit("finish"); // finishing later doesn't count it twice
+    assert.equal(m.maintenanceState().inFlight, 0);
+  } finally { Object.assign(m.maintenanceLimits, old); }
+});
+
+test("an automatic clock-out already running is waited for; none starts during a restore", async () => {
+  const m = await import("../server/maintenance");
+  let release!: () => void;
+  const order: string[] = [];
+  const tick = m.asChange("automatic clock-out", async () => { order.push("tick start"); await new Promise<void>((r) => { release = r; }); order.push("tick end"); return 1; });
+  await sleep(10);
+  const job = m.withMaintenance("restore", async () => {
+    order.push("restore");
+    assert.equal(await m.asChange("automatic clock-out", async () => { order.push("tick during restore"); return 2; }), null, "skipped while the restore runs");
+  });
+  await sleep(50);
+  assert.deepEqual(order, ["tick start"], "the restore waits for the running clock-out");
+  release();
+  assert.equal(await tick, 1);
+  await job;
+  assert.deepEqual(order, ["tick start", "tick end", "restore"]);
+});

@@ -13,8 +13,12 @@ let active: string | null = null;
 let inFlight = 0;
 const waiters = new Set<() => void>();
 
-/** How long a restore or switch waits for changes already under way before giving up. */
-export const maintenanceLimits = { drainMs: 15_000 };
+/**
+ * drainMs: how long a restore or switch waits for changes already under way before giving up.
+ * requestMs: a change still running after this long stops counting as under way (a hung
+ * request would otherwise block every restore and switch until a restart).
+ */
+export const maintenanceLimits = { drainMs: 15_000, requestMs: 60_000 };
 
 export class MaintenanceError extends Error {
   status = 409;
@@ -70,18 +74,42 @@ export function maintenanceGate(exempt: (path: string) => boolean) {
       // No `code`: the time clock treats a 5xx without one as "no answer" and keeps the punch to send again.
       return res.status(503).json({ error: `A ${active === "switch" ? "database switch" : "backup restore"} is running. Please try again in a moment.`, busy: true });
     }
-    inFlight++;
-    let done = false;
-    const finish = () => {
-      if (done) return;
-      done = true;
-      inFlight--;
-      if (inFlight === 0) notify();
-    };
+    const finish = hold(`${req.method} ${req.originalUrl ?? req.path}`);
     res.once("finish", finish);
     res.once("close", finish);
     next();
   };
+}
+
+/** Count one change as under way. Returns the function that ends it (safe to call twice). */
+function hold(label: string): () => void {
+  inFlight++;
+  let done = false;
+  const finish = () => {
+    if (done) return;
+    done = true;
+    clearTimeout(timer);
+    inFlight--;
+    if (inFlight === 0) notify();
+  };
+  const timer = setTimeout(() => {
+    if (done) return;
+    console.warn(`[maintenance] ${label} is still running after ${Math.round(maintenanceLimits.requestMs / 1000)} s; no longer waiting for it before a restore or database switch`);
+    finish();
+  }, maintenanceLimits.requestMs);
+  timer.unref?.();
+  return finish;
+}
+
+/**
+ * Run background work that changes data (e.g. automatic clock-out) as a change
+ * under way: a restore or switch waits for it. Skipped (returns null) while one
+ * is running.
+ */
+export async function asChange<T>(label: string, fn: () => Promise<T>): Promise<T | null> {
+  if (active) return null;
+  const finish = hold(label);
+  try { return await fn(); } finally { finish(); }
 }
 
 /** For tests. */
