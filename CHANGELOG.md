@@ -6,7 +6,7 @@ Settings → About, next to the matching update.
 Add an entry with every pull request: a `## YYYY-MM-DD · Title (#PR)` heading and a
 few short bullets written for the people who use the app, not for developers.
 
-## 2026-11-26 · New timesheet, time clock and backup fixes (#PRNUM)
+## 2026-11-26 · New timesheet, time clock and backup fixes (#41)
 - New timesheet → Start blank: the window now closes once the timesheet is created, and a quick double tap no longer makes two of them. If creating fails, the reason shows in the window.
 - A timesheet that arrives already finalized (for example, from another app through the API) now gets the same pay snapshot and advance repayments as one you finalize yourself.
 - Time clock: if the database is busy for more than a few seconds (for example, during a big backup), the punch is saved on the tablet and sent automatically a moment later, instead of showing an error.

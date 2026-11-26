@@ -245,6 +245,8 @@ test("a timesheet without an id refuses the whole restore", async () => {
   const mixed = await call("POST", "/api/backup/restore", { ...snap, timesheets: [...snap.timesheets, { filename: "x" }] });
   assert.equal(mixed.status, 400);
   assert.equal((await call("GET", "/api/timesheets")).body.length, n, "nothing changed");
+});
+
 test("a large backup download streams as valid JSON with every row", async () => {
   const { db } = await import("../server/db");
   const store = await db();
