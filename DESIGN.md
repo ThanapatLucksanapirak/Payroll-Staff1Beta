@@ -1,19 +1,39 @@
 # Design
 
-The look every screen of Payroll Admin follows: the admin app, the employee
+The look every screen of Shijiri Payroll follows: the admin app, the employee
 portal, the kiosk and the emails. Read this before changing UI. Tokens live in
 `client/src/index.css` (CSS variables) and `tailwind.config.ts`; the shared
 components in `client/src/components/ui/` are the vocabulary.
 
 ## Direction
 
-**Calm, white, Apple-native. A tool that disappears into payroll.**
+**Shijiri: two halves, one service. A calm tool with one warm, confident brand.**
 
-Owners and managers of small restaurants run payroll here between shifts, often
-on a phone. Staff clock in on a wall tablet with wet hands. The app should feel
-like a well-made macOS / iOS utility: quiet surfaces, one blue accent, real
-numbers set in tabular figures, and status colour only where something needs
-attention. Familiar beats clever. Brand shows in precision, not decoration.
+Owners and managers of Shijiri's restaurants run payroll here between shifts,
+often on a phone. Staff clock in on a wall tablet with wet hands. The product
+should feel like a well-made native utility: quiet warm-neutral surfaces, one
+plum accent, real numbers in tabular figures, and status colour only where
+something needs attention. Familiar beats clever. The brand speaks loudly in
+exactly three places (sign-in, kiosk idle/greeting, the app icon and email
+header) and through precision everywhere else.
+
+### Brand
+
+- **Mark**: a lid lifted off a bowl, set apart so the two halves read as an S
+  (kitchen and floor, clock in and clock out, hours and pay). Single colour only:
+  plum on light, rice or white on ink or plum. `components/Logo.tsx` exports
+  `Logo` (app icon), `Mark` and `Wordmark`; `public/favicon.svg` has a wider gap
+  for 16px. Never rotate it, outline it, or put rays or circles behind it.
+- **Names**: Shijiri Payroll (admin), Shijiri Time Clock (kiosk, Android app),
+  Shijiri for staff (portal, "My shifts"). Never "SHIJIRI" in caps.
+- **Brand colours**: Plum `#7a295e` (primary), Plum deep `#661e4d` (hover),
+  Plum light `#d09fc0` (dark-mode primary, with ink text), Ink `#2e1525` (brand
+  panels), Rice `#f7f1e9` (type on ink). Plum is never an action-status colour:
+  "Clock in" stays green, errors stay red, info stays blue.
+- **Voice**: talk like the shift manager: warm, brief, on your side. Name the
+  thing (hours, pay, shift, tips). Confirm with facts (the time and the name).
+  One idea per line. No exclamation marks, puns or "Oops".
+  Signature line: "Every shift counted. Every hour paid."
 
 Modes: the admin app and portal are **Operate** (scan, decide, act). Emails are
 **Read** (one message, one action). The kiosk is **Operate at arm's length**:
@@ -26,12 +46,12 @@ current selection and focus, nothing else.
 
 | Role | Token | Use |
 |---|---|---|
-| Canvas | `--background` (#fbfbfd) | page behind cards |
+| Canvas | `--background` (#fbfaf9, warm) | page behind cards |
 | Surface | `--card` (white) + `--card-border` | cards, lists, dialogs (`.surface`) |
-| Chrome | `--sidebar` (#f5f5f7) | sidebar, toolbars |
-| Text | `--foreground` (#1d1d1f) | body, figures |
-| Secondary text | `--muted-foreground` (≥4.5:1 on white and on canvas) | captions, meta |
-| Accent | `--primary` (Apple blue) | primary button, active nav, links, focus ring |
+| Chrome | `--sidebar` (#f6f5f3) | sidebar, toolbars; active row `--sidebar-accent` plum tint |
+| Text | `--foreground` (#201d1f) | body, figures |
+| Secondary text | `--muted-foreground` (#6a6266, 5.9:1 on white) | captions, meta |
+| Accent | `--primary` (Shijiri plum; plum-light with ink text in dark) | primary button, active nav, links, focus ring |
 | Status | `success` / `warning` / `danger` / `info` / `neutral`, each with `-soft` | badges, notices, flags |
 
 Rules:
@@ -47,7 +67,12 @@ Rules:
 
 ## Type
 
-One family: the system UI font (`--font-sans`). No display faces.
+Product text uses the system UI font (`--font-sans`). One brand face, **Young
+Serif** (`font-display`, OFL, self-hosted in `client/src/assets/fonts`), sets the
+wordmark, the sign-in heading and voice line, and the kiosk greeting and
+employee names: 22px or larger, weight 400 only, **never numbers** (its figures
+are old-style). Everything else, including the kiosk clock, money and tables,
+stays in the system font.
 
 | Step | Size / weight | Use |
 |---|---|---|
@@ -109,20 +134,29 @@ state change (press, open, appear) and nothing else. No page-load choreography.
 
 ## Surfaces with their own rules
 
-**Kiosk** (`client/src/kiosk/`): white, no theme variables on purpose (it must
-look the same on any tablet). Neutral-950 text, neutral greys, one blue
-(#0071e3 / #0a84ff for focus). Action colours are fixed in `ACTION_STYLE`
-(clock in emerald-700, break amber-400, back sky-700, out neutral-900), each
-AA on its fill. Minimum target 64px; PIN keys ≥ 80px. Secondary text no lighter
-than neutral-600 on white. One idea per screen, words at 20px+.
+**Kiosk** (`client/src/kiosk/`): light, no theme variables on purpose (it must
+look the same on any tablet). Warm `stone-*` greys (text stone-950, body
+stone-700, secondary no lighter than stone-600), the Shijiri mark top-left, plum
+`#7a295e` for the primary key, filled PIN dots and focus. Greetings and names in
+`font-display`; the clock in the system font, light, tabular. Action colours are
+fixed in `ACTION_STYLE` (clock in emerald-700, break amber-400, back sky-700,
+out stone-900), each AA on its fill. Minimum target 64px; PIN keys ≥ 80px. One
+idea per screen, words at 20px+.
 
-**Emails** (`server/email.ts`, `brandedHtml`): table layout, inline styles,
-light only. Page #f2f2f7, card white with #e5e5ea border, radius 18. Text
-#1d1d1f, body #3a3a3c, secondary no lighter than #6e6e73 (≥4.5:1 on both white
-and #f2f2f7). Button #0071e3 with white text (4.5:1+). One button per email.
+**Emails** (`server/email.ts`, `brandedHtml`, colours in its `C` map): table
+layout, inline styles, light only, system font. Page #f4f1ee, card white with
+#e6e2de border, radius 18. Text #201d1f, body #3d3639, secondary #6a6266
+(≥5.2:1 on page and card). Button plum #7a295e with white text (9.1:1). Brand
+tile: plum with a rice serif initial. One button per email.
 
-**Portal** (`client/src/portal/`): same tokens and components as the admin app,
-phone-first.
+**Portal** (`client/src/portal/`): same tokens and components as the admin app
+(`portal.css` imports `index.css`), phone-first.
+
+**Sign-in** (`pages/Login.tsx`): split screen. Ink brand panel on the left with
+the reversed lockup, one oversized tonal mark bleeding off the edge, and the
+voice line in Young Serif; the form on the right, 380px column, 48px fields and
+a full-width plum button. On phones the panel becomes a header band. No photos,
+gradients or carousels.
 
 ## Copy
 

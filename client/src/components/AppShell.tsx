@@ -4,7 +4,7 @@ import { AlertTriangle, Menu, PanelLeftClose, PanelLeftOpen, Search } from "luci
 import { useApp } from "@/context/AppData";
 import { AccountMenu } from "@/components/AccountMenu";
 import { safeStorage } from "@/lib/storage";
-import { Logo } from "@/components/Logo";
+import { Mark } from "@/components/Logo";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -69,12 +69,12 @@ function Shell({ children }: { children: ReactNode }) {
       <div className="flex min-w-0 flex-1 flex-col">
         {/* Mobile top bar */}
         <header className="glass sticky top-0 z-40 flex h-14 items-center gap-1 border-b border-border/70 px-2 md:hidden">
-          <Button variant="ghost" size="icon" aria-label="Open menu" onClick={() => setMenuOpen(true)} data-testid="button-mobile-menu"><Menu className="h-5 w-5" /></Button>
-          <Link href="/" className="flex min-w-0 items-center gap-2" data-testid="link-home-mobile">
-            <Logo className="h-7 w-7 shrink-0" />
+          <Button variant="ghost" size="icon" className="h-10 w-10" aria-label="Open menu" onClick={() => setMenuOpen(true)} data-testid="button-mobile-menu"><Menu className="h-5 w-5" /></Button>
+          <Link href="/" className="flex min-w-0 shrink-0 items-center gap-2 rounded-md p-1 focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/35" aria-label="Home" data-testid="link-home-mobile">
+            <Brand compact />
           </Link>
           <div className="min-w-0 flex-1"><LocationSwitcher compact /></div>
-          <Button variant="ghost" size="icon" aria-label="Search" onClick={() => setPaletteOpen(true)} data-testid="button-mobile-search"><Search className="h-5 w-5" /></Button>
+          <Button variant="ghost" size="icon" className="h-10 w-10" aria-label="Search" onClick={() => setPaletteOpen(true)} data-testid="button-mobile-search"><Search className="h-5 w-5" /></Button>
         </header>
 
         <main id="main" className="flex-1 pb-[calc(4.5rem+env(safe-area-inset-bottom))] md:pb-0" tabIndex={-1}>{children}</main>
@@ -82,12 +82,12 @@ function Shell({ children }: { children: ReactNode }) {
 
       {/* Mobile bottom tab bar */}
       <nav aria-label="Sections" className="glass fixed inset-x-0 bottom-0 z-40 border-t border-border/70 pb-[env(safe-area-inset-bottom)] md:hidden">
-        <ul className="mx-auto flex max-w-lg">
+        <ul className="mx-auto flex max-w-lg px-1">
           {visibleNav(user).filter((n) => n.tab).map((n) => {
             const active = n.isActive(loc);
             return (
               <li key={n.href} className="flex-1">
-                <Link href={n.href} aria-current={active ? "page" : undefined} className={cn("flex h-14 flex-col items-center justify-center gap-0.5 text-[10.5px] font-medium transition-colors", active ? "text-primary" : "text-muted-foreground hover:text-foreground")} data-testid={`tab-${n.label.toLowerCase()}`}>
+                <Link href={n.href} aria-current={active ? "page" : undefined} className={cn("mx-0.5 flex h-14 flex-col items-center justify-center gap-0.5 rounded-lg text-[10.5px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-inset focus-visible:ring-ring/35 active:bg-foreground/[0.05]", active ? "text-primary" : "text-muted-foreground hover:text-foreground")} data-testid={`tab-${n.label.toLowerCase()}`}>
                   <n.icon className="h-[22px] w-[22px]" strokeWidth={active ? 2.2 : 1.8} />
                   {n.label}
                 </Link>
@@ -101,7 +101,7 @@ function Shell({ children }: { children: ReactNode }) {
       <Sheet open={menuOpen} onOpenChange={setMenuOpen}>
         <SheetContent side="left" aria-describedby={undefined}>
           <SheetTitle className="sr-only">Menu</SheetTitle>
-          <SidebarBody collapsed={false} onSearch={() => { setMenuOpen(false); setPaletteOpen(true); }} />
+          <SidebarBody collapsed={false} touch onSearch={() => { setMenuOpen(false); setPaletteOpen(true); }} />
         </SheetContent>
       </Sheet>
 
@@ -110,7 +110,19 @@ function Shell({ children }: { children: ReactNode }) {
   );
 }
 
-function SidebarBody({ collapsed, onToggleCollapsed, onSearch }: { collapsed: boolean; onToggleCollapsed?: () => void; onSearch: () => void }) {
+/** Brand row: plum mark, serif "Shijiri", muted product label. */
+function Brand({ compact = false }: { compact?: boolean }) {
+  return (
+    <>
+      <Mark aria-hidden role="presentation" aria-label={undefined} className="h-6 w-auto shrink-0 text-primary" />
+      <span className="font-display text-[17px] font-normal leading-none tracking-[-0.01em] text-foreground">Shijiri</span>
+      {!compact && <span className="truncate pt-0.5 text-[12.5px] text-muted-foreground">Payroll</span>}
+    </>
+  );
+}
+
+/** `touch` is the phone slide-over: taller rows (40px+ targets), no keyboard hint. */
+function SidebarBody({ collapsed, touch = false, onToggleCollapsed, onSearch }: { collapsed: boolean; touch?: boolean; onToggleCollapsed?: () => void; onSearch: () => void }) {
   const app = useApp();
   const [loc] = useLocation();
 
@@ -121,10 +133,9 @@ function SidebarBody({ collapsed, onToggleCollapsed, onSearch }: { collapsed: bo
   return (
     <div className="flex h-full min-h-0 flex-col">
       {/* Brand + collapse */}
-      <div className={cn("flex h-14 shrink-0 items-center gap-2 px-3", collapsed && "justify-center px-0")}>
-        <Link href="/" className={cn("flex min-w-0 items-center gap-2.5 rounded-md", collapsed && "hidden")} data-testid="link-home">
-          <Logo className="h-7 w-7 shrink-0" />
-          <span className="truncate text-[14px] font-semibold tracking-tight">{app.prefs.appName}</span>
+      <div className={cn("flex h-14 shrink-0 items-center gap-2 px-3", touch && "pr-12", collapsed && "justify-center px-0")}>
+        <Link href="/" className={cn("flex min-w-0 items-center gap-2.5 rounded-md focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/35", collapsed && "hidden")} data-testid="link-home">
+          <Brand />
         </Link>
         {onToggleCollapsed && tip(collapsed ? "Expand sidebar" : "Collapse sidebar",
           <Button variant="ghost" size="icon-sm" className={cn("shrink-0 text-muted-foreground", !collapsed && "ml-auto")} aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"} aria-expanded={!collapsed} onClick={onToggleCollapsed} data-testid="button-sidebar-toggle">
@@ -143,13 +154,13 @@ function SidebarBody({ collapsed, onToggleCollapsed, onSearch }: { collapsed: bo
         {tip("Search", (
           <button
             onClick={onSearch}
-            className={cn("flex h-8 w-full items-center gap-2 rounded-md border border-border/80 bg-card/70 px-2.5 text-[13px] text-muted-foreground shadow-card transition-colors hover:bg-card hover:text-foreground focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/35", collapsed && "justify-center px-0")}
+            className={cn("flex h-8 w-full items-center gap-2 rounded-md border border-border/80 bg-card/70 px-2.5 text-[13px] text-muted-foreground shadow-card transition-colors hover:bg-card hover:text-foreground focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/35", touch && "h-10 text-[15px]", collapsed && "justify-center px-0")}
             aria-label="Search and commands"
             aria-keyshortcuts={isMac ? "Meta+K" : "Control+K"}
             data-testid="button-command"
           >
             <Search className="h-3.5 w-3.5 shrink-0" />
-            {!collapsed && <><span className="flex-1 text-left">Search</span><kbd className="font-sans text-[11px] tracking-wide opacity-80">{isMac ? "⌘K" : "Ctrl K"}</kbd></>}
+            {!collapsed && <><span className="flex-1 text-left">Search</span>{!touch && <kbd className="font-sans text-[11px] tracking-wide opacity-80">{isMac ? "⌘K" : "Ctrl K"}</kbd>}</>}
           </button>
         ))}
       </div>
@@ -169,11 +180,12 @@ function SidebarBody({ collapsed, onToggleCollapsed, onSearch }: { collapsed: bo
                     className={cn(
                       "group flex h-8 items-center gap-2.5 rounded-md px-2.5 text-[13px] font-medium transition-colors duration-150 focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/35",
                       collapsed && "h-9 justify-center px-0",
+                      touch && "h-11 gap-3 text-[15px]",
                       active ? "bg-sidebar-accent text-sidebar-accent-foreground" : "text-foreground/80 hover:bg-foreground/[0.05] hover:text-foreground",
                     )}
                     data-testid={`nav-${n.label.toLowerCase()}`}
                   >
-                    <n.icon className={cn("h-[17px] w-[17px] shrink-0", active ? "text-primary" : "text-muted-foreground group-hover:text-foreground")} />
+                    <n.icon className={cn("h-[17px] w-[17px] shrink-0", touch && "h-5 w-5", active ? "text-primary" : "text-muted-foreground group-hover:text-foreground")} />
                     {!collapsed && <span className="truncate">{n.label}</span>}
                   </Link>
                 ))}
@@ -186,7 +198,7 @@ function SidebarBody({ collapsed, onToggleCollapsed, onSearch }: { collapsed: bo
       {!app.db.connected && (
         <div className={cn("px-3 pb-2", collapsed && "px-2")}>
           {tip("Database problem — open Settings", (
-            <Link href="/settings/database" className={cn("flex items-center gap-2 rounded-md bg-warning-soft px-2.5 py-2 text-xs font-medium text-warning", collapsed && "justify-center px-0")} data-testid="status-db-warning">
+            <Link href="/settings/database" className={cn("flex items-center gap-2 rounded-md bg-warning-soft px-2.5 py-2 text-xs font-medium text-warning transition-colors hover:bg-warning-soft/70 focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/35", collapsed && "justify-center px-0")} data-testid="status-db-warning">
               <AlertTriangle className="h-4 w-4 shrink-0" />{!collapsed && "Database problem"}
             </Link>
           ))}
