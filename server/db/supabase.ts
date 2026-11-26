@@ -11,6 +11,8 @@ const ROW_COLS = [
   "id", "filename", "custom_label", "period_start", "period_end", "employee_count", "total_pay", "result_json", "wages_json",
   "manual_employees_json", "csv_data", "site_id", "meta_json", "created_at", "updated_at",
 ];
+/** Rows asked for per request (Supabase's default reply cap). */
+const PAGE = 1000;
 const SUMMARY_COLS = "id,filename,custom_label,period_start,period_end,employee_count,total_pay,created_at,updated_at";
 
 export class SupabaseStore implements DataStore {
@@ -56,6 +58,25 @@ export class SupabaseStore implements DataStore {
     return json;
   }
 
+  /**
+   * GET every row, one page at a time. Supabase caps each reply (1000 rows by
+   * default, whatever limit= asks for), so a single request can silently cut
+   * a backup short. `query` must include a stable order= (ending in a unique
+   * column). Pages are read until an empty one, so a lower server cap is fine.
+   */
+  private async getAll(table: string, query: string, opts: { max?: number; punches?: boolean } = {}): Promise<any[]> {
+    const max = opts.max ?? Infinity;
+    const out: any[] = [];
+    for (let guard = 0; out.length < max && guard < 10_000; guard++) {
+      const want = Math.min(PAGE, max - out.length);
+      const path = `/${table}?${query}&limit=${want}&offset=${out.length}`;
+      const page = (opts.punches ? await this.punchReq("GET", path) : await this.req("GET", path)) ?? [];
+      if (!Array.isArray(page) || !page.length) break;
+      out.push(...page);
+    }
+    return out;
+  }
+
   private isMissingColumn(err: any) {
     return err?.code === "42703" || err?.code === "PGRST204" || /column .* does not exist|Could not find the .* column/i.test(err?.raw ?? "");
   }
@@ -82,7 +103,7 @@ export class SupabaseStore implements DataStore {
     return Object.fromEntries((rows ?? []).map((r: any) => [r.key, r.value]));
   }
   async allSettings() {
-    return (await this.req("GET", `/app_settings?select=key,value&order=key`)) ?? [];
+    return this.getAll("app_settings", "select=key,value&order=key");
   }
   async setSetting(key: string, value: string) {
     await this.req("POST", `/app_settings?on_conflict=key`, [{ key, value, updated_at: new Date().toISOString() }], {
@@ -97,8 +118,8 @@ export class SupabaseStore implements DataStore {
     const cols = this.extended
       ? `${SUMMARY_COLS},site_id,status:meta_json->>status,deleted_at:meta_json->>deletedAt`
       : `${SUMMARY_COLS},site_id:result_json->__meta->>siteId,status:result_json->__meta->>status,deleted_at:result_json->__meta->>deletedAt`;
-    const rows = await this.req("GET", `/recent_uploads?select=${cols}&order=updated_at.desc.nullslast,created_at.desc&limit=5000`);
-    return (rows ?? []).map(toSummary);
+    const rows = await this.getAll("recent_uploads", `select=${cols}&order=updated_at.desc.nullslast,created_at.desc,id.asc`, { max: 5000 });
+    return rows.map(toSummary);
   }
   private decode(r: any): TimesheetRow {
     if (!this.extended && r?.result_json?.__meta) {
@@ -123,8 +144,8 @@ export class SupabaseStore implements DataStore {
     return rows?.[0] ? this.decode(rows[0]) : null;
   }
   async allTimesheets() {
-    const rows = await this.req("GET", `/recent_uploads?select=*&order=created_at.asc&limit=10000`);
-    return (rows ?? []).map((r: any) => this.decode(r));
+    const rows = await this.getAll("recent_uploads", "select=*&order=created_at.asc,id.asc");
+    return rows.map((r: any) => this.decode(r));
   }
 
   private async write(method: "POST" | "PATCH", path: string, row: any, prefer: string): Promise<any[]> {
@@ -183,8 +204,9 @@ export class SupabaseStore implements DataStore {
     if (q.employeeId) f.push(`employee_id=eq.${encodeURIComponent(q.employeeId)}`);
     if (q.from) f.push(`at=gte.${encodeURIComponent(q.from)}`);
     if (q.to) f.push(`at=lt.${encodeURIComponent(q.to)}`);
-    f.push("order=at.asc,id.asc", `limit=${Math.max(1, Math.min(q.limit ?? 20000, MAX_PUNCH_QUERY + 1))}`);
-    return ((await this.punchReq("GET", `/punches?${f.join("&")}`)) ?? []).map(rowToPunch);
+    f.push("order=at.asc,id.asc");
+    const max = Math.max(1, Math.min(q.limit ?? 20000, MAX_PUNCH_QUERY + 1));
+    return (await this.getAll("punches", f.join("&"), { max, punches: true })).map(rowToPunch);
   }
   async getPunch(id: string) {
     const rows = await this.punchReq("GET", `/punches?select=*&id=eq.${encodeURIComponent(id)}`);
@@ -205,7 +227,7 @@ export class SupabaseStore implements DataStore {
   }
   async allPunches() {
     try {
-      return ((await this.punchReq("GET", `/punches?select=*&order=at.asc&limit=100000`)) ?? []).map(rowToPunch);
+      return (await this.getAll("punches", "select=*&order=at.asc,id.asc", { punches: true })).map(rowToPunch);
     } catch (err: any) {
       if (err instanceof StoreError && err.status === 503 && /punches table/.test(err.message)) return [];
       throw err;
@@ -241,14 +263,14 @@ export class SupabaseStore implements DataStore {
     }
     if (opts.replace) {
       const ids = new Set(rows.map((r: any) => String(r.id)));
-      const extra = ((await this.req("GET", `/recent_uploads?select=id`)) ?? []).map((r: any) => String(r.id)).filter((id: string) => !ids.has(id));
+      const extra = (await this.getAll("recent_uploads", "select=id&order=id")).map((r: any) => String(r.id)).filter((id: string) => !ids.has(id));
       await this.deleteIn("/recent_uploads", "id", extra);
       const keys = new Set(settings.map((s) => s.key));
-      const extraKeys = ((await this.req("GET", `/app_settings?select=key`)) ?? []).map((r: any) => String(r.key)).filter((k: string) => !keys.has(k) && !keep(k));
+      const extraKeys = (await this.getAll("app_settings", "select=key&order=key")).map((r: any) => String(r.key)).filter((k: string) => !keys.has(k) && !keep(k));
       await this.deleteIn("/app_settings", "key", extraKeys);
       if (data.punches) {
         const pids = new Set(data.punches.map((p) => p.id));
-        const extraP = ((await this.punchReq("GET", `/punches?select=id`)) ?? []).map((r: any) => String(r.id)).filter((id: string) => !pids.has(id));
+        const extraP = (await this.getAll("punches", "select=id&order=id", { punches: true })).map((r: any) => String(r.id)).filter((id: string) => !pids.has(id));
         await this.deleteIn("/punches", "id", extraP);
       }
     }

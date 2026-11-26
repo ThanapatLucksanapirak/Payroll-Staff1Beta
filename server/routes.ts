@@ -140,9 +140,16 @@ async function restoreFrom(raw: unknown) {
   }
   const hasPunches = !!raw && typeof raw === "object" && Array.isArray((raw as any).punches);
   const punches: Punch[] = [];
+  let badPunches = 0;
+  let firstProblem = "";
   for (const r of body.punches) {
     const p = punchSchema.safeParse(r);
     if (p.success) punches.push(p.data as Punch);
+    else { badPunches++; firstProblem ||= p.error.issues[0] ? `${p.error.issues[0].path.join(".") || "punch"}: ${p.error.issues[0].message}` : ""; }
+  }
+  // Restore replaces every punch, so a skipped row would be lost for good: refuse instead.
+  if (badPunches) {
+    throw Object.assign(new Error(`Nothing was restored: ${badPunches} of ${body.punches.length} time clock punches in that file can't be read${firstProblem ? ` (first problem: ${firstProblem})` : ""}. Your current data is unchanged.`), { status: 400 });
   }
   await runBackup("pre-restore").catch((err) => {
     throw Object.assign(new Error(`Restore cancelled: could not back up the current data first (${err.message}).`), { status: 500 });

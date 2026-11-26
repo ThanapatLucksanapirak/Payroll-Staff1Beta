@@ -148,3 +148,27 @@ test("restore keeps Square tokens and paired kiosk devices, and refuses incomple
   }
   assert.equal((await call("GET", "/api/timesheets")).body.length, before);
 });
+
+test("a file with unreadable punches is refused and today's punches stay", async () => {
+  const boot = await call("GET", "/api/bootstrap");
+  const siteId = boot.body.sites[0].id;
+  const range = `/api/sites/${siteId}/punches?start=2026-01-01&end=2026-01-10`;
+  const before1 = (await call("GET", range)).body.length;
+  assert.ok(before1 > 0);
+  const snap = (await call("GET", "/api/backup")).body;
+  const onlyBad = await call("POST", "/api/backup/restore", { ...snap, punches: [{ id: "x", type: "teleport" }, { nope: true }] });
+  assert.equal(onlyBad.status, 400);
+  assert.match(onlyBad.body.error, /2 of 2 time clock punches/);
+  const someBad = await call("POST", "/api/backup/restore", { ...snap, punches: [...snap.punches, { id: "x", type: "teleport" }] });
+  assert.equal(someBad.status, 400);
+  assert.equal((await call("GET", range)).body.length, before1, "nothing was deleted");
+});
+
+test("restores in the same second each keep their own pre-restore backup", async () => {
+  const { listBackups } = await import("../server/backup");
+  const count = () => listBackups().filter((b) => b.reason === "pre-restore" && b.kind === "export").length;
+  const n0 = count();
+  const snap = (await call("GET", "/api/backup")).body;
+  for (let i = 0; i < 3; i++) assert.equal((await call("POST", "/api/backup/restore", snap)).status, 200);
+  assert.equal(count(), n0 + 3);
+});

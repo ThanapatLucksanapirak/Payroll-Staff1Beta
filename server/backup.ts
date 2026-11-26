@@ -35,8 +35,15 @@ export function runBackup(reason: "auto" | "manual" | "pre-restore" = "manual"):
   running = (async () => {
     const store = await db();
     fs.mkdirSync(BACKUP_DIR, { recursive: true });
-    const stamp = new Date().toISOString().slice(0, 19).replace(/:/g, "-");
-    const base = path.join(BACKUP_DIR, `payroll-${stamp}-${reason}`);
+    // One name per backup: two backups in the same second (e.g. several restores
+    // in a row) take the next free second instead of overwriting each other.
+    let t = Date.now();
+    let base = "";
+    for (let i = 0; i < 3600; i++, t += 1000) {
+      const stamp = new Date(t).toISOString().slice(0, 19).replace(/:/g, "-");
+      base = path.join(BACKUP_DIR, `payroll-${stamp}-${reason}`);
+      if (!fs.existsSync(`${base}.json.gz`) && !fs.existsSync(`${base}.db`)) break;
+    }
     const payload = exportPayload((await store.allSettings()).filter((s) => !NEVER_BACKED_UP(s.key)), await store.allTimesheets(), await store.allPunches().catch(() => []));
     const tmp = `${base}.json.gz.tmp`;
     fs.writeFileSync(tmp, gzipSync(JSON.stringify(payload)), { mode: 0o600 });
