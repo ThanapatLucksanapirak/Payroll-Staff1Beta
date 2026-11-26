@@ -49,6 +49,8 @@ export interface PdfOptions {
   /** Override pref orientation / size. */
   orientation?: "portrait" | "landscape";
   pageSize?: "letter" | "a4";
+  /** A timesheet that isn't final yet: every page says DRAFT. */
+  draft?: boolean;
 }
 
 export interface Ctx {
@@ -235,10 +237,26 @@ export function finishPages(ctx: Ctx) {
     hairline(ctx, y - 4.5);
     font(ctx, 7, "normal", C.faint);
     const third = (W - 2 * M) / 3;
-    if (o.prefs.pdfFooter) pdf.text(fitText(ctx, pdfText(o.prefs.pdfFooter), third + 15), M, y);
+    if (o.draft) {
+      draftMark(ctx);
+      font(ctx, 7, "bold", C.accent);
+      pdf.text("DRAFT, not final: numbers can still change", M, y);
+      font(ctx, 7, "normal", C.faint);
+    } else if (o.prefs.pdfFooter) pdf.text(fitText(ctx, pdfText(o.prefs.pdfFooter), third + 15), M, y);
     pdf.text(gen, W / 2, y, { align: "center" });
     pdf.text(ctx.pageLabels.get(i) ?? `Page ${i} of ${n}`, W - M, y, { align: "right" });
   }
+}
+
+/** A large, faint "DRAFT" across the page. */
+function draftMark(ctx: Ctx) {
+  const { pdf, W, H } = ctx;
+  const p = pdf as any;
+  const faded = typeof p.GState === "function" && typeof p.setGState === "function";
+  if (faded) { p.saveGraphicsState(); p.setGState(new p.GState({ opacity: 0.07 })); }
+  font(ctx, 110, "bold", faded ? C.ink : [238, 238, 238]);
+  pdf.text("DRAFT", W / 2, H / 2, { align: "center", baseline: "middle", angle: 35 } as any);
+  if (faded) p.restoreGraphicsState();
 }
 
 /** Start a new page that carries the running header. */

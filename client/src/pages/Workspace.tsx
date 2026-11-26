@@ -98,7 +98,7 @@ export function WorkspacePage({ id }: { id: string }) {
   /** The same PDF as Export, as bytes (for emailing). */
   const makePdf = async (kind: ReportKind): Promise<ArrayBuffer> => {
     const pdf = await import("@/lib/pdf");
-    const o = { result, prefs: app.prefs, site, title: doc.label || `Payroll ${periodTitle}`, notes: doc.notes, ytd: ytd.data ? ytdStatementMap(ytd.data.rows, result) : undefined, ytdYear, cash: pay.settings.cash };
+    const o = { result, prefs: app.prefs, site, title: doc.label || `Payroll ${periodTitle}`, notes: doc.notes, ytd: ytd.data ? ytdStatementMap(ytd.data.rows, result) : undefined, ytdYear, cash: pay.settings.cash, draft: doc.status !== "final" };
     const build = kind === "summary" ? pdf.buildSummaryPdf : kind === "statements" ? pdf.buildPayStatementsPdf : kind === "payout" ? pdf.buildPayoutSheetPdf : pdf.buildPayrollPdf;
     return build(o).output("arraybuffer");
   };
@@ -122,14 +122,14 @@ export function WorkspacePage({ id }: { id: string }) {
     try {
       const pdf = await import("@/lib/pdf");
       // YTD on statements: finalized timesheets of the year (other than this one) plus this one.
-      const o = { result, prefs: app.prefs, site, title: doc.label || `Payroll ${periodTitle}`, notes: doc.notes, ytd: ytd.data ? ytdStatementMap(ytd.data.rows, result) : undefined, ytdYear, cash: pay.settings.cash };
+      const o = { result, prefs: app.prefs, site, title: doc.label || `Payroll ${periodTitle}`, notes: doc.notes, ytd: ytd.data ? ytdStatementMap(ytd.data.rows, result) : undefined, ytdYear, cash: pay.settings.cash, draft: doc.status !== "final" };
       if (kind === "summary") pdf.downloadSummaryPdf({ ...o, fileBase: `${base}_summary` });
       else if (kind === "statements") pdf.downloadPayStatementsPdf({ ...o, fileBase: `${base}_pay_statements` });
       else if (kind === "payout") pdf.downloadPayoutSheetPdf({ ...o, fileBase: `${base}_payout` });
       else pdf.downloadPayrollPdf({ ...o, fileBase: `${base}_payroll` });
     } catch (e) { toast({ title: "PDF export failed", description: errorMessage(e), variant: "destructive" }); }
   };
-  const base = safeFilename(`${site.name} ${doc.label || result.periodStart || "payroll"}`);
+  const base = safeFilename(`${site.name} ${doc.label || result.periodStart || "payroll"}${doc.status === "final" ? "" : " DRAFT"}`);
 
   return (
     <div className="mx-auto max-w-[94rem] px-4 pb-16 sm:px-8">
