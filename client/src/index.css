@@ -185,13 +185,14 @@ html { touch-action: manipulation; -webkit-text-size-adjust: 100%; text-size-adj
 html, body { overscroll-behavior: none; }
 /* Feel like an app, not a web page (admin app and staff portal): long-pressing a
    tab, link, button or icon doesn't open iOS's link preview (Open / Add to Reading
-   List / Copy Link) or the image menu, and app chrome (the bars, tab bar and sidebar,
+   List / Copy Link), and app chrome (the bars, tab bar and sidebar,
    marked data-chrome) and
    button labels don't get selected. Text people type and page content, including
    links in it, stay selectable. (Base layer, so
    utilities like select-all still win.) */
 @layer base {
-  a, button, [role="button"], [role="tab"], [role="menuitem"], [role="option"], img, svg, video, [data-chrome] {
+  /* Photos (e.g. kiosk punch photos on Live) keep the long-press menu, so they can be saved. */
+  a, button, [role="button"], [role="tab"], [role="menuitem"], [role="option"], svg, [data-chrome] {
     -webkit-touch-callout: none;
   }
   button, [role="button"], [role="tab"], [role="menuitem"], [role="option"], [data-chrome], label {
