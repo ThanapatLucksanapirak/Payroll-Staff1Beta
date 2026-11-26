@@ -108,6 +108,19 @@ test("alerts: a split shift needs its own clock-in", () => {
 const kshift = (employee: string, start: number, end: number, extra: Partial<Shift> = {}): Shift =>
   ({ id: `ki_${employee}_${start}`, employee, date: D, start, end, breakMinutes: 0, role: "", source: "kiosk", note: "", ...extra });
 
+test("early clock-in rule: a double shift worked straight through keeps its hours", () => {
+  const rule = { enabled: true, minutes: 5, mode: "start" as const };
+  const scheduled = [{ employeeName: "Kenji", date: D, start: 360, end: 840 }, { employeeName: "Kenji", date: D, start: 840, end: 1320 }];
+  const r = applyEarlyClockIn([kshift("Kenji", 361, 870)], scheduled, rule);
+  assert.equal(r.adjusted, 0);
+  assert.equal(r.shifts[0].start, 361, "in at 6:01 for the 6:00 shift: not early for the 2:00 PM one");
+  // Without end times, a start within 4 hours before the clock-in also counts as "already on shift"
+  assert.equal(applyEarlyClockIn([kshift("Kenji", 361, 870)], scheduled.map(({ end: _e, ...x }) => x), rule).shifts[0].start, 361);
+  // A real early arrival for the second shift of a split day is still adjusted
+  const split = [{ employeeName: "Kenji", date: D, start: 360, end: 600 }, { employeeName: "Kenji", date: D, start: 840, end: 1320 }];
+  assert.equal(applyEarlyClockIn([kshift("Kenji", 800, 1320)], split, rule).shifts[0].start, 840);
+});
+
 test("early clock-in rule: off by default, start and cap modes, only scheduled days", () => {
   const shifts = [kshift("Kenji", 500, 1020), kshift("Ana", 535, 1020), kshift("Lee", 480, 1020), kshift("Mia", 480, 1020, { source: "square" })];
   const scheduled = [{ employeeName: "kenji", date: D, start: 540 }, { employeeName: "Ana", date: D, start: 540 }, { employeeName: "Mia", date: D, start: 540 }];

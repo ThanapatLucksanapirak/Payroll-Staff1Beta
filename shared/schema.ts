@@ -243,6 +243,12 @@ export const timesheetDocSchema = z.object({
   manualEmployees: z.array(manualEmployeeSchema),
   /** Tips, holidays, standing items and advance repayments (shared/payExtras.ts). Absent on older timesheets. */
   payExtras: docPayExtrasSchema.optional(),
+  /**
+   * Finalized timesheets only: the totals saved when it was finalized, i.e. what
+   * was actually paid. Filled in by the server when it loads the timesheet, never
+   * taken from the browser.
+   */
+  paidResult: z.any().optional(),
 });
 export type TimesheetDoc = z.infer<typeof timesheetDocSchema>;
 

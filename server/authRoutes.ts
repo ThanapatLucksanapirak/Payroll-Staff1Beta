@@ -50,7 +50,7 @@ export function registerAuthRoutes(app: Express) {
     recordLogin(ip, r.ok);
     if (!r.ok) {
       audit({ userId: null, userName: r.username || username.trim(), ip, action: "auth.login-failed", detail: r.reason === "username-required" ? "username missing" : "wrong username or password" });
-      return res.status(401).json({ error: r.reason === "username-required" ? "Enter your username and password." : "Incorrect username or password." });
+      return res.status(401).json({ error: r.reason === "username-required" ? "Enter your username and password." : "Incorrect username or password. Use your sign-in username, not your display name." });
     }
     // Two-factor sign-in: answer with a ticket for the second step instead of a session.
     const step = await loginStep(req, r.user, remember !== false);
@@ -111,28 +111,28 @@ export function registerAuthRoutes(app: Express) {
     const updated = await setUserPassword({ id: u.id, role: u.role }, u.id, next);
     const { expiresAt } = setSessionCookie(req, res, updated, { days: await sessionDays(), remember: true });
     audit({ ...actorOf(req, res), action: "user.password", target: `user:${u.id}`, detail: "changed own password" });
-    res.json({ user: toPublic(updated), expiresAt, message: "Password updated. Other devices have been signed out." });
+    res.json({ user: toPublic(updated), expiresAt, message: `Password updated. Next time, sign in as "${updated.username}" with the new password. Other devices have been signed out.` });
   }));
 
   app.put("/api/auth/profile", h(async (req, res) => {
     const u = me(res);
-    const body = z.object({ displayName: displayNameSchema.optional(), notificationEmail: notificationEmailSchema.optional(), password: z.string().max(200).optional() }).parse(req.body ?? {});
+    const { password, ...body } = z.object({ displayName: displayNameSchema.optional(), username: usernameSchema.optional(), notificationEmail: notificationEmailSchema.optional(), password: z.string().max(200).optional() }).parse(req.body ?? {});
     // Changing the email needs the password: sign-in codes and payroll notices go there,
     // so a borrowed or stolen session must not be able to redirect them.
     if (body.notificationEmail !== undefined) {
       const fresh = await getUser(u.id, { fresh: true });
       if (fresh && body.notificationEmail !== (fresh.notificationEmail ?? "")) {
-        if (!body.password) return res.status(400).json({ error: "Enter your password to change your notification email." });
+        if (!password) return res.status(400).json({ error: "Enter your password to change your notification email." });
         const ip = req.ip ?? "unknown";
         const blocked = loginThrottle(ip, res);
         if (blocked) return res.status(429).json({ error: blocked });
-        const ok = await verifyHash(body.password, fresh.passwordHash);
+        const ok = await verifyHash(password, fresh.passwordHash);
         recordLogin(ip, ok);
         if (!ok) return res.status(400).json({ error: "Current password is incorrect." });
       }
     }
     const updated = await updateProfile(u.id, body);
-    const what = [body.displayName !== undefined && "display name", body.notificationEmail !== undefined && "notification email"].filter(Boolean).join(", ");
+    const what = [body.username && updated.username !== u.username ? `username ${u.username} → ${updated.username}` : "", body.displayName !== undefined ? "display name" : "", body.notificationEmail !== undefined ? "notification email" : ""].filter(Boolean).join("; ");
     audit({ ...actorOf(req, res, updated), action: "user.update", target: `user:${u.id}`, detail: what || "no changes" });
     res.json(toPublic(updated));
   }));
