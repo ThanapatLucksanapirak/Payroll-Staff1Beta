@@ -147,6 +147,7 @@ html { touch-action: manipulation; -webkit-text-size-adjust: 100%; text-size-adj
   [data-testid="kiosk-done"] > span:nth-last-child(2) { margin-top: 1rem; }
   [data-testid="kiosk-done"] > span:last-child { margin-top: 0.5rem; font-size: 1rem; }
   [data-testid="kiosk-timezone"] { display: none; }
+  [data-testid="kiosk-next-hint"] { font-size: 1rem; line-height: 1.35rem; }
 }
 @media (max-height: 640px) and (max-width: 1023px) {
   [data-testid="kiosk-done"] > .kiosk-pop { width: 3.5rem; height: 3.5rem; }

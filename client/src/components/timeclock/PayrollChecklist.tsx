@@ -26,7 +26,7 @@ export function PayrollChecklistDialog({ site, onClose, period, result, onTab, f
   /** The timesheet's computed payroll: adds flagged days and its own rate check. */
   result?: AnalysisResult | null;
   /** Open a workspace tab (when shown from a timesheet). */
-  onTab?: (tab: Tab) => void;
+  onTab?: (tab: Tab, item?: ChecklistItem) => void;
   footer?: ReactNode;
 }) {
   const app = useApp();
@@ -51,7 +51,7 @@ export function PayrollChecklistDialog({ site, onClose, period, result, onTab, f
   const loading = queryable && q.isLoading;
 
   const go = (i: ChecklistItem) => {
-    if (i.tab && onTab) { onTab(i.tab); onClose(); return; }
+    if (i.tab && onTab) { onTab(i.tab, i); onClose(); return; }
     if (i.href) { navigate(i.href); onClose(); }
   };
   const fixCount = items.filter((i) => i.severity === "fix").length;

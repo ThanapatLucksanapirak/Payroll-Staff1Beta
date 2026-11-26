@@ -68,6 +68,7 @@ export function ConfirmScreen({ c, tz, onDone }: { c: Confirm; tz: string; onDon
           </div>
         </dl>
       )}
+      {c.type === "in" && c.tone !== "queued" && <p className="mt-4 text-lg font-medium opacity-90" data-testid="kiosk-next-hint">Enter your PIN again for a break or to clock out.</p>}
       {c.station && <p className="mt-5 rounded-full bg-white/90 px-5 py-2 text-xl font-semibold text-stone-900">Station: {c.station}</p>}
       {nudge && c.day && <div className="mt-5"><BreakNudge minutes={c.day.minutesWithoutBreak ?? 0} onDark={!light} /></div>}
       {c.note && <p className="mt-5 max-w-xl rounded-2xl bg-white/90 px-5 py-3 text-xl font-medium text-stone-950">{c.note}</p>}
