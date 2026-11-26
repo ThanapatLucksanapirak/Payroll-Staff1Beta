@@ -73,7 +73,7 @@ function PhotoGrid({ siteId, employeeId, tz, showNames, onOpen }: { siteId: stri
         <ul className="grid grid-cols-3 gap-2 sm:grid-cols-4" data-testid="grid-photos">
           {photos.map((p) => {
             const flagged = p.face === "missing" || p.face === "unchecked" || p.face === "mismatch";
-            const label = `${showNames ? `${p.employeeName} · ` : ""}${PUNCH_LABELS[p.type as PunchType] ?? p.type} · ${when(p.at, tz)}`;
+            const label = `${showNames ? `${p.employeeName}${p.removed ? " (removed)" : ""} · ` : ""}${PUNCH_LABELS[p.type as PunchType] ?? p.type} · ${when(p.at, tz)}`;
             return (
               <li key={p.punchId} className="min-w-0">
                 <button
@@ -87,7 +87,7 @@ function PhotoGrid({ siteId, employeeId, tz, showNames, onOpen }: { siteId: stri
                   {p.reference && <span className="absolute right-1 top-1 inline-flex h-5 w-5 items-center justify-center rounded-full bg-primary text-primary-foreground shadow" title="Reference photo"><Check className="h-3 w-3" /></span>}
                 </button>
                 <p className="mt-1 truncate text-[11px] leading-tight text-muted-foreground">
-                  {showNames && <span className="font-medium text-foreground">{firstName(p.employeeName)} · </span>}
+                  {showNames && <span className="font-medium text-foreground">{p.employeeName}{p.removed ? " (removed)" : ""} · </span>}
                   {PUNCH_LABELS[p.type as PunchType] ?? p.type}
                 </p>
                 <p className="truncate text-[11px] leading-tight text-muted-foreground tabular">{when(p.at, tz)}</p>

@@ -196,7 +196,7 @@ export function KioskLocationExtras({ site }: { site: Site }) {
         <p className="flex items-center gap-2 text-[13px] font-semibold"><Camera className="h-4 w-4 text-muted-foreground" />Punch photos <UnsavedDot show={daysDirty} /></p>
         <p className="text-xs text-muted-foreground">Turn photos on per device above. Photos are kept on the server (not in backups) and deleted automatically after:</p>
         <div className="flex flex-wrap items-center gap-2 text-[13px]">
-          <Input type="number" inputMode="numeric" min={1} max={3650} value={days} onChange={(e) => setDays(e.target.value)} className={cn("w-24", !daysValid && "border-destructive")} aria-invalid={!daysValid} data-testid="input-photo-days" />
+          <Input type="number" inputMode="numeric" min={1} max={3650} value={days} onChange={(e) => setDays(e.target.value)} aria-label="Delete punch photos after this many days" className={cn("w-24", !daysValid && "border-destructive")} aria-invalid={!daysValid} data-testid="input-photo-days" />
           days
           {!daysValid && <span className="w-full text-xs text-destructive">Use 1 to 3650 days.</span>}
         </div>
@@ -207,7 +207,7 @@ export function KioskLocationExtras({ site }: { site: Site }) {
           <p className="flex items-center gap-2 text-[13px] font-semibold"><ScanFace className="h-4 w-4 text-muted-foreground" />Face data <UnsavedDot show={faceDaysDirty} /></p>
           <p className="text-xs text-muted-foreground">For face match (Employees → Photos): reference photos and face templates are deleted when someone is removed, and automatically once they haven't punched for:</p>
           <div className="flex flex-wrap items-center gap-2 text-[13px]">
-            <Input type="number" inputMode="numeric" min={FACE_RETENTION_MIN_DAYS} max={FACE_RETENTION_MAX_DAYS} value={faceDays} onChange={(e) => setFaceDays(e.target.value)} className={cn("w-24", !faceDaysValid && "border-destructive")} aria-invalid={!faceDaysValid} data-testid="input-face-days" />
+            <Input type="number" inputMode="numeric" min={FACE_RETENTION_MIN_DAYS} max={FACE_RETENTION_MAX_DAYS} value={faceDays} onChange={(e) => setFaceDays(e.target.value)} aria-label="Delete face data after this many days without a punch" className={cn("w-24", !faceDaysValid && "border-destructive")} aria-invalid={!faceDaysValid} data-testid="input-face-days" />
             days
             {!faceDaysValid && <span className="w-full text-xs text-destructive">Use {FACE_RETENTION_MIN_DAYS} to {FACE_RETENTION_MAX_DAYS} days (3 years at most).</span>}
           </div>

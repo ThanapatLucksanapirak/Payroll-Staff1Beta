@@ -299,6 +299,7 @@ export async function galleryPage(siteId: string, opts: { employeeId?: string; b
     if (!s) { s = new Set(readProfile(siteId, employeeId).refs.map((r) => r.punchId ?? "")); refsByPerson.set(employeeId, s); }
     return s;
   };
+  const current = new Set((await listEmployees(siteId)).map((e) => e.id));
   const photos: GalleryPhoto[] = [];
   while (end > horizon && photos.length < limit) {
     const start = Math.max(horizon, end - windowDays * DAY);
@@ -309,7 +310,7 @@ export async function galleryPage(siteId: string, opts: { employeeId?: string; b
     for (const p of withPhoto) {
       const file = photoPath(siteId, p.id);
       if (!file || !fs.existsSync(file)) continue;
-      photos.push({ punchId: p.id, employeeId: p.employeeId, employeeName: p.employeeName, type: p.type, at: p.at, face: p.meta?.face ?? null, reference: refPunches(p.employeeId).has(p.id) });
+      photos.push({ punchId: p.id, employeeId: p.employeeId, employeeName: p.employeeName, type: p.type, at: p.at, face: p.meta?.face ?? null, reference: refPunches(p.employeeId).has(p.id), ...(current.has(p.employeeId) ? {} : { removed: true }) });
     }
     end = start;
     // A page always ends at a window boundary, so nothing is skipped or shown twice.

@@ -83,6 +83,8 @@ export interface GalleryPhoto {
   face: string | null;
   /** True when this photo is one of the person's reference photos. */
   reference: boolean;
+  /** True when the employee has since been removed from the list. */
+  removed?: boolean;
 }
 
 /**

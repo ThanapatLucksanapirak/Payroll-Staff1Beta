@@ -6,11 +6,12 @@ Settings → About, next to the matching update.
 Add an entry with every pull request: a `## YYYY-MM-DD · Title (#PR)` heading and a
 few short bullets written for the people who use the app, not for developers.
 
-## 2026-11-27 · Face match at the time clock (#PR)
+## 2026-11-27 · Face match at the time clock (#45)
 - Employees → camera button → Face match: once someone has three reference photos, turn on **Require face match at the time clock** for just that person.
 - With it on, a punch is refused if the face doesn't match their reference photos. They're asked to try again or ask a manager, and Live shows it under "Face didn't match" with the photo, until you dismiss it.
 - A punch saved on the tablet while it was offline is never lost: if the face didn't match, it's kept and tagged "Face didn't match" on Live so you can check it.
 - On a time clock with photos off, their punches can't be checked, so they're tagged "Not checked".
+- Photos: a removed employee's photos show their full name with "(removed)". Removing someone now says that their punch photos stay until the photo retention period, as pay records.
 
 ## 2026-11-26 · Photo gallery and face match set-up (#44)
 - Employees → Photos: see every punch photo at the location, newest first, or one person's photos. The camera button next to each employee opens their photos.

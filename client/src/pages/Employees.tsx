@@ -92,7 +92,7 @@ export function EmployeesPage() {
   };
 
   const remove = async (e: EmployeeRow) => {
-    if (!(await confirm({ title: `Remove ${e.name}?`, description: "They can no longer use the time clock. Their past punches and timesheets are kept. To pause someone instead, turn off Active.", confirmLabel: "Remove", destructive: true }))) return;
+    if (!(await confirm({ title: `Remove ${e.name}?`, description: "They can no longer use the time clock. Their face data (if any) is deleted now. Their past punches, timesheets and punch photos are kept, because they're pay records; punch photos are deleted at the end of the photo retention period (Settings → Locations & rules). To pause someone instead, turn off Active.", confirmLabel: "Remove", destructive: true }))) return;
     try {
       await api("DELETE", `/api/sites/${site.id}/employees/${e.id}`);
       await queryClient.invalidateQueries({ queryKey: key });

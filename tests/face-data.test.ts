@@ -261,6 +261,10 @@ test("retention: removed employees and people who stopped punching", async () =>
   assert.equal((await A("POST", `${url(ben)}/refs`, { punchId: benPunch })).status, 200);
   assert.equal((await A("DELETE", `/api/sites/${siteId}/employees/${ben}`)).status, 200);
   assert.equal(fs.existsSync(path.join(dir, "face-data", siteId, ben)), false, "deleted with the employee");
+  const kept = (await A("GET", `/api/sites/${siteId}/photos`)).body.photos.find((p: any) => p.punchId === benPunch);
+  assert.ok(kept, "his punch photo is kept (a pay record) until photo retention");
+  assert.equal(kept.employeeName, "Ben Lee");
+  assert.equal(kept.removed, true);
 
   // Ana: consent only. Nothing expires today; a year and a bit from now she hasn't punched, so it goes.
   await A("POST", `${url(ana)}/consent`, { confirm: true });
