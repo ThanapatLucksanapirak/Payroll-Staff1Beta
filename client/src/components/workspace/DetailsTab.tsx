@@ -65,7 +65,7 @@ export function DetailsTab(p: WsProps) {
               : <li>Full day at {doc.rules.fullDayMinHours} h, half day at {doc.rules.halfDayMinHours} h</li>}
             {Object.keys(doc.rules.weekdayOverrides).length > 0 && <li>{Object.keys(doc.rules.weekdayOverrides).length} weekday override(s)</li>}
             <li>Split shifts {doc.rules.mergeSameDayShifts ? "combined into one day" : "counted separately"}</li>
-            <li>Flagged days pay {doc.rules.flaggedDayPay === "none" ? "nothing" : `the ${doc.rules.flaggedDayPay}-day rate`}</li>
+            <li>Flagged days on a day rate pay {doc.rules.flaggedDayPay === "none" ? "nothing until you set them as a full or half day" : `the ${doc.rules.flaggedDayPay}-day rate`}. Hourly staff are paid for all hours worked, including flagged days.</li>
             {doc.rules.overtimeEnabled && <li>Overtime after {doc.rules.overtimeWeeklyHours} h/week at {doc.rules.overtimeMultiplier}×</li>}
             {doc.rules.roundingMinutes > 0 && <li>Time rounded to {doc.rules.roundingMinutes} min</li>}
           </ul>

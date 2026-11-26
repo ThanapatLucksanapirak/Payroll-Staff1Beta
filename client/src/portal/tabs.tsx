@@ -91,6 +91,11 @@ export function HoursTab({ me }: { me: Me }) {
   const [offset, setOffset] = useState(0);
   const q = useLoad<HoursData>(`/api/portal/hours?offset=${offset}`);
   const d = q.data;
+  // No time-clock days, but a finalized timesheet covers this period (hours from Square or a
+  // spreadsheet): show those hours, so the page doesn't say zero next to a paid statement.
+  const sheets = d?.timesheets ?? [];
+  const fromSheets = !!d && !d.days.length && sheets.length > 0;
+  const sheetMinutes = sheets.reduce((a, t) => a + t.minutes, 0);
   return (
     <section data-testid="portal-hours">
       <Title sub={d ? range(d.period.start, d.period.end) : " "}>My hours</Title>
@@ -99,8 +104,8 @@ export function HoursTab({ me }: { me: Me }) {
       {q.error && !d ? <ErrorBox text={q.error} retry={q.reload} /> : !d || (q.loading && d.offset !== offset) ? <Loading /> : (
         <>
           <div className="mb-6 rounded-2xl border border-card-border bg-card px-5 py-5 shadow-card">
-            <p className="text-[15px] font-medium text-muted-foreground">{offset === 0 ? "Total so far" : "Total"}</p>
-            <p className="tabular mt-1.5 text-[40px] font-bold leading-none tracking-[-0.022em]" data-testid="portal-hours-total">{hm(d.totalMinutes)}</p>
+            <p className="text-[15px] font-medium text-muted-foreground">{fromSheets ? "Total on your pay statement" : offset === 0 ? "Total so far" : "Total"}</p>
+            <p className="tabular mt-1.5 text-[40px] font-bold leading-none tracking-[-0.022em]" data-testid="portal-hours-total">{hm(fromSheets ? sheetMinutes : d.totalMinutes)}</p>
             {d.status !== "out" && d.since && offset === 0 && (
               <p className="tabular mt-3 inline-flex items-center gap-1.5 text-[16px] font-medium text-primary">
                 {d.status === "break" ? <Coffee className="h-4 w-4" /> : <Timer className="h-4 w-4" />}
@@ -108,7 +113,19 @@ export function HoursTab({ me }: { me: Me }) {
               </p>
             )}
           </div>
-          {!d.days.length ? <Empty text={offset === 0 ? "No hours yet this period. Clock in at the time clock and your days show up here." : "No hours in this period."} /> : (
+          {fromSheets ? (
+            <ul className={LIST} data-testid="portal-hours-timesheets">
+              {sheets.map((t) => (
+                <li key={t.id} className="flex items-baseline justify-between gap-3 px-5 py-4">
+                  <span className="min-w-0">
+                    <span className="block text-[18px] font-semibold">{range(t.periodStart, t.periodEnd)}</span>
+                    <span className="block text-[14px] text-muted-foreground">From your pay statement</span>
+                  </span>
+                  <span className="tabular shrink-0 text-[20px] font-semibold">{hm(t.minutes)}</span>
+                </li>
+              ))}
+            </ul>
+          ) : !d.days.length ? <Empty text={offset === 0 ? "No time clock hours yet this period. Clock in at the time clock and your days show up here." : "No time clock hours in this period. If your hours were sent in another way, they're on your pay statement under My pay."} /> : (
             <ul className={LIST}>
               {d.days.map((day) => {
                 const st = DAY_STATUS[day.status];
@@ -135,7 +152,7 @@ export function HoursTab({ me }: { me: Me }) {
               })}
             </ul>
           )}
-          <p className="mt-4 px-1 text-[14px] leading-relaxed text-muted-foreground">Hours from the time clock. Your pay statement has the final numbers. Something wrong? Tell your manager.</p>
+          <p className="mt-4 px-1 text-[14px] leading-relaxed text-muted-foreground">{fromSheets ? "These hours come from your finalized pay statement. Day-by-day times show here only for shifts on the time clock." : "Hours from the time clock. Your pay statement has the final numbers."} Something wrong? Tell your manager.</p>
         </>
       )}
     </section>
@@ -182,7 +199,7 @@ export function PayTab({ me }: { me: Me }) {
                 </span>
                 <span className="shrink-0 text-right">
                   <span className="tabular block text-[18px] font-semibold">{money(s.totalPay, me)}</span>
-                  <span className="block text-[13px] text-muted-foreground">{s.isNetPay ? "Take-home" : "Before tax"}</span>
+                  <span className="block text-[13px] text-muted-foreground">{s.minutes ? `${hm(s.minutes)} · ` : ""}{s.isNetPay ? "Take-home" : "Before tax"}</span>
                 </span>
                 {busy === s.id ? <Loader2 className="h-5 w-5 shrink-0 animate-spin text-muted-foreground" aria-label="Making PDF" /> : <Download className="h-5 w-5 shrink-0 text-primary" aria-hidden />}
               </button>

@@ -72,10 +72,21 @@ export function punchChecklist(days: WorkDay[], period: { start: string; end: st
 /** Lines from a computed timesheet: flagged days, missing rates and other engine warnings. */
 export function timesheetChecklist(result: Pick<AnalysisResult, "employees" | "warnings">): ChecklistItem[] {
   const items: ChecklistItem[] = [];
-  const flagged = result.employees.filter((e) => !e.excluded).flatMap((e) => e.days.filter((d) => d.dayType === "flagged" && !d.cancelled).map(() => e.name));
-  if (flagged.length) {
-    const names = uniq(flagged);
-    items.push({ id: "flagged", severity: "review", title: `${plural(flagged.length, "flagged day")}`, detail: `${listNames(names)}. Decide how to pay them on the Payroll tab.`, count: flagged.length, href: null, tab: "payroll", linkLabel: "Open Payroll", names });
+  // Flagged days change pay only for day-rate staff (the "Pay for flagged days" rule). Hourly staff are
+  // paid for the hours worked either way, so for them it's a check of the times, not a pay decision.
+  const flaggedOf = (hourly: boolean) => result.employees
+    .filter((e) => !e.excluded && (e.payBasis === "hourly") === hourly)
+    .flatMap((e) => e.days.filter((d) => d.dayType === "flagged" && !d.cancelled).map(() => e.name));
+  const flagged = flaggedOf(false);
+  const flaggedHourly = flaggedOf(true);
+  const total = flagged.length + flaggedHourly.length;
+  if (total) {
+    const names = uniq([...flagged, ...flaggedHourly]);
+    const parts = [
+      flagged.length ? `Day rate: ${listNames(uniq(flagged))}. Open a day on the Payroll tab to count it as a full or half day.` : "",
+      flaggedHourly.length ? `${flagged.length ? "Hourly: " : ""}${listNames(uniq(flaggedHourly))}. Hourly staff are paid for the hours worked, so just check the times look right.` : "",
+    ].filter(Boolean);
+    items.push({ id: "flagged", severity: "review", title: `${plural(total, "flagged day")}`, detail: parts.join(" "), count: total, href: null, tab: "payroll", linkLabel: "Open Payroll", names });
   }
   const noRate = uniq(result.warnings.filter((w) => w.employee && /no pay rate/i.test(w.message)).map((w) => w.employee!));
   if (noRate.length) {

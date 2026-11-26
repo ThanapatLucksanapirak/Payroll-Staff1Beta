@@ -1,16 +1,28 @@
-import type { DayAdjustment, EmployeeConfig, ManualEmployee, Shift, Site, TimesheetDoc } from "@shared/schema";
+import type { DayAdjustment, EmployeeConfig, PayBasis, ManualEmployee, Shift, Site, TimesheetDoc } from "@shared/schema";
 import { employeeKey, shiftEmployeeNames } from "@shared/engine";
 
-export function blankEmployee(name: string, site: Site): EmployeeConfig {
+export function blankEmployee(name: string, site: Site, payBasis: PayBasis = "hourly"): EmployeeConfig {
   return {
-    name, categoryId: "custom", payBasis: "day_rate", fullDayRate: 0, halfDayRate: 0, hourlyRate: 0,
+    name, categoryId: "custom", payBasis, fullDayRate: 0, halfDayRate: 0, hourlyRate: 0,
     isNetPay: site.rules.defaultNetPay, adjustments: {}, bonuses: [], deductions: [], excluded: false, note: "",
     paymentMethod: "default", splitCashAmount: 0,
   };
 }
 
+/**
+ * The pay basis for someone new: what most people already set up here use (saved rates or
+ * this timesheet), else Hourly, since every imported shift has clock times. A Day rate with
+ * blank boxes would show $0.00 until the owner switched each person over.
+ */
+export function defaultPayBasis(known: EmployeeConfig[]): PayBasis {
+  const set = known.filter((e) => e.categoryId === "custom" && (e.fullDayRate > 0 || e.halfDayRate > 0 || e.hourlyRate > 0));
+  const day = set.filter((e) => e.payBasis === "day_rate").length;
+  return day > set.length - day ? "day_rate" : "hourly";
+}
+
 /** Make sure every name that appears in shifts has a pay config; keep existing ones. */
 export function syncEmployees(shifts: Shift[], current: EmployeeConfig[], site: Site, profile: EmployeeConfig[] = []): EmployeeConfig[] {
+  const basis = defaultPayBasis([...profile, ...current]);
   const have = new Map(current.map((e) => [employeeKey(e.name), e]));
   const prof = new Map(profile.map((e) => [employeeKey(e.name), e]));
   const out = [...current];
@@ -18,7 +30,7 @@ export function syncEmployees(shifts: Shift[], current: EmployeeConfig[], site: 
     const k = employeeKey(name);
     if (have.has(k)) continue;
     const p = prof.get(k);
-    const e = p ? { ...blankEmployee(name, site), ...p, name, adjustments: {}, bonuses: [], deductions: [] } : blankEmployee(name, site);
+    const e = p ? { ...blankEmployee(name, site), ...p, name, adjustments: {}, bonuses: [], deductions: [] } : blankEmployee(name, site, basis);
     out.push(e);
     have.set(k, e);
   }
@@ -98,7 +110,7 @@ export function updateEmployee(doc: Doc, name: string, site: Site, fn: (e: Emplo
   const k = employeeKey(name);
   const i = doc.employees.findIndex((e) => employeeKey(e.name) === k);
   const employees = [...doc.employees];
-  if (i < 0) employees.push(fn(blankEmployee(name, site)));
+  if (i < 0) employees.push(fn(blankEmployee(name, site, defaultPayBasis(doc.employees))));
   else employees[i] = fn(employees[i]);
   return { ...doc, employees };
 }

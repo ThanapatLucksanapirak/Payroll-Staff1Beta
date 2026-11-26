@@ -309,6 +309,21 @@ test("pay statements: finalized only, my own data only", async () => {
   for (const id of [benOnly, draft, other, "../timesheets", "nope"]) {
     assert.equal((await P(ana, "GET", `/api/portal/statements/${encodeURIComponent(id)}`)).status, 404, `statement ${id}`);
   }
+  assert.equal(list.body[1].minutes, 22 * 60, "hours on the statement row (2 days of 10:00–21:00)");
+
+  // Hours that came from a spreadsheet (no time-clock punches) still show under My hours for the period.
+  const today = todayISO(TZ);
+  const now = await make("This period", ["Ana Ruiz", "Ben Lee"], [today], true);
+  const hours = await P(ana, "GET", "/api/portal/hours");
+  assert.equal(hours.status, 200);
+  const mine = hours.body.timesheets.find((t: any) => t.id === now);
+  assert.ok(mine, JSON.stringify(hours.body.timesheets));
+  assert.equal(mine.minutes, 11 * 60);
+  assert.ok(!hours.body.timesheets.some((t: any) => t.id === both), "only timesheets overlapping this period");
+  assert.ok(!JSON.stringify(hours.body.timesheets).includes("Ben"), "nothing about Ben");
+  assert.equal((await A("POST", `/api/timesheets/${now}/reopen`, { reason: "tidy" })).status, 200);
+  assert.ok(!(await P(ana, "GET", "/api/portal/hours")).body.timesheets.some((t: any) => t.id === now), "drafts don't count");
+
   // Reopened (no longer final) timesheets disappear
   assert.equal((await A("POST", `/api/timesheets/${both2}/reopen`, { reason: "fix it" })).status, 200);
   assert.equal((await P(ana, "GET", `/api/portal/statements/${both2}`)).status, 404);

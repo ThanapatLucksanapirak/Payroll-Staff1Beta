@@ -73,8 +73,10 @@ export interface HoursData {
   since: string | null;
   totalMinutes: number;
   days: PortalDay[];
+  /** Finalized timesheets overlapping this period, with this person's hours on them (for hours not from the time clock). */
+  timesheets?: { id: string; periodStart: string; periodEnd: string; minutes: number }[];
 }
-export interface StatementItem { id: string; label: string; periodStart: string; periodEnd: string; totalPay: number; isNetPay: boolean }
+export interface StatementItem { id: string; label: string; periodStart: string; periodEnd: string; totalPay: number; isNetPay: boolean; minutes?: number }
 export interface StatementData {
   title: string;
   result: AnalysisResult;
