@@ -165,6 +165,7 @@ function UserDialog({ user, open, onClose, onSaved, lastOwner }: { user: Session
   const [siteIds, setSiteIds] = useState<string[]>([]);
   const [active, setActive] = useState(true);
   const [email, setEmail] = useState("");
+  const [myPassword, setMyPassword] = useState("");
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
@@ -176,12 +177,15 @@ function UserDialog({ user, open, onClose, onSaved, lastOwner }: { user: Session
     setSiteIds(user?.siteIds ?? []);
     setActive(user?.active ?? true);
     setEmail(user?.notificationEmail ?? "");
+    setMyPassword("");
   }, [open, user]);
 
   const roles = (Object.keys(ROLE_LABELS) as Role[]).filter((r) => r !== "owner" || me.role === "owner");
   const roleLocked = self || lastOwner;
   const limited = role === "manager" || role === "viewer" || role === "accountant";
   const emailOk = !email.trim() || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
+  // Sign-in codes can go to this address, so changing it asks for your own password.
+  const emailChanged = !isNew && email.trim() !== (user?.notificationEmail ?? "");
   const toggleSite = (id: string, on: boolean) => setSiteIds((cur) => (on ? [...new Set([...cur, id])] : cur.filter((x) => x !== id)));
 
   const save = async () => {
@@ -189,7 +193,10 @@ function UserDialog({ user, open, onClose, onSaved, lastOwner }: { user: Session
     try {
       const body = { username: username.trim(), displayName: displayName.trim(), role, siteIds: limited ? siteIds : [], active, notificationEmail: email.trim() };
       if (isNew) await api("POST", "/api/users", { ...body, password });
-      else await api("PATCH", `/api/users/${user!.id}`, roleLocked ? { username: body.username, displayName: body.displayName, siteIds: body.siteIds, notificationEmail: body.notificationEmail } : body);
+      else {
+        const patch = roleLocked ? { username: body.username, displayName: body.displayName, siteIds: body.siteIds, notificationEmail: body.notificationEmail } : body;
+        await api("PATCH", `/api/users/${user!.id}`, { ...patch, ...(emailChanged ? { actorPassword: myPassword } : {}) });
+      }
       if (self) await app.refresh();
       onSaved();
       onClose();
@@ -200,7 +207,7 @@ function UserDialog({ user, open, onClose, onSaved, lastOwner }: { user: Session
     } finally { setBusy(false); }
   };
 
-  const valid = username.trim().length >= 2 && (!isNew || password.length >= MIN) && emailOk;
+  const valid = username.trim().length >= 2 && (!isNew || password.length >= MIN) && emailOk && (!emailChanged || !!myPassword);
 
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
@@ -236,6 +243,11 @@ function UserDialog({ user, open, onClose, onSaved, lastOwner }: { user: Session
           <Field label="Notification email" hint={!emailOk ? "Enter a valid email address, like name@example.com." : role === "accountant" ? "They get an email here when you publish payroll. Leave empty for no emails." : "Optional. Where the app sends this person emails."}>
             <Input type="email" inputMode="email" autoCapitalize="none" spellCheck={false} maxLength={200} value={email} onChange={(e) => setEmail(e.target.value)} placeholder="name@example.com" data-testid="input-user-email" />
           </Field>
+          {emailChanged && (
+            <Field label="Your password" hint="Needed to change a notification email, because sign-in codes can go there.">
+              <Input type="password" autoComplete="current-password" value={myPassword} onChange={(e) => setMyPassword(e.target.value)} data-testid="input-user-actor-password" />
+            </Field>
+          )}
           {!self && (
             <label className="flex items-center justify-between gap-3 text-sm">
               <span>Active <span className="block text-xs text-muted-foreground">Inactive users can't sign in.</span></span>

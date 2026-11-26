@@ -277,7 +277,10 @@ test("people set their own notification email; admins set others'", async () => 
   assert.equal(ok.body.displayName, "acct", "display name unchanged");
   const list = await call("GET", "/api/users", undefined, "owner");
   const acct = list.body.find((u: any) => u.username === "acct");
-  const patch = await call("PATCH", `/api/users/${acct.id}`, { notificationEmail: "" }, "owner");
+  // Changing someone's email needs your own password too.
+  assert.equal((await call("PATCH", `/api/users/${acct.id}`, { notificationEmail: "" }, "owner")).status, 400);
+  assert.equal((await call("PATCH", `/api/users/${acct.id}`, { notificationEmail: "", actorPassword: "wrong" }, "owner")).status, 400);
+  const patch = await call("PATCH", `/api/users/${acct.id}`, { notificationEmail: "", actorPassword: "owner password" }, "owner");
   assert.equal(patch.body.notificationEmail, "");
   // The accountant can't make themselves an editor.
   assert.equal((await call("PATCH", `/api/users/${acct.id}`, { role: "admin" }, "acct")).status, 403);
@@ -443,6 +446,10 @@ test("only an owner can change the email of someone using email codes", async ()
   await login("admin2", "admin2", "admin2 password");
   const list = await call("GET", "/api/users", undefined, "owner");
   const acct = list.body.find((u: any) => u.username === "acct");
-  assert.equal((await call("PATCH", `/api/users/${acct.id}`, { notificationEmail: "evil@example.com" }, "admin2")).status, 403);
-  assert.equal((await call("PATCH", `/api/users/${acct.id}`, { notificationEmail: "books@example.com" }, "owner")).status, 200);
+  assert.equal((await call("PATCH", `/api/users/${acct.id}`, { notificationEmail: "evil@example.com" }, "admin2")).status, 400, "a session alone can't");
+  assert.equal((await call("PATCH", `/api/users/${acct.id}`, { notificationEmail: "evil@example.com", actorPassword: "admin2 password" }, "admin2")).status, 403);
+  assert.equal((await call("PATCH", `/api/users/${acct.id}`, { notificationEmail: "books@example.com" }, "owner")).status, 400, "not even the owner's session alone");
+  assert.equal((await call("PATCH", `/api/users/${acct.id}`, { notificationEmail: "books@example.com", actorPassword: "owner password" }, "owner")).status, 200);
+  // Other changes still need no password.
+  assert.equal((await call("PATCH", `/api/users/${acct.id}`, { displayName: "Dana R" }, "owner")).status, 200);
 });

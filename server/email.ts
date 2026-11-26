@@ -22,11 +22,14 @@ export const EMAIL_CONFIG_KEY = "email:config";
 export const EMAIL_STATUS_KEY = "email:status";
 
 export const SECURITY = ["starttls", "ssl", "none"] as const;
+/** smtp: a server, username and password. google: send through Gmail after signing in with Google (no password). */
+export const PROVIDERS = ["smtp", "google"] as const;
 /** Who emails come from unless changed in Settings → Email. */
 export const DEFAULT_FROM_ADDRESS = "contact@shijiri.com";
 export const DEFAULT_FROM_NAME = "Shijiri Payroll Service";
 export const emailConfigSchema = z.object({
   enabled: z.boolean().default(false),
+  provider: z.enum(PROVIDERS).default("smtp"),
   host: z.string().trim().max(200).default(""),
   port: z.coerce.number().int().min(1).max(65535).default(587),
   /** starttls: port 587 (most providers). ssl: port 465. none: local relays only. */
@@ -37,6 +40,12 @@ export const emailConfigSchema = z.object({
   fromName: z.string().trim().max(100).default(DEFAULT_FROM_NAME),
   /** The address people open the app at, used for links in emails (e.g. https://payroll.example.com). */
   appUrl: z.string().trim().max(300).default(""),
+  /** "Sign in with Google": the OAuth client from the owner's Google Cloud project. */
+  googleClientId: z.string().trim().max(300).default(""),
+  googleClientSecret: z.string().max(300).default(""),
+  /** Set only by the Google sign-in callback (never from the browser). */
+  googleRefreshToken: z.string().max(2000).default(""),
+  googleAccount: z.string().trim().max(200).default(""),
 });
 export type EmailConfig = z.infer<typeof emailConfigSchema>;
 
@@ -52,7 +61,7 @@ export async function getEmailConfig(): Promise<EmailConfig> {
   } catch { return emailConfigSchema.parse({}); }
 }
 
-async function saveEmailConfig(cfg: EmailConfig) {
+export async function saveEmailConfig(cfg: EmailConfig) {
   await (await db()).setSetting(EMAIL_CONFIG_KEY, JSON.stringify(emailConfigSchema.parse(cfg)));
 }
 
@@ -75,35 +84,60 @@ function recordStatus(ok: boolean, error?: string) {
 
 /** What the browser may see: never the password. */
 export function publicEmailConfig(cfg: EmailConfig) {
-  const { password, ...rest } = cfg;
-  return { ...rest, hasPassword: !!password };
+  const { password, googleClientSecret, googleRefreshToken, ...rest } = cfg;
+  return { ...rest, hasPassword: !!password, hasGoogleSecret: !!googleClientSecret, googleConnected: !!(googleRefreshToken && cfg.googleAccount) };
 }
 
+export const GMAIL_HOST = "smtp.gmail.com";
+/** Signed in with Google and ready to send through Gmail. */
+export const googleReady = (cfg: EmailConfig) => !!(cfg.googleClientId && cfg.googleClientSecret && cfg.googleRefreshToken && cfg.googleAccount);
+
 /** Whether emails will be attempted. */
-export const emailReady = (cfg: EmailConfig) => cfg.enabled && !!cfg.host && !!cfg.fromAddress;
+export const emailReady = (cfg: EmailConfig) => cfg.enabled && !!cfg.fromAddress && (cfg.provider === "google" ? googleReady(cfg) : !!cfg.host);
 
 /** A message for people, with anything that looks like a credential removed. */
-export function cleanError(err: unknown, cfg?: Pick<EmailConfig, "password">): string {
+export function cleanError(err: unknown, cfg?: Partial<Pick<EmailConfig, "password" | "googleClientSecret" | "googleRefreshToken" | "provider">>): string {
   const e = err as any;
   let msg = String(e?.response || e?.message || e || "Unknown error");
-  if (e?.code === "EAUTH") msg = `The email server refused the username or password. ${e?.response ? `(${String(e.response).slice(0, 160)})` : ""}`.trim();
+  if (e?.code === "EAUTH" && cfg?.provider === "google") msg = "Google refused to send. Connect your Google account again in Settings → Email.";
+  else if (e?.code === "EAUTH") msg = `The email server refused the username or password. ${e?.response ? `(${String(e.response).slice(0, 160)})` : ""}`.trim();
   else if (e?.code === "ESOCKET" && /wrong version number|ssl3_get_record|packet length too long/i.test(msg)) msg = "Security setting doesn't match the port. Use STARTTLS with port 587, or SSL with port 465.";
   // Connection problems get one message, so the test can't be used to map which hosts and ports exist.
   else if (["ECONNREFUSED", "ETIMEDOUT", "ETIMEOUT", "EDNS", "ENOTFOUND", "ECONNECTION", "ESOCKET", "EHOSTUNREACH", "ENETUNREACH", "ECONNRESET"].includes(e?.code) || /timeout|connect|getaddrinfo/i.test(msg)) {
     msg = "Could not reach the email server. Check the server name, port and security setting.";
   }
-  if (cfg?.password && cfg.password.length >= 4) msg = msg.split(cfg.password).join("••••");
+  for (const secret of [cfg?.password, cfg?.googleClientSecret, cfg?.googleRefreshToken]) {
+    if (secret && secret.length >= 4) msg = msg.split(secret).join("••••");
+  }
   return msg.replace(/\s+/g, " ").trim().slice(0, 300);
 }
 
-function check(cfg: EmailConfig) {
+/** Settings that can't work. `sending`: also needs a connected Google account. */
+function check(cfg: EmailConfig, sending = false) {
   const bad = (m: string) => Object.assign(new Error(m), { status: 400 });
-  if (!cfg.host) throw bad("Enter the email server (SMTP host).");
+  if (cfg.provider === "google") {
+    if (!cfg.googleClientId || !cfg.googleClientSecret) throw bad("Enter the Google client ID and client secret.");
+    if (sending && !googleReady(cfg)) throw bad("Connect your Google account first (the \"Connect with Google\" button).");
+  } else if (!cfg.host) throw bad("Enter the email server (SMTP host).");
   if (!cfg.fromAddress || !notificationEmailSchema.safeParse(cfg.fromAddress).success) throw bad("Enter a valid \"from\" email address.");
   if (cfg.appUrl && !/^https?:\/\/[^\s/]+/i.test(cfg.appUrl)) throw bad("The app address should start with https://");
 }
 
 function transportFor(cfg: EmailConfig) {
+  if (cfg.provider === "google") {
+    return nodemailer.createTransport({
+      host: GMAIL_HOST,
+      port: 465,
+      secure: true,
+      // nodemailer swaps the refresh token for a short-lived access token as needed.
+      auth: { type: "OAuth2", user: cfg.googleAccount, clientId: cfg.googleClientId, clientSecret: cfg.googleClientSecret, refreshToken: cfg.googleRefreshToken },
+      connectionTimeout: 10_000,
+      greetingTimeout: 10_000,
+      socketTimeout: 20_000,
+      logger: false,
+      debug: false,
+    });
+  }
   return nodemailer.createTransport({
     host: cfg.host,
     port: cfg.port,
@@ -233,7 +267,11 @@ ${e.paragraphs.map(para).join("\n")}${code}${details}${button}
 type Handler = (req: Request, res: Response) => Promise<unknown>;
 const h = (fn: Handler) => (req: Request, res: Response, next: NextFunction) => { fn(req, res).catch(next); };
 
-const inputSchema = z.unknown().transform((v) => parsePatch(emailConfigSchema, v ?? {}));
+// The Google connection itself (token and account) is only ever set by the sign-in callback.
+const inputSchema = z.unknown().transform((v) => {
+  const { googleRefreshToken: _t, googleAccount: _a, ...rest } = parsePatch(emailConfigSchema, v ?? {});
+  return rest;
+});
 
 /** Where the saved password would be sent. Changing any of these needs the password typed again. */
 const destination = (c: Pick<EmailConfig, "host" | "port" | "security" | "username">) => [c.host.trim().toLowerCase(), c.port, c.security, c.username.trim().toLowerCase()].join("|");
@@ -251,6 +289,10 @@ function merge(cur: EmailConfig, input: Partial<EmailConfig>, clearPassword = fa
     else if (cur.password && destination(next) !== destination(cur)) throw Object.assign(new Error(PASSWORD_AGAIN), { status: 400 });
     else next.password = cur.password;
   }
+  // The Google secret and connection belong to one OAuth client: a new client ID starts over.
+  const sameClient = next.googleClientId === cur.googleClientId;
+  if (!input.googleClientSecret) next.googleClientSecret = sameClient ? cur.googleClientSecret : "";
+  if (!sameClient) { next.googleRefreshToken = ""; next.googleAccount = ""; }
   return emailConfigSchema.parse(next);
 }
 
@@ -282,8 +324,9 @@ export function registerEmailRoutes(app: Express) {
     const next = merge(before, input, body.clearPassword === true);
     if (next.enabled) check(next);
     await saveEmailConfig(next);
-    const parts = [next.enabled ? `on (${next.host}:${next.port}, ${next.security}, from ${next.fromAddress})` : "off"];
+    const parts = [!next.enabled ? "off" : next.provider === "google" ? `on (Google: ${next.googleAccount || "not connected"}, from ${next.fromAddress})` : `on (${next.host}:${next.port}, ${next.security}, from ${next.fromAddress})`];
     if (input.password) parts.push("new password");
+    if (input.googleClientSecret) parts.push("new Google client secret");
     else if (body.clearPassword === true && before.password) parts.push("password removed");
     audit({ ...actorOf(req, res), action: "settings.email", target: "email", detail: parts.join("; ") });
     res.json({ config: publicEmailConfig(next), status: await getEmailStatus(), ready: emailReady(next) });
@@ -297,7 +340,7 @@ export function registerEmailRoutes(app: Express) {
     if (!testAllowed(user.id)) return res.status(429).json({ error: "That's a lot of test emails. Wait a few minutes and try again." });
     const to = notificationEmailSchema.parse(typeof body.to === "string" && body.to.trim() ? body.to : user.notificationEmail ?? "");
     if (!to) return res.status(400).json({ error: "Enter the address to send the test to." });
-    try { check(cfg); } catch (err: any) { return res.json({ ok: false, message: err.message }); }
+    try { check(cfg, true); } catch (err: any) { return res.json({ ok: false, message: err.message }); }
     const brand = await brandName(cfg);
     try {
       await deliver(cfg, {
@@ -307,7 +350,7 @@ export function registerEmailRoutes(app: Express) {
         html: brandedHtml({
           brand, preheader: "If you can read this, email is set up.", heading: "Email is working",
           paragraphs: [`This is a test from ${brand}. If you can read this, payroll notifications and sign-in codes will arrive here.`],
-          details: [["Sent by", user.displayName || user.username], ["Server", `${cfg.host}:${cfg.port}`]],
+          details: [["Sent by", user.displayName || user.username], ["Sent through", cfg.provider === "google" ? `Gmail (${cfg.googleAccount})` : `${cfg.host}:${cfg.port}`]],
           footer: `You got this because someone pressed "Send test email" in ${brand}.`,
         }),
       });

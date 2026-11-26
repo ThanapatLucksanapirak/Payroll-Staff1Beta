@@ -26,3 +26,17 @@
 - At sign-in, after the password, a 6-digit code is emailed. It expires in 10 minutes, allows 5 tries, and **Send a new code** waits 30 seconds between sends. Recovery codes still work.
 - Changing your own notification email asks for your password. Only an owner can change the notification email of someone else who uses email codes, and it can't be cleared while they're on.
 - Marking a timesheet **Final** does not email anyone. Only **Publish** does.
+
+## Gmail: Connect with Google (no App password)
+Settings → Email → **Gmail / Google Workspace** → How to sign in: **Connect with Google**.
+
+One-time setup in Google Cloud (console.cloud.google.com), signed in as the Google account that will send:
+1. Create a project (any name).
+2. **APIs & Services → OAuth consent screen**: pick **Internal** if you use Google Workspace (no Google review needed), otherwise External and add yourself as a test user.
+3. **APIs & Services → Credentials → Create credentials → OAuth client ID**, type **Web application**. Under **Authorized redirect URIs**, add the address shown in Settings → Email (e.g. `https://payroll.yourcompany.com/api/email/google/callback`).
+4. Paste the **Client ID** and **Client secret** into Settings → Email, then press **Connect with Google**, sign in and press **Allow**.
+
+- The app asks for Gmail's sending permission (`https://mail.google.com/`), which Gmail's SMTP server requires.
+- The client secret and the Google token stay on your server; they're never shown again, logged, or put in backups without secrets. **Disconnect** removes the token and cancels it at Google.
+- The From address must be the Google account's own address or a "Send mail as" address in Gmail, otherwise Gmail sends from the account's address.
+- The App password method still works (choose **App password**).

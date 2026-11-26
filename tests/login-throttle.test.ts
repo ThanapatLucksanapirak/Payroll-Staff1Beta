@@ -14,7 +14,7 @@ test("checks still running count against the login limit", () => {
   const responses = Array.from({ length: 50 }, () => new EventEmitter());
   const allowed = responses.filter((r) => !loginThrottle(ip, r));
   assert.equal(allowed.length, 8, "parallel guesses can't all slip past");
-  for (const r of allowed) { recordLogin(ip, false); r.emit("close"); }
+  for (const r of allowed) { recordLogin(ip, false); r.emit("finish"); }
   assert.ok(loginThrottle(ip, new EventEmitter()), "8 failures block");
 });
 
@@ -23,6 +23,6 @@ test("a finished check frees its slot", () => {
   const rs = Array.from({ length: 8 }, () => new EventEmitter());
   for (const r of rs) assert.equal(loginThrottle(ip, r), null);
   assert.ok(loginThrottle(ip, new EventEmitter()));
-  rs[0].emit("close");
+  rs[0].emit("finish");
   assert.equal(loginThrottle(ip, new EventEmitter()), null);
 });
