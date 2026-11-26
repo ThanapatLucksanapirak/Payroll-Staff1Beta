@@ -61,6 +61,24 @@ export interface RecordInput {
   meta?: PunchMeta;
 }
 
+/**
+ * The refusal recordPunch would give for this punch (a wrong action for the
+ * person's clock state), or null. Nothing is saved. The kiosk asks first, so a
+ * punch that will be refused 409 doesn't pay for a face check.
+ */
+export async function punchStateProblem(input: Pick<RecordInput, "id" | "site" | "employee" | "type" | "at" | "audience">): Promise<string | null> {
+  const store = await db();
+  const existing = await store.getPunch(input.id);
+  if (existing) return null; // a replay: recordPunch answers with the saved punch
+  const at = new Date(input.at).toISOString();
+  const punch: Punch = {
+    id: input.id, siteId: input.site.id, employeeId: input.employee.id, employeeName: input.employee.name, type: input.type, at,
+    source: "kiosk", deviceId: null, note: "", createdAt: new Date().toISOString(), editedAt: null, edits: [],
+  };
+  const before = await nearbyPunches(input.site.id, input.employee.id, at);
+  return validateChange(before, [...before, punch], input.site.rules.timezone, input.audience);
+}
+
 export async function recordPunch(input: RecordInput): Promise<{ punch: Punch; created: boolean }> {
   if (!PUNCH_ID_RE.test(input.id)) throw new PunchError("Invalid punch id.", 400, "invalid");
   return withLock(`${input.site.id}|${input.employee.id}`, async () => {

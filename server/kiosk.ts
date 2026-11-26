@@ -23,7 +23,7 @@ import { db } from "./db";
 import type { DataStore } from "./db/types";
 import * as settings from "./settings";
 import { type StoredEmployee, PIN_RE, findByPin, getEmployee, listEmployees, pinInUse, registerEmployeeRoutes } from "./employees";
-import { PUNCH_ID_RE, PunchError, recordPunch, registerPunchRoutes } from "./punches";
+import { PUNCH_ID_RE, PunchError, punchStateProblem, recordPunch, registerPunchRoutes } from "./punches";
 import { registerLiveRoutes } from "./live";
 import { hashPassword, verifyHash } from "./passwords";
 
@@ -544,6 +544,19 @@ export function registerKioskRoutes(app: Express) {
       }
       meta.face = "unchecked";
     }
+    // A punch that will be refused for the wrong action (clock out when not clocked in)
+    // is refused now, before the face check: that check costs about 0.3 s of CPU.
+    if (takesPhoto && photoBytes) {
+      const problem = await punchStateProblem({ id: body.id, site, employee: e, type: body.type, at: new Date(at).toISOString(), audience: "kiosk" });
+      if (problem) {
+        const st = await employeeClock(site, e.id);
+        const check = checkAction(st.status, body.type);
+        return res.status(409).json({
+          error: problem, code: "state", status: st.status, suggest: check.suggest ?? null, question: check.question ?? null,
+          actions: allowedActions(st.status), ticket: issueTicket(device.id, e.id),
+        });
+      }
+    }
     if (takesPhoto && photoBytes) {
       const face = await checkFaceJpeg(photoBytes, { descriptor: Array.isArray(templates) });
       if (face.ok && Array.isArray(templates)) {
@@ -569,7 +582,7 @@ export function registerKioskRoutes(app: Express) {
             ? "The face check isn't working on the server right now. Ask a manager to add your punch."
             : face.reason === "bad_image"
               ? "The photo didn't come through. Show your face to the camera and try again."
-              : "Face not detected. Show your face to the camera and try again.";
+              : "Face not detected. Move closer to the camera and look straight at it, then try again.";
           return res.status(face.reason === "unavailable" || face.reason === "busy" ? 503 : 422).json({ error, code: "photo", reason: face.reason });
         }
         // A punch saved offline: kept, but flagged for the manager ("unchecked" when the check couldn't run)
