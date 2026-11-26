@@ -44,5 +44,7 @@ test("database is locked → 503 busy with Retry-After", async () => {
   const res = await fetch(`${base}/api/kiosk/punch`, { method: "POST" });
   assert.equal(res.status, 503);
   assert.equal(res.headers.get("retry-after"), "5");
-  assert.equal((await res.json()).code, "busy");
+  const body = await res.json();
+  assert.equal(body.code, undefined, "no code, so the kiosk queues the punch as offline");
+  assert.equal(body.busy, true);
 });

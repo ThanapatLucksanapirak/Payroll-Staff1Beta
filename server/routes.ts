@@ -592,7 +592,8 @@ export function registerRoutes(app: Express) {
     // retryable outage, not a crash. The time clock saves the punch and sends it later.
     if (err?.code === "SQLITE_BUSY" || err?.code === "SQLITE_LOCKED" || /database is locked/i.test(String(err?.message ?? ""))) {
       res.setHeader("Retry-After", "5");
-      return res.status(503).json({ error: "The database is busy for a moment. Please try again.", code: "busy" });
+      // No `code`: the kiosk treats a 5xx without one as "no answer" and queues the punch.
+      return res.status(503).json({ error: "The database is busy for a moment. Please try again.", busy: true });
     }
     const status = Number(err?.status) || 500;
     if (status >= 500) console.error("[api]", err);
