@@ -149,7 +149,7 @@ test("dates far from today are skipped with a warning", () => {
   const csv = HDR + "Ana Ruiz,11/1/1926,9:00 AM,5:00 PM,11/1/1926\nBo Lee,3/4/2099,9:00 AM,5:00 PM,3/4/2099\nAna Ruiz,11/2/26,9:00 AM,5:00 PM,11/2/26\n";
   const r = parseCsvText(csv, T);
   assert.equal(r.shifts.length, 1);
-  assert.ok(r.warnings.some((w) => /2 rows skipped: the date is more than a year from today/.test(w)), r.warnings.join("|"));
+  assert.ok(r.warnings.some((w) => /2 rows skipped: the date is more than 3 years ago or more than a year ahead/.test(w)), r.warnings.join("|"));
 });
 
 test("a shift cut to 72 hours is reported with the person and date", () => {
