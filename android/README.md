@@ -33,6 +33,33 @@ address or Android settings.
 
 ---
 
+## Quickest way: install the APK directly (no Play Store)
+
+You can skip Google Play completely. Do steps 1–3 below. The manual workflow
+run also publishes the signed APK to the GitHub release **time-clock-apk**.
+Then run step 5 on the server with the **upload key's** fingerprint (the run's
+summary shows it):
+
+```bash
+sudo payroll android fingerprint <upload key SHA-256>
+```
+
+On each Android tablet, open the kiosk in Chrome. A **Get the Android app**
+button at the top downloads the APK. Open it and allow "Install unknown apps"
+for Chrome when Android asks.
+
+* The button only shows in an Android browser. It is hidden inside the app,
+  while the kiosk is full screen, and until an APK has been published.
+* Each new workflow run replaces the APK. Tablets update by downloading it again
+  (the version code must go up each time).
+* The server checks `https://github.com/<owner>/<repo>/releases/download/time-clock-apk/time-clock.apk`
+  using `REPO_URL`. If the repository is private, the tablets can't download
+  from it, so host the file somewhere public and set `KIOSK_APK_URL=https://…`
+  in `/etc/payroll/payroll.env`, then run `sudo payroll restart`.
+* A copy installed this way is signed with your upload key, and a copy from
+  Play is signed with Google's key. Android won't update one with the other, so
+  pick one route per tablet (uninstall first to switch).
+
 ## What you need to do
 
 ### 1. Make an upload key (once, on your own computer)

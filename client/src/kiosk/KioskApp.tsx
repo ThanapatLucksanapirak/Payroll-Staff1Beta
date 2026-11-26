@@ -9,6 +9,7 @@ import {
 import { type CameraStatus, useCamera } from "./camera";
 import { ACTION_STYLE, BigSecondary, duration, firstName, fmt, initials, timeOf, useIdle } from "./ui";
 import { Mark } from "@/components/Logo";
+import { AndroidAppButton, useAndroidAppDownload } from "./appDownload";
 import { type Confirm, type FixInput, BreakNudge, ConfirmScreen, FixRequestScreen, GuardScreen, MessageScreen, NoteScreen, StationScreen } from "./screens";
 
 const STATUS_TEXT: Record<ClockStatus, string> = { in: "Working", break: "On break", out: "Not clocked in" };
@@ -276,7 +277,7 @@ export function KioskApp() {
           <span className="flex-1">{notice}</span><X className="h-5 w-5 shrink-0" />
         </button>
       )}
-      <main className="flex min-h-0 flex-1 flex-col">
+      <main className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain">
         {screen.k === "manager" ? (
           <PinScreen tz={tz} key={`manager-${screen.next}`} heading={{ title: "Manager PIN", sub: screen.next === "settings" ? "Enter the manager PIN to open device settings" : "Enter the manager PIN to leave full screen" }} maxLength={8} error={screen.error} shake={screen.shake} idleMs={Math.max(idleMs, 30_000)} onSubmit={submitManager} onBack={home} />
         ) : !state.site.enabled ? (
@@ -360,19 +361,22 @@ function BigClock({ tz, compact }: { tz: string; compact?: boolean }) {
       <div className={`tabular font-light tracking-tight text-stone-950 ${compact ? "text-6xl sm:text-7xl" : "text-7xl sm:text-8xl lg:text-9xl"}`} data-testid="kiosk-clock">
         {main}{period && <span className={`ml-2 font-normal text-stone-700 ${compact ? "text-2xl" : "text-3xl sm:text-4xl"}`}>{period}</span>}
       </div>
-      <div className={`mt-2 font-medium text-stone-800 ${compact ? "text-lg" : "text-xl sm:text-2xl"}`}>{date}</div>
+      <div className={`kiosk-clock-date mt-2 font-medium text-stone-800 ${compact ? "text-lg" : "text-xl sm:text-2xl"}`}>{date}</div>
     </div>
   );
 }
 
 function TopBar({ state, online, pending, onInfo, onExitFullscreen }: { state: KioskState; online: boolean; pending: number; onInfo: () => void; onExitFullscreen: (exit: () => void) => void }) {
   const fs = useFullscreen();
+  // Hidden in full screen, so staff using the clock don't leave it by accident.
+  const apk = useAndroidAppDownload();
   return (
     <header className="flex items-center gap-3 px-5 pt-2 sm:px-8 sm:pt-4">
       <Mark className="h-[22px] w-auto shrink-0 text-[#7a295e]" aria-hidden />
       <span className="text-lg text-stone-600" aria-hidden>·</span>
       <span className="truncate text-lg font-semibold text-stone-800" data-testid="kiosk-location">{state.site.name}</span>
       <div className="-mr-4 ml-auto flex items-center gap-1">
+        {apk && !fs.active && <AndroidAppButton url={apk} className="mr-1" />}
         {(!online || pending > 0) && (
           <span className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-base font-semibold ${online ? "bg-stone-100 text-stone-700" : "bg-amber-100 text-amber-950"}`} data-testid="kiosk-offline">
             {!online && <WifiOff className="h-4 w-4" />}
@@ -439,7 +443,7 @@ function PinScreen({ tz, employee, heading, error, shake, maxLength = 6, idleMs,
   }, [pin, press, back, submit, onBack]);
 
   return (
-    <div className="flex flex-1 flex-col items-center justify-center gap-4 px-6 pb-6 sm:gap-6 lg:flex-row lg:gap-24">
+    <div className="kiosk-pin flex flex-1 flex-col items-center justify-center gap-4 px-6 pb-6 sm:gap-6 lg:flex-row lg:gap-24">
       <div className="text-center lg:text-left">
         {heading ? (
           <div className="kiosk-fade-up">
@@ -455,7 +459,7 @@ function PinScreen({ tz, employee, heading, error, shake, maxLength = 6, idleMs,
         ) : (
           <>
             <BigClock tz={tz} />
-            <p className="mt-4 text-xl font-medium text-stone-700 [text-wrap:balance] sm:mt-6 sm:text-2xl lg:mt-10">Enter your PIN to clock in or out</p>
+            <p className="kiosk-pin-prompt mt-4 text-xl font-medium text-stone-700 [text-wrap:balance] sm:mt-6 sm:text-2xl lg:mt-10">Enter your PIN to clock in or out</p>
           </>
         )}
       </div>
@@ -466,7 +470,7 @@ function PinScreen({ tz, employee, heading, error, shake, maxLength = 6, idleMs,
           ))}
         </div>
         <p className={`mt-2 min-h-7 text-lg font-medium ${error ? "text-red-700" : "text-transparent"}`} role="alert">{error || "·"}</p>
-        <div className="mt-3 grid grid-cols-3 gap-3 sm:gap-5">
+        <div className="kiosk-pad mt-3 grid grid-cols-3 gap-3 sm:gap-5">
           {["1", "2", "3", "4", "5", "6", "7", "8", "9"].map((d) => <Key key={d} onPress={() => press(d)} label={d} />)}
           {onBack && employee ? <Key onPress={onBack} label={<ArrowLeft className="h-8 w-8" />} subtle aria="Back" /> : <Key onPress={back} label={<Delete className="h-8 w-8" />} subtle aria="Delete" />}
           <Key onPress={() => press("0")} label="0" />
@@ -487,7 +491,7 @@ function Key({ label, onPress, primary, subtle, disabled, aria }: { label: React
       disabled={disabled}
       onPointerDown={(e) => { e.preventDefault(); if (!disabled) onPress(); }}
       onKeyDown={(e) => { if (e.key === " ") onPress(); }}
-      className={`kiosk-tap flex h-20 w-20 items-center justify-center rounded-full text-4xl font-normal transition-all duration-100 active:scale-95 sm:h-28 sm:w-28 sm:text-5xl ${
+      className={`kiosk-tap kiosk-key flex h-20 w-20 items-center justify-center rounded-full text-4xl font-normal transition-all duration-100 active:scale-95 sm:h-28 sm:w-28 sm:text-5xl ${
         primary ? "kiosk-primary kiosk-go shadow-sm disabled:shadow-none" : subtle ? "text-stone-800 active:bg-stone-200" : "bg-stone-100 text-stone-950 ring-2 ring-stone-200 active:bg-stone-300 active:ring-stone-300"
       }`}
       data-testid={`kiosk-key-${aria ?? label}`}
@@ -594,8 +598,10 @@ function PairScreen({ notice, onPaired }: { notice: string | null; onPaired: () 
       onPaired();
     } catch (e) { setError((e as Error).message); } finally { setBusy(false); }
   };
+  const apk = useAndroidAppDownload();
   return (
     <Centered>
+      {apk && <div className="fixed right-4 top-3 z-10"><AndroidAppButton url={apk} /></div>}
       <div className="w-full max-w-md kiosk-fade-up">
         <h1 className="text-4xl font-display font-normal tracking-[-0.01em] text-stone-950">Set up this time clock</h1>
         <p className="mt-3 text-lg text-stone-700">In the admin app, open <b className="font-semibold text-stone-900">Settings → Locations → Time clock</b>, add a device, then open its pairing link here or type its code.</p>

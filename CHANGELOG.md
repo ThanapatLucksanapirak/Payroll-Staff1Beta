@@ -6,6 +6,10 @@ Settings → About, next to the matching update.
 Add an entry with every pull request: a `## YYYY-MM-DD · Title (#PR)` heading and a
 few short bullets written for the people who use the app, not for developers.
 
+## 2026-11-26 · Time clock: no page scrolling, Android app download (#PRNUM)
+- The time clock page no longer scrolls or bounces. The PIN pad fits on small phones.
+- On Android tablets, a "Get the Android app" button at the top downloads the Time Clock app directly, without the Play Store.
+
 ## 2026-11-26 · New Shijiri look (#24)
 - A new Shijiri logo, colours and sign-in page, shared by the admin app, time clock, staff portal and emails.
 - Easier to use on phones: timesheets, schedule, settings and the two-factor notice fit small screens.

@@ -4,7 +4,8 @@ plugins {
 
 def prop = { String name -> project.findProperty(name)?.toString() }
 def kioskHost = prop("kioskHost")
-def kioskUrl = "https://${kioskHost}/kiosk"
+// ?app=android tells the kiosk page it is inside the app (it then hides "Get the Android app").
+def kioskUrl = "https://${kioskHost}/kiosk?app=android"
 
 // Release signing comes from the environment (CI secrets) or ~/.gradle/gradle.properties,
 // never from this repository. Without it, bundleRelease builds an unsigned bundle.

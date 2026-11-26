@@ -400,6 +400,45 @@ test("assetlinks.json for the Android app, also on the kiosk hostname", async ()
   }
 });
 
+test("Android APK download link: only when the file is published", async () => {
+  const { apkUrl } = await import("../server/android");
+  assert.equal(apkUrl({ REPO_URL: "https://user:tok@github.com/acme/payroll.git" }), "https://github.com/acme/payroll/releases/download/time-clock-apk/time-clock.apk");
+  assert.equal(apkUrl({ REPO_URL: "https://gitlab.com/acme/payroll.git" }), null);
+  assert.equal(apkUrl({ KIOSK_APK_URL: "http://evil.example.com/a.apk" }), null, "plain http only for localhost");
+  assert.equal(apkUrl({ KIOSK_APK_URL: "javascript:alert(1)" }), null);
+
+  // A stand-in file host: /yes has the APK (redirects like GitHub), /no doesn't.
+  const host = http.createServer((req, res) => {
+    if (req.url === "/yes.apk") { res.writeHead(302, { Location: "https://objects.example/apk" }); return res.end(); }
+    res.writeHead(404); res.end();
+  });
+  await new Promise<void>((r) => host.listen(0, "127.0.0.1", () => r()));
+  const hp = (host.address() as AddressInfo).port;
+  try {
+    delete process.env.REPO_URL;
+    delete process.env.KIOSK_APK_URL;
+    assert.deepEqual((await call("GET", "/api/kiosk/app")).body, { url: null });
+    process.env.KIOSK_APK_URL = `http://127.0.0.1:${hp}/no.apk`;
+    assert.deepEqual((await call("GET", "/api/kiosk/app")).body, { url: null }, "not published yet");
+    process.env.KIOSK_APK_URL = `http://127.0.0.1:${hp}/yes.apk`;
+    assert.deepEqual((await call("GET", "/api/kiosk/app")).body, { url: `http://127.0.0.1:${hp}/yes.apk` });
+    // Reachable on the kiosk-only hostname, without a device token
+    process.env.KIOSK_HOST = "clock.example.com";
+    const r = await new Promise<{ status: number; body: string }>((resolve, reject) => {
+      const q = http.request({ host: "127.0.0.1", port, path: "/api/kiosk/app", headers: { Host: "clock.example.com" } }, (res) => {
+        let b = ""; res.setEncoding("utf8"); res.on("data", (c) => (b += c)); res.on("end", () => resolve({ status: res.statusCode!, body: b }));
+      });
+      q.on("error", reject); q.end();
+    });
+    assert.equal(r.status, 200);
+    assert.equal(JSON.parse(r.body).url, `http://127.0.0.1:${hp}/yes.apk`);
+  } finally {
+    delete process.env.KIOSK_APK_URL;
+    delete process.env.KIOSK_HOST;
+    host.close();
+  }
+});
+
 test("manager PIN guards kiosk settings and unpairing", async () => {
   const dev = await A("POST", `/api/sites/${siteId}/kiosk-devices`, { name: "Locked tablet" });
   const tok = dev.body.token;
