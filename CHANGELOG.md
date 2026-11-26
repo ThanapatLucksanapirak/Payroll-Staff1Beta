@@ -1,0 +1,53 @@
+# What's new
+
+Plain-language notes for each update, newest first. They appear in the app under
+Settings → About, next to the matching update.
+
+Add an entry with every pull request: a `## YYYY-MM-DD · Title (#PR)` heading and a
+few short bullets written for the people who use the app, not for developers.
+
+## 2026-11-25 · Update now button and safer reinstall (#10)
+- Settings → Software update shows the installed version and has an Update now button.
+- Running the installer again recovers a half-finished install instead of failing.
+- Start-up errors are explained in plain words.
+
+## 2026-11-25 · Set the admin and kiosk web addresses from the command line (#11)
+- `payroll tunnel hosts` changes the admin and kiosk addresses.
+- `payroll admin list` shows who can sign in.
+
+## 2026-11-25 · Accountant role, publish payroll and email notifications (#13)
+- New Accountant role that only sees payroll you publish.
+- Publish a finalized payroll to send it to your accountant.
+- Settings → Email to send notifications from your own address.
+
+## 2026-11-25 · Installer follow-ups (#9)
+- Editing a location no longer resets its other settings.
+- `payroll start` and re-running the installer recover from a stopped install.
+
+## 2026-11-25 · Time clock, schedule, employee portal and more (#7)
+- Schedule page with shifts, time off, late alerts and labor vs sales.
+- Fix punches page, day approval, overtime watch and automatic clock-out.
+- Kiosk extras: photo on punch, stations, break reminders and fix requests.
+- Employee portal at /me: hours, pay statements, schedule and time-off requests.
+- Pay extras: locked timesheets, cash breakdown, holidays, tips, advances and year-to-date totals.
+- Role permissions, two-factor sign-in and offsite backups.
+
+## 2026-11-25 · Stress-test fixes (#6)
+- Fixes to installer recovery, restore, CSV import, sign-out, layout and overtime math.
+
+## 2026-11-25 · Kiosk manager PIN lock (#5)
+- A manager PIN locks the kiosk tablet's settings, with a lockdown guide.
+
+## 2026-11-25 · New design, time clock and payment methods (#4)
+- Redesigned app with a sidebar, Home, Reports and a command palette.
+- Kiosk time clock app, Live page and Employees page.
+- Redesigned PDF report, pay statements and manager summary.
+- Pay by cash, bank transfer, check, or cash and bank split.
+- User accounts with roles and an activity log.
+
+## 2026-11-25 · One-command installer (#2)
+- Install on Debian or Ubuntu with one command, with Cloudflare Tunnel and automatic updates.
+- The `payroll` command manages the server: status, logs, update, rollback and backups.
+
+## 2026-11-25 · Stability and data safety (#1)
+- Safer saving, data backups and first-run security.

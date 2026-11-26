@@ -16,7 +16,7 @@ export function updatesManaged(): boolean {
   return process.env.PAYROLL_MANAGED === "1" || fs.existsSync(PATH_UNIT) || fs.existsSync(STATUS());
 }
 
-function readStatus(): { state: string; from?: string; to?: string; at?: string; message?: string } | null {
+export function readUpdateStatus(): { state: string; from?: string; to?: string; at?: string; message?: string } | null {
   try {
     const s = JSON.parse(fs.readFileSync(STATUS(), "utf8"));
     return s && typeof s.state === "string" ? s : null;
@@ -24,7 +24,7 @@ function readStatus(): { state: string; from?: string; to?: string; at?: string;
 }
 
 /** The running release's git commit (written by the installer as .release-sha). */
-function currentVersion(): string | null {
+export function currentVersion(): string | null {
   const here = typeof __dirname === "string" ? [path.resolve(__dirname, "..")] : [];
   for (const dir of [process.cwd(), ...here]) {
     try { const v = fs.readFileSync(path.join(dir, ".release-sha"), "utf8").trim(); if (v) return v; } catch { /* next */ }
@@ -45,14 +45,14 @@ export function registerUpdateRoutes(app: Express) {
       version: currentVersion(),
       autoUpdate: process.env.AUTO_UPDATE === "1",
       requested: fs.existsSync(REQUEST()),
-      status: readStatus(),
+      status: readUpdateStatus(),
     });
   }));
   app.post("/api/system/update", h((req, res) => {
     if (!updatesManaged()) {
       return res.status(409).json({ error: "Updates from the app need the Linux installer. On this server, update with git pull and a rebuild.", code: "not_managed" });
     }
-    const st = readStatus();
+    const st = readUpdateStatus();
     if (fs.existsSync(REQUEST()) || st?.state === "checking" || st?.state === "updating") {
       return res.json({ ok: true, alreadyRunning: true });
     }

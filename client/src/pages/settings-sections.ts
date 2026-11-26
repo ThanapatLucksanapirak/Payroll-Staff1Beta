@@ -1,5 +1,4 @@
-import { Database, HandCoins, HardDriveDownload, History, MapPin, RefreshCw, Shield, SlidersHorizontal, Tags, Users, type LucideIcon } from "lucide-react";
-import { Database, HandCoins, HardDriveDownload, History, Mail, MapPin, Shield, SlidersHorizontal, Tags, Users, type LucideIcon } from "lucide-react";
+import { Database, HandCoins, HardDriveDownload, History, Info, Mail, MapPin, RefreshCw, Shield, SlidersHorizontal, Tags, Users, type LucideIcon } from "lucide-react";
 import { isAdmin, type Role } from "@/lib/roles";
 
 /**
@@ -32,6 +31,7 @@ export const SETTINGS_SECTIONS: SettingsSectionMeta[] = [
   { id: "database", label: "Database", description: "Storage and connection", icon: Database, tint: "bg-[#30d158]", group: "System", adminOnly: true, keywords: "supabase sqlite storage" },
   { id: "data", label: "Backup & history", description: "Backups, restore, retention", icon: HardDriveDownload, tint: "bg-[#bf5af2]", group: "System", adminOnly: true, keywords: "backup restore export retention trash" },
   { id: "updates", label: "Software update", description: "Version and Update now", icon: RefreshCw, tint: "bg-[#0a84ff]", group: "System", adminOnly: true, keywords: "update upgrade version new release install" },
+  { id: "about", label: "About", description: "Installed version and what's new", icon: Info, tint: "bg-[#8e8e93]", group: "System", adminOnly: true, keywords: "about version history changelog what's new release notes updates installed commit" },
 ];
 
 /** The sections this user may open: everyone gets their own account; the rest are for owners and administrators. */
