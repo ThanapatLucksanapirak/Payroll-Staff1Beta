@@ -26,9 +26,8 @@ test("day-first preference doesn't swap dates in the app's own CSV or Square fil
   const sq = "Team Member,Clockin date,Clockin time,Clockout time\nAna,1/11/26,9:00:00 AM,5:00:00 PM\n";
   assert.equal(parseCsvText(sq, { dayFirst: true }).shifts[0].date, "2026-01-11");
   // Other files still follow the preference
-  const other = "Name,Date,Start,End\nAna,1/11/26,9:00,17:00\n";
-  const r = parseCsvText(other, { dayFirst: true });
-  if (r.shifts.length) assert.equal(r.shifts[0].date, "2026-11-01");
+  const other = "Employee,Date,Clock In,Clock Out\nAna,1/11/26,9:00 AM,5:00 PM\n";
+  assert.equal(parseCsvText(other, { dayFirst: true }).shifts[0].date, "2026-11-01");
 });
 
 test("pay redaction hides YTD gross/net/deductions and the tips pool", async () => {
