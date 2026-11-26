@@ -6,6 +6,11 @@ Settings → About, next to the matching update.
 Add an entry with every pull request: a `## YYYY-MM-DD · Title (#PR)` heading and a
 few short bullets written for the people who use the app, not for developers.
 
+## 2026-11-27 · Face data is kept through a database switch or restore (#47)
+- Switching to another database, or restoring an older backup, no longer lets the daily clean-up delete saved face data. Face data isn't in backups, so before this it couldn't be got back after switching back.
+- The clean-up now skips a location when the database in use doesn't have it, has no employees there, or has no punches there within the face data retention period.
+- Face data for someone who isn't in the employee list is kept for 30 days before it's deleted. Removing an employee still deletes their face data straight away.
+
 ## 2026-11-27 · Clearer face match alerts and removed staff on Live (#46)
 - Live → Face match refused now labels each refusal: "Face didn't match", or "Face profile needs redoing" when someone's face data can't be read, with the steps to set it up again.
 - Removing someone who is clocked in now clocks them out first (the dialog says so and the button reads "Clock out and remove"), so no open shift is left behind. The server refuses to remove a clocked-in employee without that.
