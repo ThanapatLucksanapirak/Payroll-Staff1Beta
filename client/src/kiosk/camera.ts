@@ -23,6 +23,16 @@ export const CAMERA_MESSAGES = {
   starting: "The camera is starting. Wait a moment and try again.",
 } as const;
 
+/** True when the browser reports camera permission as denied for this page. */
+async function cameraDenied(): Promise<boolean> {
+  try {
+    const st = await navigator.permissions?.query({ name: "camera" as PermissionName });
+    return st?.state === "denied";
+  } catch {
+    return false; // Safari and older browsers can't be asked about the camera
+  }
+}
+
 export function useCamera(active: boolean) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -52,10 +62,14 @@ export function useCamera(active: boolean) {
         }
         setStatus("ready");
       })
-      .catch((err: unknown) => {
+      .catch(async (err: unknown) => {
         if (cancelled) return;
         const name = (err as { name?: string } | null)?.name;
-        setStatus(name === "NotAllowedError" || name === "SecurityError" ? "blocked" : "unavailable");
+        // Browsers don't all say "not allowed" when the camera was denied (an
+        // Android app without camera permission, a dismissed prompt): ask the
+        // permission state too, so a denied camera always reads as "blocked".
+        const denied = name === "NotAllowedError" || name === "SecurityError" || (await cameraDenied());
+        if (!cancelled) setStatus(denied ? "blocked" : "unavailable");
       });
     return () => {
       cancelled = true;

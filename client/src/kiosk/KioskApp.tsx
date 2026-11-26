@@ -435,7 +435,7 @@ function CameraCaption({ status, faceSeen, center }: { status: CameraStatus; fac
     <span className={`text-base font-medium leading-snug ${center ? "text-center" : ""} ${warn ? "text-red-800" : faceSeen ? "text-emerald-800" : "text-stone-700"}`} data-testid="kiosk-camera-caption">
       {status === "blocked" ? <>Camera blocked<br /><span className="font-normal">Punching needs the camera</span></>
         : status === "unavailable" ? <>Camera not available<br /><span className="font-normal">Punching needs the camera</span></>
-        : faceSeen === false ? <>Face not detected<br /><span className="font-normal">Please show your face</span></>
+        : faceSeen === false ? <>Face not detected<br /><span className="font-normal">Show your face to the camera</span></>
         : faceSeen ? <><Check className="mr-1 inline h-5 w-5" />Face found<br /><span className="font-normal text-stone-700">Photo taken with your punch</span></>
         : <><Camera className="mr-1 inline h-5 w-5" />Please show your face<br /><span className="font-normal">Photo taken with your punch</span></>}
     </span>

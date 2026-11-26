@@ -503,11 +503,11 @@ export function registerKioskRoutes(app: Express) {
     // face before sending). Punches queued while offline are still accepted
     // without one, so a punch saved on the tablet is never lost over a photo.
     if (options.photo && !body.at && !body.photo) {
-      return res.status(422).json({ error: "Face not detected. This time clock takes a photo with each punch: look at the camera and try again.", code: "photo" });
+      return res.status(422).json({ error: "Face not detected. This time clock takes a photo with each punch: show your face to the camera and try again.", code: "photo" });
     }
     const photoBytes = options.photo && body.photo ? decodePhoto(body.photo) : null;
     if (options.photo && !body.at && !photoBytes) {
-      return res.status(422).json({ error: "The photo didn't come through. Look at the camera and try again.", code: "photo" });
+      return res.status(422).json({ error: "The photo didn't come through. Show your face to the camera and try again.", code: "photo" });
     }
     let photoSaved = false;
     // Photos on: every punch records whether it has one ("none" for a queued punch without one).

@@ -118,7 +118,7 @@ export async function checkFace(canvas: HTMLCanvasElement): Promise<FaceResult> 
 }
 
 export const FACE_MESSAGES: Record<FaceReason, string> = {
-  no_face: "Face not detected. Look at the camera and try again.",
+  no_face: "Face not detected. Show your face to the camera and try again.",
   covered: "Face not detected: the camera looks covered or too dark. Uncover it and try again.",
   no_frame: "The camera isn't ready yet. Wait a moment and try again.",
   unchecked: "This tablet couldn't check for a face. Try again in a moment, or ask a manager.",
