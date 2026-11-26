@@ -33,9 +33,10 @@ export function PunchPhoto({ punch, canView, label }: { punch: Punch; canView: b
   }
   const src = `/api/punches/${encodeURIComponent(punch.id)}/photo`;
   const noFace = punch.meta?.face === "missing";
+  const unchecked = punch.meta?.face === "unchecked";
   return (
     <>
-      <button type="button" onClick={() => setOpen(true)} className={cn("h-8 w-8 shrink-0 overflow-hidden rounded-md bg-foreground/[0.05] transition hover:ring-primary/50 focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/35", noFace ? "ring-2 ring-amber-500" : "ring-1 ring-border/70")} title={noFace ? "No face found in this photo" : undefined} aria-label={`Photo: ${label}${noFace ? " (no face found)" : ""}`} data-testid={`button-photo-${punch.id}`}>
+      <button type="button" onClick={() => setOpen(true)} className={cn("h-8 w-8 shrink-0 overflow-hidden rounded-md bg-foreground/[0.05] transition hover:ring-primary/50 focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/35", noFace || unchecked ? "ring-2 ring-amber-500" : "ring-1 ring-border/70")} title={noFace ? "No face found in this photo" : unchecked ? "This photo wasn't checked for a face" : undefined} aria-label={`Photo: ${label}${noFace ? " (no face found)" : unchecked ? " (not checked for a face)" : ""}`} data-testid={`button-photo-${punch.id}`}>
         <img src={src} alt="" loading="lazy" className="h-full w-full object-cover" onError={() => setFailed(true)} />
       </button>
       {open && (
@@ -47,6 +48,7 @@ export function PunchPhoto({ punch, canView, label }: { punch: Punch; canView: b
             </DialogHeader>
             <img src={src} alt={`Kiosk photo: ${label}`} className="w-full rounded-lg bg-foreground/[0.04]" />
             {noFace && <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-950 ring-1 ring-amber-200 dark:bg-amber-950/30 dark:text-amber-100 dark:ring-amber-800">No face was found in this photo. The punch was saved on the tablet while it was offline, so it couldn't be refused. Check it's really them.</p>}
+            {unchecked && <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-950 ring-1 ring-amber-200 dark:bg-amber-950/30 dark:text-amber-100 dark:ring-amber-800">This photo wasn't checked for a face: the punch was saved on the tablet while it was offline, and the face check wasn't working when it arrived. Check it's really them.</p>}
           </DialogContent>
         </Dialog>
       )}
@@ -54,8 +56,11 @@ export function PunchPhoto({ punch, canView, label }: { punch: Punch; canView: b
   );
 }
 
-/** "No face" badge for a kiosk punch saved offline whose photo showed no face. */
+/** "No face" (or "Not checked") badge for a kiosk punch saved offline that a manager should check. */
 export function NoFaceBadge({ punch }: { punch: Punch }) {
+  if (punch.meta?.face === "unchecked") {
+    return <Badge variant="warning" className="shrink-0" title="Saved offline; the face check wasn't working when it arrived" data-testid={`badge-not-checked-${punch.id}`}>Not checked</Badge>;
+  }
   if (punch.meta?.face !== "missing") return null;
   return <Badge variant="warning" className="shrink-0" title="Saved offline; no face was found in the photo" data-testid={`badge-no-face-${punch.id}`}>No face</Badge>;
 }

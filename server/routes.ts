@@ -451,6 +451,8 @@ export function registerRoutes(app: Express) {
     const result = await switchDatabase(config, { copyData });
     settings.invalidateSettingsCache();
     invalidatePublishedCache();
+    invalidateEmployeeCache();
+    invalidateDeviceCache();
     resetTagCache();
     await settings.getSites();
     res.json(result);

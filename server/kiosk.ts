@@ -530,7 +530,8 @@ export function registerKioskRoutes(app: Express) {
               : "Face not detected. Show your face to the camera and try again.";
           return res.status(face.reason === "unavailable" || face.reason === "busy" ? 503 : 422).json({ error, code: "photo", reason: face.reason });
         }
-        meta.face = "missing"; // a punch saved offline: kept, but flagged for the manager
+        // A punch saved offline: kept, but flagged for the manager ("unchecked" when the check couldn't run)
+        meta.face = face.reason === "unavailable" || face.reason === "busy" ? "unchecked" : "missing";
       }
     }
     if (options.photo && !photoBytes) meta.face = "missing"; // queued offline with no photo: kept, flagged

@@ -313,6 +313,22 @@ test("punch with station and photo; photo served only to editors; not in backups
   const stored = (await A("GET", `/api/sites/${siteId}/timeclock`)).body.punches;
   assert.deepEqual(stored.find((x: any) => x.id === queued.body.punch.id).meta, { photo: "none", face: "missing" }, "queued without a photo");
   assert.deepEqual(stored.find((x: any) => x.id === offline.body.punch.id).meta, { photo: "saved", face: "missing" }, "queued without a face");
+  // Queued while the server's face check can't run: kept, flagged "unchecked" (not "No face")
+  const { faceLimits } = await import("../server/faceCheck");
+  const keepLimit = faceLimits.timeoutMs;
+  faceLimits.timeoutMs = -1;
+  try {
+    const live503 = await K("POST", "/api/kiosk/punch", { id: randomUUID(), type: "break_start", pin: "1234", photo: JPEG });
+    assert.equal(live503.status, 503);
+    assert.equal(live503.body.reason, "unavailable");
+    const late = await K("POST", "/api/kiosk/punch", { id: randomUUID(), type: "break_start", pin: "1234", photo: JPEG, at: new Date(Date.now() - 4 * 60_000).toISOString() });
+    assert.equal(late.status, 200, JSON.stringify(late.body));
+    const lateMeta = (await A("GET", `/api/sites/${siteId}/timeclock`)).body.punches.find((x: any) => x.id === late.body.punch.id).meta;
+    assert.deepEqual(lateMeta, { photo: "saved", face: "unchecked" });
+  } finally {
+    faceLimits.timeoutMs = keepLimit;
+  }
+  assert.equal((await K("POST", "/api/kiosk/punch", { id: randomUUID(), type: "break_end", pin: "1234", photo: JPEG })).status, 200);
   // Live again with a face: fine
   assert.equal((await K("POST", "/api/kiosk/punch", { id: randomUUID(), type: "break_start", pin: "1234", photo: JPEG })).status, 200);
   assert.equal((await K("POST", "/api/kiosk/punch", { id: randomUUID(), type: "break_end", pin: "1234", photo: JPEG })).status, 200);

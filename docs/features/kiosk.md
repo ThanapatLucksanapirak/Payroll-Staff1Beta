@@ -40,7 +40,8 @@ refused, with a message on screen, when:
 A punch saved on the tablet while it was offline is still accepted, so it is
 never lost. The server only treats a punch as saved offline when its time is
 more than 2 minutes old (and less than 24 hours). If it has no photo, or the
-photo shows no face, it gets a "No face" tag on Live for a manager to check. A
+photo shows no face, it gets a "No face" tag on Live for a manager to check
+("Not checked" when the face check wasn't working when it arrived). A
 newer punch is treated as live, so sending a time can't skip the check. If a
 tablet's camera breaks, add the punches on Live or turn photos off for that
 device.
