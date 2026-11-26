@@ -368,15 +368,15 @@ function rawGet(p: string, host: string) {
   });
 }
 
-test("KIOSK_HOST allows the kiosk's on-demand chunks (the face check's MediaPipe bundle)", async () => {
+test("KIOSK_HOST allows the kiosk's on-demand (dynamically imported) chunks", async () => {
   const { kioskAssetsFromManifest } = await import("../server/kiosk");
   const set = kioskAssetsFromManifest({
-    "kiosk.html": { file: "assets/kiosk-1.js", css: ["assets/kiosk-1.css"], imports: ["_react.js"], dynamicImports: ["../node_modules/@mediapipe/tasks-vision/vision_bundle.mjs"] },
+    "kiosk.html": { file: "assets/kiosk-1.js", css: ["assets/kiosk-1.css"], imports: ["_react.js"], dynamicImports: ["client/src/kiosk/lazy.ts"] },
     "_react.js": { file: "assets/react-1.js" },
-    "../node_modules/@mediapipe/tasks-vision/vision_bundle.mjs": { file: "assets/vision_bundle-1.js" },
+    "client/src/kiosk/lazy.ts": { file: "assets/lazy-1.js" },
     "index.html": { file: "assets/admin-1.js" },
   });
-  assert.deepEqual([...set].sort(), ["/assets/kiosk-1.css", "/assets/kiosk-1.js", "/assets/react-1.js", "/assets/vision_bundle-1.js"]);
+  assert.deepEqual([...set].sort(), ["/assets/kiosk-1.css", "/assets/kiosk-1.js", "/assets/lazy-1.js", "/assets/react-1.js"]);
 });
 
 test("KIOSK_HOST serves only the kiosk on that hostname", async () => {

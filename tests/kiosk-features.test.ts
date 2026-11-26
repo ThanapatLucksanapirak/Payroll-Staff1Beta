@@ -161,7 +161,8 @@ const A = (method: string, url: string, body?: unknown) => as(admin)(method, url
 const K = (method: string, url: string, body?: unknown, t = token) => call(method, url, body, { "X-Kiosk-Token": t });
 
 /** A tiny but valid-looking JPEG (magic bytes plus padding). */
-const JPEG = `data:image/jpeg;base64,${Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.alloc(400, 7), Buffer.from([0xff, 0xd9])]).toString("base64")}`;
+// A real photo with a face in it: the server checks punch photos for a face.
+const JPEG = `data:image/jpeg;base64,${fs.readFileSync(path.join(import.meta.dirname, "fixtures", "face.jpg")).toString("base64")}`;
 
 async function signIn(username: string, password: string) {
   const r = await call("POST", "/api/auth/login", { username, password }, { "X-Requested-With": "payroll" });
@@ -286,6 +287,21 @@ test("punch with station and photo; photo served only to editors; not in backups
   assert.equal(queued.body.punch.photo, "none");
   const back = await K("POST", "/api/kiosk/punch", { id: randomUUID(), type: "break_end", pin: "1234", photo: JPEG });
   assert.equal(back.status, 200);
+  // The server checks the photo for a face: no face, no punch (same on every device)
+  const photoOf = (f: string) => `data:image/jpeg;base64,${fs.readFileSync(path.join(import.meta.dirname, "fixtures", f)).toString("base64")}`;
+  for (const f of ["no-face.jpg", "palm.jpg"]) {
+    const r = await K("POST", "/api/kiosk/punch", { id: randomUUID(), type: "break_start", pin: "1234", photo: photoOf(f) });
+    assert.equal(r.status, 422, f);
+    assert.equal(r.body.code, "photo");
+    assert.equal(r.body.reason, "no_face");
+    assert.match(r.body.error, /Face not detected/);
+  }
+  // Saved offline with no face: kept (never lose a punch), flagged for the manager
+  const offline = await K("POST", "/api/kiosk/punch", { id: randomUUID(), type: "break_start", pin: "1234", photo: photoOf("no-face.jpg"), at: new Date().toISOString() });
+  assert.equal(offline.status, 200, JSON.stringify(offline.body));
+  const flagged = (await A("GET", `/api/sites/${siteId}/timeclock`)).body.punches.find((x: any) => x.id === offline.body.punch.id);
+  assert.deepEqual(flagged.meta, { photo: "saved", face: "missing" });
+  assert.equal((await K("POST", "/api/kiosk/punch", { id: randomUUID(), type: "break_end", pin: "1234", photo: JPEG })).status, 200);
   // Unknown station is ignored, not an error
   const benIn = await K("POST", "/api/kiosk/punch", { id: randomUUID(), type: "in", pin: "5678", station: "Roof", photo: JPEG });
   assert.equal(benIn.status, 200);

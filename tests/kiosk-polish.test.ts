@@ -48,7 +48,8 @@ const A = (method: string, url: string, body?: unknown) => as(admin)(method, url
 const K = (method: string, url: string, body?: unknown, t = token) => call(method, url, body, { "X-Kiosk-Token": t });
 
 /** A tiny but valid-looking JPEG (magic bytes plus padding). */
-const JPEG = `data:image/jpeg;base64,${Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.alloc(400, 7), Buffer.from([0xff, 0xd9])]).toString("base64")}`;
+// A real photo with a face in it: the server checks punch photos for a face.
+const JPEG = `data:image/jpeg;base64,${fs.readFileSync(path.join(import.meta.dirname, "fixtures", "face.jpg")).toString("base64")}`;
 
 async function signIn(username: string, password: string) {
   const r = await call("POST", "/api/auth/login", { username, password }, { "X-Requested-With": "payroll" });

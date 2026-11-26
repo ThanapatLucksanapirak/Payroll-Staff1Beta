@@ -6,6 +6,11 @@ Settings → About, next to the matching update.
 Add an entry with every pull request: a `## YYYY-MM-DD · Title (#PR)` heading and a
 few short bullets written for the people who use the app, not for developers.
 
+## 2026-11-26 · Your server checks punch photos for a face (#PR)
+- The time clock no longer tries to recognize faces on the phone or tablet. It takes the photo and your server checks it for a face before it accepts the punch, so it works the same on iPhone, iPad and Android, and can't be skipped.
+- No face, no punch: the kiosk says "Face not detected" and asks the person to try again.
+- A punch saved on a tablet while it was offline is still kept, but if its photo shows no face it gets a "No face" tag on Live.
+
 ## 2026-11-26 · iPhone home screen edges, and labor from Square (#32)
 - On an iPhone added to the home screen, the app now fills the whole screen neatly: the tab bar sits above the home bar, the top bar clears the status bar and camera, and nothing is cut off by the rounded corners, in portrait and landscape. The time clock and staff portal got the same care.
 - Home and Reports: for a location that tracks time in Square, "Labor vs. sales" now counts this week's Square timecards at your saved pay rates (marked est.), instead of showing $0.00 labor until a timesheet is saved. The payroll forecast counts them too.
