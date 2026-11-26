@@ -136,6 +136,9 @@ test("device pairing: link token, short code exchange, revoke", async () => {
   assert.equal(paired.status, 200);
   assert.equal(paired.body.site.id, siteId);
   kioskToken = paired.body.token;
+  // New devices take a photo with each punch; these tests punch without photos.
+  assert.equal(created.body.device.options?.photo ?? (await A("GET", `/api/sites/${siteId}/kiosk-devices`)).body[0].options.photo, true, "photos on by default");
+  assert.equal((await A("PUT", `/api/sites/${siteId}/kiosk-devices/${created.body.device.id}/options`, { photo: false })).status, 200);
   assert.equal((await K("GET", "/api/kiosk/state", undefined, created.body.token)).status, 401, "code exchange replaces the link token");
   assert.equal((await call("POST", "/api/kiosk/pair", { code: created.body.pairCode })).status, 403, "codes are single use");
 

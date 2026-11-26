@@ -8,6 +8,7 @@ few short bullets written for the people who use the app, not for developers.
 
 ## 2026-11-26 · The time clock checks for a face before a punch (#30)
 - With photos on, the time clock now always checks that a face is in the photo, also on Android tablets where the check could switch itself off. Covering the camera no longer goes through unnoticed.
+- New time clock devices take a photo with each punch from the start, so the face check is on by default. Devices you already set up keep their setting. Turning photos off also turns off the face check.
 - No face, no punch: the kiosk asks the person to look at the camera and try again. If it still can't see a face, a manager can add the punch on Live.
 - The camera view on the time clock is much bigger and sits at the top of the screen, with a green or red frame showing whether your face is in view.
 
