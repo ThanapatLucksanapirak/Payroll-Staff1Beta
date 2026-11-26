@@ -220,3 +220,37 @@ test("a timesheet created already final gets the pay snapshot and repays advance
   const a = list.find((x: any) => x.id === adv.body.id);
   assert.deepEqual([a.repaid, a.remaining], [50, 0], "repayment recorded");
 });
+
+test("created final and finalized from a draft save the same totals", async () => {
+  const mk = async (name: string) => {
+    const adv = await call("POST", `/api/sites/${siteId}/pay/advances`, { employee: name, amount: 30, date: "2026-07-01", mode: "periods", periods: 1 }, "mgr1");
+    assert.equal(adv.status, 200);
+    const d = doc(`Same ${name}`, ["2026-07-06", "2026-07-07"]);
+    (d.shifts as any[]).forEach((s) => { s.employee = name; });
+    (d.employees as any[])[0] = { ...(d.employees as any[])[0], name };
+    return { d, advId: adv.body.id };
+  };
+  const a = await mk("Eve Ray");
+  const b = await mk("Fay Ray");
+  // A: created already final. B: created as a draft, then finalized from the list.
+  const ta = await call("POST", "/api/timesheets", { doc: { ...a.d, status: "final" } });
+  const tb = await call("POST", "/api/timesheets", { doc: b.d });
+  assert.equal((await call("PATCH", `/api/timesheets/${tb.body.id}`, { status: "final" })).status, 200);
+  const ga = (await call("GET", `/api/timesheets/${ta.body.id}`)).body;
+  const gb = (await call("GET", `/api/timesheets/${tb.body.id}`)).body;
+  const strip = (x: any) => JSON.parse(JSON.stringify(x ?? null).replaceAll("Eve Ray", "X").replaceAll("Fay Ray", "X").replaceAll(a.advId, "ADV").replaceAll(b.advId, "ADV"));
+  assert.equal(ga.doc.status, "final");
+  assert.equal(gb.doc.status, "final");
+  assert.ok(JSON.stringify(ga.doc.payExtras ?? {}).includes("30"), "the snapshot holds the advance");
+  assert.deepEqual(strip(ga.doc.payExtras), strip(gb.doc.payExtras), "same pay extras snapshot (advance deduction)");
+  const list = (await call("GET", "/api/timesheets")).body;
+  const sa = list.find((t: any) => t.id === ta.body.id);
+  const sb = list.find((t: any) => t.id === tb.body.id);
+  assert.equal(sa.totalPay, sb.totalPay);
+  assert.equal(sa.totalPay, 200 - 30);
+  const advs = (await call("GET", `/api/sites/${siteId}/pay/advances`)).body;
+  const ra = advs.find((x: any) => x.id === a.advId);
+  const rb = advs.find((x: any) => x.id === b.advId);
+  assert.deepEqual([ra.repaid, ra.remaining], [rb.repaid, rb.remaining]);
+  assert.deepEqual([ra.repaid, ra.remaining], [30, 0]);
+});

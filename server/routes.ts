@@ -211,7 +211,8 @@ async function restoreFrom(raw: unknown, opts: { allowEmpty?: boolean } = {}) {
 
 /**
  * Send `{...head, list1: [...], list2: [...]}` as JSON, one item at a time,
- * waiting for the socket to drain, so memory stays at about one row.
+ * waiting for the socket to drain, so no full-size JSON string is built. The rows
+ * themselves are still in memory (the store loads them first).
  */
 async function streamJson(res: Response, head: Record<string, unknown>, lists: Record<string, unknown[]>) {
   res.status(200).setHeader("Content-Type", "application/json; charset=utf-8");
@@ -541,8 +542,8 @@ export function registerRoutes(app: Express) {
     const all = await store.allSettings();
     const timesheets = await store.allTimesheets();
     const punches = await store.allPunches();
-    // Written row by row: one JSON.stringify of a large database held several
-    // copies of it in memory at once and could exhaust the server.
+    // Serialized row by row: one JSON.stringify of the whole database added a
+    // full-size string (and its copies) on top of the loaded rows.
     await streamJson(res, { app: "payroll-admin", version: 2, exportedAt: new Date().toISOString() }, {
       settings: all.filter((s) => !NEVER_BACKED_UP(s.key) && (includeSecrets || !secret(s.key))),
       timesheets,
