@@ -119,7 +119,7 @@ export function HoursTab({ me }: { me: Me }) {
                 <li key={t.id} className="flex items-baseline justify-between gap-3 px-5 py-4">
                   <span className="min-w-0">
                     <span className="block text-[18px] font-semibold">{range(t.periodStart, t.periodEnd)}</span>
-                    <span className="block text-[14px] text-muted-foreground">From your pay statement</span>
+                    <span className="block text-[14px] text-muted-foreground">{t.partial ? "From your pay statement, days in this period only" : "From your pay statement"}</span>
                   </span>
                   <span className="tabular shrink-0 text-[20px] font-semibold">{hm(t.minutes)}</span>
                 </li>

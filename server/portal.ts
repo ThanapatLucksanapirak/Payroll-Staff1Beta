@@ -296,7 +296,12 @@ export function registerPortalRoutes(app: Express) {
       timesheets: finalized.flatMap((t) => {
         if (!t.periodStart || !t.periodEnd || t.periodEnd < period.start || t.periodStart > period.end) return [];
         const e = employeeSummaryFor(t.result, employee.name);
-        return e ? [{ id: t.id, periodStart: t.periodStart, periodEnd: t.periodEnd, minutes: Math.round(e.hoursWorked * 60) }] : [];
+        if (!e) return [];
+        // Only the days inside the period being viewed: a sheet can straddle two pay periods.
+        const inside = e.days.filter((day) => !day.cancelled && day.date >= period.start && day.date <= period.end);
+        if (!inside.length) return [];
+        const minutes = Math.round(inside.reduce((a, day) => a + day.hours, 0) * 60);
+        return [{ id: t.id, periodStart: t.periodStart, periodEnd: t.periodEnd, minutes, partial: inside.length < e.days.filter((day) => !day.cancelled).length }];
       }).sort((a, b) => b.periodEnd.localeCompare(a.periodEnd)),
     });
   }));

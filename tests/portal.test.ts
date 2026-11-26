@@ -321,7 +321,24 @@ test("pay statements: finalized only, my own data only", async () => {
   assert.equal(mine.minutes, 11 * 60);
   assert.ok(!hours.body.timesheets.some((t: any) => t.id === both), "only timesheets overlapping this period");
   assert.ok(!JSON.stringify(hours.body.timesheets).includes("Ben"), "nothing about Ben");
+  assert.equal(mine.partial, false);
   assert.equal((await A("POST", `/api/timesheets/${now}/reopen`, { reason: "tidy" })).status, 200);
+
+  // A sheet that straddles two pay periods counts only its days inside the one being viewed.
+  const ps = hours.body.period.start as string;
+  const pe = hours.body.period.end as string;
+  const straddle = await make("Straddle", ["Ana Ruiz"], [addDays(ps, -2), addDays(ps, -1), ps], true);
+  const cur = (await P(ana, "GET", "/api/portal/hours")).body.timesheets.find((t: any) => t.id === straddle);
+  assert.ok(cur, "overlapping sheet is listed");
+  assert.equal(cur.minutes, 11 * 60, "only the one day inside this period");
+  assert.equal(cur.partial, true);
+  const last = await P(ana, "GET", "/api/portal/hours?offset=-1");
+  const prev = last.body.timesheets.find((t: any) => t.id === straddle);
+  assert.ok(prev && last.body.period.end < ps, JSON.stringify(last.body.period));
+  assert.equal(prev.minutes, 22 * 60, "the other two days show under last period");
+  const after = await make("After", ["Ana Ruiz"], [addDays(pe, 1)], true);
+  assert.ok(!(await P(ana, "GET", "/api/portal/hours")).body.timesheets.some((t: any) => t.id === after), "a sheet wholly outside isn't listed");
+  for (const id of [straddle, after]) assert.equal((await A("POST", `/api/timesheets/${id}/reopen`, { reason: "tidy" })).status, 200);
   assert.ok(!(await P(ana, "GET", "/api/portal/hours")).body.timesheets.some((t: any) => t.id === now), "drafts don't count");
 
   // Reopened (no longer final) timesheets disappear
