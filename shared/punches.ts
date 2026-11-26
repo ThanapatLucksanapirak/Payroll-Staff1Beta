@@ -74,7 +74,8 @@ export interface PunchMeta {
   photo?: "saved" | "none";
   /**
    * A punch saved offline, kept but flagged for a manager: "missing" when it has
-   * no photo or its photo showed no face, "unchecked" when the server's face
+   * no photo (Live: "No photo") or its photo showed no face ("No face"),
+   * "unchecked" ("Not checked") when the server's face
    * check couldn't run on its photo.
    */
   face?: "missing" | "unchecked";

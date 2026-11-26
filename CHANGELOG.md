@@ -6,6 +6,9 @@ Settings → About, next to the matching update.
 Add an entry with every pull request: a `## YYYY-MM-DD · Title (#PR)` heading and a
 few short bullets written for the people who use the app, not for developers.
 
+## 2026-11-26 · "No photo" tag for offline punches without a photo (#PRNUM)
+- On Live, a punch saved on a tablet while it was offline and sent without a photo now says "No photo" instead of "No face". "No face" is only for a photo that shows no face.
+
 ## 2026-11-26 · Your server checks punch photos for a face (#37)
 - The time clock no longer tries to recognize faces on the phone or tablet. It takes the photo and your server checks it for a face before it accepts the punch, so it works the same on iPhone, iPad and Android, and can't be skipped.
 - No face, no punch: the kiosk says "Face not detected" and asks the person to try again.
