@@ -13,7 +13,7 @@ import * as settings from "./settings";
 import { verifyHash } from "./passwords";
 import { getPinKey } from "./config";
 import { actorOf, audit } from "./audit";
-import { accountKey, loginThrottle, recordLogin } from "./auth";
+import { loginThrottle, passwordKey, recordLogin } from "./auth";
 import { getUser, type UserRecord } from "./users";
 
 const scrypt = promisify(nodeScrypt) as (pw: string, salt: string, len: number) => Promise<Buffer>;
@@ -270,7 +270,7 @@ export function registerEmployeeRoutes(app: Express) {
     const { password, employeeId } = z.object({ password: z.string().max(200).default(""), employeeId: z.string().max(64).optional() }).parse(req.body ?? {});
     if (!password) return res.status(400).json({ error: "Enter your password to see PINs.", needPassword: true });
     const ip = req.ip ?? "unknown";
-    const acct = accountKey(`id:${user.id}`);
+    const acct = passwordKey({ userId: user.id });
     const blocked = loginThrottle(ip, res) ?? loginThrottle(acct, res);
     if (blocked) return res.status(429).json({ error: blocked });
     const fresh = await getUser(user.id, { fresh: true });

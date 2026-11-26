@@ -20,7 +20,7 @@ import { db } from "./db";
 import { getAuthSecret } from "./config";
 import * as settings from "./settings";
 import { actorOf, audit } from "./audit";
-import { accountKey, loginThrottle, recordLogin, setSessionCookie, currentUser } from "./auth";
+import { loginThrottle, passwordKey, twoFactorKey, recordLogin, setSessionCookie, currentUser } from "./auth";
 import { safeEqual, verifyHash } from "./passwords";
 import { type TwoFactorState, type UserRecord, UserError, getUser, isAdmin, mutateUser, toPublic } from "./users";
 import { brandName, brandedHtml, emailReady, getEmailConfig, sendEmail } from "./email";
@@ -421,7 +421,7 @@ async function checkPassword(req: Request, user: UserRecord, password: unknown) 
   const ip = req.ip ?? "unknown";
   const blocked = loginThrottle(ip, req.res);
   if (blocked) throw new UserError(blocked, 429);
-  const acct = accountKey(`id:${user.id}`);
+  const acct = passwordKey({ userId: user.id });
   const acctBlocked = loginThrottle(acct, req.res);
   if (acctBlocked) throw new UserError(acctBlocked, 429);
   const fresh = await getUser(user.id, { fresh: true });
@@ -446,7 +446,7 @@ export function registerTwoFactorRoutes(app: Express) {
     if (!t) return res.status(401).json({ error: expired, expired: true });
     // Wrong codes count per account across sign-ins, so a known password can't
     // be used to get a fresh ticket (and fresh tries) over and over.
-    const acct = accountKey(`2fa:${t.user.id}`);
+    const acct = twoFactorKey(t.user.id);
     const acctBlocked = loginThrottle(acct, res);
     if (acctBlocked) return res.status(429).json({ error: acctBlocked });
     countTry(t.nonce);
@@ -497,7 +497,7 @@ export function registerTwoFactorRoutes(app: Express) {
     const body = z.object({ ticket: z.string().max(2000), code: codeSchema }).parse(req.body);
     const t = await ticketUser(body.ticket, "setup");
     if (!t) return res.status(401).json({ error: expired, expired: true });
-    const acct = accountKey(`2fa:${t.user.id}`);
+    const acct = twoFactorKey(t.user.id);
     const acctBlocked = loginThrottle(acct, res);
     if (acctBlocked) return res.status(429).json({ error: acctBlocked });
     countTry(t.nonce);

@@ -196,8 +196,18 @@ const MAX_TRIES = 8;
 const MAX_TRIES_IP = 30;
 const WINDOW_MS = 15 * 60_000;
 const ACCOUNT_PREFIX = "acct:";
-/** The throttle key for an account (a username, or "2fa:<user id>" for second-step codes). */
+/** A raw account counter key. Use passwordKey / twoFactorKey so every check shares one counter. */
 export function accountKey(name: string) { return ACCOUNT_PREFIX + name.trim().toLowerCase(); }
+/**
+ * The one password counter for an account: sign-in and every "enter your password"
+ * check share it. Keyed by user id; a username with no account gets its own
+ * namespace, so nothing typed at sign-in can land on another account's counter.
+ */
+export function passwordKey(target: { userId: string } | { unknownName: string }) {
+  return "userId" in target ? accountKey(`pw:id:${target.userId}`) : accountKey(`pw:name:${target.unknownName}`);
+}
+/** The counter for an account's two-step sign-in codes. */
+export function twoFactorKey(userId: string) { return accountKey(`2fa:id:${userId}`); }
 const limitFor = (key: string) => (key.startsWith(ACCOUNT_PREFIX) ? MAX_TRIES : MAX_TRIES_IP);
 const attempts = new Map<string, { n: number; until: number }>();
 

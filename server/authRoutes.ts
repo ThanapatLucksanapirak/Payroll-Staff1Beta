@@ -4,9 +4,9 @@ import { z } from "zod";
 import { siteRulesSchema } from "@shared/schema";
 import { dbStatus } from "./db";
 import * as settings from "./settings";
-import { accountKey, clearSessionCookie, clearSetupCode, currentUser, loginThrottle, recordLogin, requestToken, revokeToken, setSessionCookie, setupCodeMatches } from "./auth";
+import { clearSessionCookie, passwordKey, clearSetupCode, currentUser, loginThrottle, recordLogin, requestToken, revokeToken, setSessionCookie, setupCodeMatches } from "./auth";
 import { actorOf, audit, queryAudit } from "./audit";
-import {
+import { loginTargetId,
   type UserRecord, ROLE_LABELS, bumpSessionVersion, createUser, createUserSchema, deleteUser, displayNameSchema, getUser, listUsers,
   isAdmin, notificationEmailSchema, passwordSchema, setUserPassword, setupRequired, toPublic, updateProfile, updateUser, updateUserSchema, usernameSchema, authenticate,
 } from "./users";
@@ -40,7 +40,7 @@ async function confirmOwnPassword(req: Request, res: Response, userId: string, p
   const ip = req.ip ?? "unknown";
   const blocked = loginThrottle(ip, res);
   if (blocked) { res.status(429).json({ error: blocked }); return false; }
-  const acct = accountKey(`id:${userId}`);
+  const acct = passwordKey({ userId });
   const acctBlocked = loginThrottle(acct, res);
   if (acctBlocked) { res.status(429).json({ error: acctBlocked }); return false; }
   const fresh = await getUser(userId, { fresh: true });
@@ -69,7 +69,8 @@ export function registerAuthRoutes(app: Express) {
       remember: z.boolean().optional(),
     }).parse(req.body);
     // Also limit guesses per account, so many addresses can't share the work.
-    const acct = accountKey(username);
+    const targetId = await loginTargetId(username);
+    const acct = passwordKey(targetId ? { userId: targetId } : { unknownName: username });
     const acctBlocked = loginThrottle(acct, res);
     if (acctBlocked) return res.status(429).json({ error: acctBlocked });
     const r = await authenticate(username, password);
@@ -143,7 +144,7 @@ export function registerAuthRoutes(app: Express) {
     const { current, next } = z.object({ current: z.string().min(1).max(200), next: passwordSchema }).parse(req.body);
     // Rate limited like sign-in, so a borrowed session can't guess the current password.
     const ip = req.ip ?? "unknown";
-    const acct = accountKey(`id:${u.id}`);
+    const acct = passwordKey({ userId: u.id });
     const blocked = loginThrottle(ip, res) ?? loginThrottle(acct, res);
     if (blocked) return res.status(429).json({ error: blocked });
     const fresh = await getUser(u.id, { fresh: true });

@@ -196,6 +196,17 @@ export async function getUser(id: string, opts?: { fresh?: boolean }) {
   return (await listUsers(opts)).find((u) => u.id === id) ?? null;
 }
 
+/**
+ * The account a sign-in with this username would try (a blank username means the
+ * only owner, as in authenticate), for rate limiting. Null when there is none.
+ */
+export async function loginTargetId(username: string): Promise<string | null> {
+  const users = await listUsers({ fresh: true }).catch(() => listUsers());
+  const name = username.trim();
+  if (!name) { const owners = activeOwners(users); return owners.length === 1 ? owners[0].id : null; }
+  return users.find((u) => sameName(u.username, name))?.id ?? null;
+}
+
 export async function findUserByName(username: string) {
   return (await listUsers({ fresh: true })).find((u) => sameName(u.username, username)) ?? null;
 }
