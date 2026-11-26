@@ -6,6 +6,9 @@ Settings → About, next to the matching update.
 Add an entry with every pull request: a `## YYYY-MM-DD · Title (#PR)` heading and a
 few short bullets written for the people who use the app, not for developers.
 
+## 2026-11-26 · Time clock lockout countdown (#33)
+- After too many wrong PINs, the time clock counts down to when it unlocks ("Try again in 0:57") instead of a fixed message, and says when you can try again.
+
 ## 2026-11-26 · The time clock checks for a face before a punch (#30)
 - With photos on, the time clock now always checks that a face is in the photo, also on Android tablets where the check could switch itself off. Covering the camera no longer goes through unnoticed.
 - New time clock devices take a photo with each punch from the start, so the face check is on by default. Devices you already set up keep their setting. Turning photos off also turns off the face check.

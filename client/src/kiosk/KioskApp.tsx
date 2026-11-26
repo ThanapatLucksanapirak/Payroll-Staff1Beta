@@ -23,7 +23,7 @@ const only = (s: Session): Session => ({ who: s.who, pin: s.pin, offline: s.offl
 
 type Screen =
   | { k: "home" }
-  | { k: "pin"; employee?: RosterEmployee; error?: string; shake?: number }
+  | { k: "pin"; employee?: RosterEmployee; error?: string; shake?: number; lockedUntil?: number }
   | ({ k: "actions"; error?: string } & Session)
   | ({ k: "station"; type: PunchType; photo: string | null | undefined } & Session)
   | ({ k: "guard"; message: string; question: string | null; suggest: PunchType | null; also?: PunchType; error?: string } & Session)
@@ -143,7 +143,8 @@ export function KioskApp() {
         });
         return;
       }
-      setScreen((s) => ({ k: "pin", employee: s.k === "pin" ? s.employee : employee, error: e.message, shake: Date.now() }));
+      const lockedUntil = e.code === "locked" && Number(e.body?.retryAfter) > 0 ? Date.now() + Number(e.body.retryAfter) * 1000 : undefined;
+      setScreen((s) => ({ k: "pin", employee: s.k === "pin" ? s.employee : employee, error: e.message, shake: Date.now(), lockedUntil }));
     }
   };
 
@@ -298,7 +299,7 @@ export function KioskApp() {
             <NamesScreen tz={tz} employees={state.employees} onPick={(e) => setScreen({ k: "pin", employee: e })} />
           )
         ) : screen.k === "pin" ? (
-          <PinScreen tz={tz} employee={screen.employee} error={screen.error} shake={screen.shake} idleMs={idleMs} onSubmit={(pin) => identify(pin, screen.employee)} onBack={home} />
+          <PinScreen tz={tz} employee={screen.employee} error={screen.error} shake={screen.shake} lockedUntil={screen.lockedUntil} idleMs={idleMs} onSubmit={(pin) => identify(pin, screen.employee)} onBack={home} />
         ) : screen.k === "actions" ? (
           <ActionsScreen
             tz={tz} who={screen.who} offline={screen.offline} error={screen.error} busy={busy} idleMs={idleMs}
@@ -458,8 +459,18 @@ function CameraMirror({ attach, status, faceSeen }: CameraProps) {
   );
 }
 
-function PinScreen({ tz, employee, heading, error, shake, maxLength = 6, idleMs, onSubmit, onBack }: { tz: string; employee?: RosterEmployee; heading?: { title: string; sub: string }; error?: string; shake?: number; maxLength?: number; idleMs: number; onSubmit: (pin: string) => Promise<void> | void; onBack?: () => void }) {
+function PinScreen({ tz, employee, heading, error, shake, lockedUntil, maxLength = 6, idleMs, onSubmit, onBack }: { tz: string; employee?: RosterEmployee; heading?: { title: string; sub: string }; error?: string; shake?: number; lockedUntil?: number; maxLength?: number; idleMs: number; onSubmit: (pin: string) => Promise<void> | void; onBack?: () => void }) {
   const [pin, setPin] = useState("");
+  // A live countdown while the clock is locked after wrong PINs, instead of a fixed "try again in 60 seconds".
+  const [tick, setTick] = useState(() => Date.now());
+  useEffect(() => {
+    if (!lockedUntil) return;
+    const t = setInterval(() => setTick(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, [lockedUntil]);
+  const lockLeft = lockedUntil ? Math.max(0, Math.ceil((lockedUntil - tick) / 1000)) : 0;
+  if (lockedUntil && lockLeft > 0) error = `Too many wrong PINs. Try again in ${Math.floor(lockLeft / 60)}:${String(lockLeft % 60).padStart(2, "0")}`;
+  else if (lockedUntil && error?.startsWith("Too many wrong PINs")) error = "You can try again now.";
   const [busy, setBusy] = useState(false);
   useEffect(() => { if (shake) setPin(""); }, [shake]);
   useIdle(idleMs, () => { setPin(""); onBack?.(); }, [onBack]);
