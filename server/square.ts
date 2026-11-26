@@ -1,7 +1,6 @@
 import type { Shift } from "@shared/schema";
 import { addDays, instantToLocal, localToInstant } from "@shared/dates";
 import { normalizeName } from "@shared/engine";
-import { fetchWithTimeout } from "./http";
 
 const API = "https://connect.squareup.com/v2";
 const VERSION = "2025-05-21";
@@ -12,6 +11,8 @@ export class SquareError extends Error {
   constructor(message: string, public status = 502) { super(message); }
 }
 
+/** Per-request limit in ms (headers and body together). A test hook. */
+export const squareTimeout = { ms: 20000 };
 const MAX_RETRIES = 3;
 /** Pages of timecards read per pull (200 each). */
 const MAX_PAGES = 100;
@@ -24,15 +25,20 @@ function retryDelay(res: Response, attempt: number) {
 
 async function call(token: string, path: string, init: { method?: string; body?: unknown } = {}): Promise<any> {
   for (let attempt = 0; ; attempt++) {
+    // One timer covers the headers AND the body, so a reply that stalls half-way can't hang the pull.
+    const ctl = new AbortController();
+    const timer = setTimeout(() => ctl.abort(), squareTimeout.ms);
+    try {
     let res: Response;
     try {
-      res = await fetchWithTimeout(`${API}${path}`, {
+      res = await fetch(`${API}${path}`, {
         method: init.method ?? "GET",
         headers: { Authorization: `Bearer ${token}`, "Square-Version": VERSION, "Content-Type": "application/json" },
         body: init.body === undefined ? undefined : JSON.stringify(init.body),
-      }, 20000);
+        signal: ctl.signal,
+      });
     } catch (err: any) {
-      throw new SquareError(`Could not reach Square: ${err.message}`);
+      throw new SquareError(`Could not reach Square: ${ctl.signal.aborted ? "Square took too long to answer." : err.message}`);
     }
     // Rate limited or a passing Square outage: wait and try again a few times.
     if ((res.status === 429 || res.status >= 500) && attempt < MAX_RETRIES) {
@@ -40,7 +46,10 @@ async function call(token: string, path: string, init: { method?: string; body?:
       await sleep(retryDelay(res, attempt));
       continue;
     }
-    const text = await res.text().catch(() => "");
+    let text: string;
+    try { text = await res.text(); } catch {
+      throw new SquareError(`Square sent a reply that couldn't be read (status ${res.status}). Try again in a minute.`);
+    }
     let data: any = null;
     try { data = text ? JSON.parse(text) : {}; } catch { data = null; }
     if (res.status === 401) throw new SquareError("Square rejected the access token. Reconnect Square in Settings → Locations.", 400);
@@ -55,6 +64,7 @@ async function call(token: string, path: string, init: { method?: string; body?:
       throw e;
     }
     return data;
+    } finally { clearTimeout(timer); }
   }
 }
 
@@ -138,7 +148,7 @@ export async function pullTimecards(token: string, opts: { locationId?: string; 
     };
   });
   const warnings: string[] = [];
-  if (open) warnings.push(`${open} timecard${open === 1 ? " is" : "s are"} still open (not clocked out) and were skipped.`);
+  if (open) warnings.push(`${open} timecard${open === 1 ? " is" : "s are"} still open (not clocked out) and ${open === 1 ? "was" : "were"} skipped.`);
   if (bad) warnings.push(`${bad} timecard${bad === 1 ? " has" : "s have"} an unreadable start or end time and ${bad === 1 ? "was" : "were"} skipped. Check ${bad === 1 ? "it" : "them"} in Square.`);
   if (truncated) warnings.push(`Square has more than ${MAX_PAGES * 200} timecards in this period, so only the first ${timecards.length} were brought in. Pull a shorter period.`);
   return { shifts, warnings, locationId };

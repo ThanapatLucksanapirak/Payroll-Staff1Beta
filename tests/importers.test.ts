@@ -134,3 +134,27 @@ test("legacy v1 rows convert, including lost Add Day entries", () => {
   assert.ok(doc.shifts.some((s) => s.date === "2026-11-01" && s.source === "manual"));
   assert.equal(doc.manualEmployees[0].lumpSum, 90);
 });
+
+const HDR = "Team Member,Clockin date,Clockin time,Clockout time,Clockout date\n";
+const T = { today: "2026-11-26" };
+
+test("exact duplicate rows are dropped with a warning (hourly staff are not paid twice)", () => {
+  const csv = HDR + "Ana Ruiz,11/2/26,9:00 AM,5:00 PM,11/2/26\nAna Ruiz,11/2/26,9:00 AM,5:00 PM,11/2/26\nAna Ruiz,11/3/26,9:00 AM,5:00 PM,11/3/26\n";
+  const r = parseCsvText(csv, T);
+  assert.equal(r.shifts.length, 2);
+  assert.ok(r.warnings.some((w) => /1 duplicate row skipped/.test(w)), r.warnings.join("|"));
+});
+
+test("dates far from today are skipped with a warning", () => {
+  const csv = HDR + "Ana Ruiz,11/1/1926,9:00 AM,5:00 PM,11/1/1926\nBo Lee,3/4/2099,9:00 AM,5:00 PM,3/4/2099\nAna Ruiz,11/2/26,9:00 AM,5:00 PM,11/2/26\n";
+  const r = parseCsvText(csv, T);
+  assert.equal(r.shifts.length, 1);
+  assert.ok(r.warnings.some((w) => /2 rows skipped: the date is more than a year from today/.test(w)), r.warnings.join("|"));
+});
+
+test("a shift cut to 72 hours is reported with the person and date", () => {
+  const csv = HDR + "Ana Ruiz,11/2/26,9:00 AM,5:00 PM,11/10/26\n";
+  const r = parseCsvText(csv, T);
+  assert.equal(r.shifts[0].end, 4320);
+  assert.ok(r.warnings.some((w) => /72 hours/.test(w) && /Ana Ruiz 2026-11-02/.test(w)), r.warnings.join("|"));
+});

@@ -334,8 +334,8 @@ function BlankStep({ site, onResult }: { site: Site; onResult: (r: ImportResult)
       setBusy(true);
       setError("");
       try { await onResult({ shifts: [], source: "manual", filename: label || "Manual timesheet", label, warnings: [] }); }
-      catch (err) { setError(errorMessage(err)); }
-      finally { sending.current = false; setBusy(false); }
+      // On success stay busy: the dialog closes and unmounts, and a late second tap must not create a second sheet.
+      catch (err) { setError(errorMessage(err)); sending.current = false; setBusy(false); }
     }}>
       <div className="space-y-1.5"><Label>Name (optional)</Label><Input value={label} onChange={(e) => setLabel(e.target.value)} placeholder={`e.g. ${site.name} — week 45`} data-testid="input-blank-label" /></div>
       <p className="text-xs text-muted-foreground">You can add shifts, manual employees and lump-sum pay inside the timesheet.</p>
@@ -357,6 +357,8 @@ function ReviewStep({ result, onBack, onConfirm, mode }: { result: ImportResult;
     return `${app.date(dates[0])} – ${app.date(dates[dates.length - 1])}`;
   });
   const [busy, setBusy] = useState(false);
+  // A ref too: two quick taps both see busy=false until React re-renders.
+  const sending = useRef(false);
   const [error, setError] = useState("");
   const byEmp = useMemo(() => {
     const m = new Map<string, Shift[]>();
@@ -403,7 +405,12 @@ function ReviewStep({ result, onBack, onConfirm, mode }: { result: ImportResult;
         <Button variant="outline" onClick={onBack}>Back</Button>
         <Button
           disabled={busy || !kept.length}
-          onClick={async () => { setBusy(true); setError(""); try { await onConfirm({ ...result, shifts: kept, label }); } catch (e) { setError(errorMessage(e)); } finally { setBusy(false); } }}
+          onClick={async () => {
+            if (sending.current) return;
+            sending.current = true; setBusy(true); setError("");
+            // Stay busy on success until the dialog closes; only an error re-enables the button.
+            try { await onConfirm({ ...result, shifts: kept, label }); } catch (e) { setError(errorMessage(e)); sending.current = false; setBusy(false); }
+          }}
           data-testid="button-import-confirm"
         >
           {busy && <Loader2 className="animate-spin" />} {mode === "append" ? "Add shifts" : "Create timesheet"}

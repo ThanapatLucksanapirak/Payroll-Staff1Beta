@@ -74,7 +74,7 @@ export function newShiftId(prefix = "s"): string {
   return `${prefix}_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 7)}${counter.toString(36)}`;
 }
 
-export function parseCsvText(text: string, opts: { mapping?: CsvMapping; source?: ShiftSource; defaultYear?: number; dayFirst?: boolean } = {}): CsvParseResult {
+export function parseCsvText(text: string, opts: { mapping?: CsvMapping; source?: ShiftSource; defaultYear?: number; dayFirst?: boolean; today?: string } = {}): CsvParseResult {
   const parsed = Papa.parse<Record<string, string>>(text.replace(/^\uFEFF/, ""), { header: true, skipEmptyLines: "greedy", transformHeader: (h) => h.trim() });
   const headers = (parsed.meta.fields ?? []).filter(Boolean);
   const mapping = opts.mapping ?? detectMapping(headers);
@@ -86,6 +86,14 @@ export function parseCsvText(text: string, opts: { mapping?: CsvMapping; source?
   const shifts: Shift[] = [];
   let skipped = 0;
   let zeroLength = 0;
+  let duplicates = 0;
+  let outOfRangeCount = 0;
+  const outOfRange: string[] = [];
+  const clamped: string[] = [];
+  const seen = new Set<string>();
+  // Dates more than about a year from today are almost always a typo (1926, 2099).
+  const todayMs = Date.parse((opts.today ?? new Date().toISOString().slice(0, 10)) + "T00:00:00Z");
+  const YEAR_MS = 366 * 86400000;
   // Slash dates: the file decides when it can (13/11 is clearly day-first),
   // otherwise the date-format preference does.
   const dateValues = mapping.date ? parsed.data.map((r) => String(r[mapping.date!] ?? "")) : [];
@@ -120,6 +128,11 @@ export function parseCsvText(text: string, opts: { mapping?: CsvMapping; source?
     if (endT === start && endDate === date) { zeroLength++; continue; }
     let end = endT + Math.max(0, dayDiff(date, endDate)) * 1440;
     if (end <= start) end += 1440; // overnight without an explicit out-date
+    if (Math.abs(Date.parse(date + "T00:00:00Z") - todayMs) > YEAR_MS) { if (outOfRange.length < 3) outOfRange.push(`${name} ${date}`); outOfRangeCount++; continue; }
+    const dupKey = `${name.toLowerCase()}|${date}|${start}|${end}`;
+    if (seen.has(dupKey)) { duplicates++; continue; }
+    seen.add(dupKey);
+    if (end > 4320) clamped.push(`${name} ${date}`);
     let brk = 0;
     if (mapping.breakMinutes) brk = Math.round(Number(get("breakMinutes")) || 0);
     else if (mapping.breakHours) brk = Math.round((Number(get("breakHours")) || 0) * 60);
@@ -131,6 +144,9 @@ export function parseCsvText(text: string, opts: { mapping?: CsvMapping; source?
   }
   if (zeroLength) base.warnings.push(`${zeroLength} row${zeroLength === 1 ? "" : "s"} skipped: clock-in and clock-out are the same time.`);
   if (skipped) base.warnings.push(`${skipped} row${skipped === 1 ? "" : "s"} skipped (missing name, date, or clock times).`);
+  if (outOfRangeCount) base.warnings.push(`${outOfRangeCount} row${outOfRangeCount === 1 ? "" : "s"} skipped: the date is more than a year from today (${outOfRange.join(", ")}${outOfRangeCount > outOfRange.length ? ", ..." : ""}). Check for a typo in the year.`);
+  if (duplicates) base.warnings.push(`${duplicates} duplicate row${duplicates === 1 ? "" : "s"} skipped (same employee, start and end).`);
+  if (clamped.length) base.warnings.push(`${clamped.length === 1 ? "A shift was" : `${clamped.length} shifts were`} longer than 72 hours and cut to 72 hours: ${clamped.slice(0, 3).join(", ")}${clamped.length > 3 ? ", ..." : ""}. Check the clock-out date.`);
   if (!shifts.length) base.warnings.push("No complete shifts were found. Check the column mapping.");
   return { ...base, shifts, skipped, needsMapping: shifts.length === 0 };
 }

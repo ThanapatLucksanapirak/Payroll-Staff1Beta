@@ -6,6 +6,11 @@ Settings → About, next to the matching update.
 Add an entry with every pull request: a `## YYYY-MM-DD · Title (#PR)` heading and a
 few short bullets written for the people who use the app, not for developers.
 
+## 2026-11-28 · Safer imports and Square pulls
+- Tapping Create timesheet twice (New timesheet, Start blank, or the CSV review) no longer makes two sheets.
+- CSV imports now skip exact duplicate rows, skip dates more than a year from today (like 1926 or 2099), and say so in the review warnings. A shift cut to 72 hours is named in a warning too.
+- A Square pull whose reply is cut off or stalls now shows an error instead of "0 shifts", and "1 timecard is still open" reads correctly.
+
 ## 2026-11-27 · Face data is kept through a database switch or restore (#47)
 - Switching to another database, or restoring an older backup, no longer lets the daily clean-up delete saved face data. Face data isn't in backups, so before this it couldn't be got back after switching back.
 - The clean-up now skips a location when the database in use doesn't have it, has no employees there, or has no punches there within the face data retention period.
