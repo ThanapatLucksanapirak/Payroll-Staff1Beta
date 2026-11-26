@@ -109,7 +109,7 @@ const POLICY: Rule[] = [
   { method: "GET", path: /^\/sites\/[^/]+\/employee-suggestions$/, need: "admin", perm: "employees.manage", sites: fromParam },
   // Two-factor sign-in for your own account
   { method: "GET", path: /^\/auth\/2fa$/, need: "user" },
-  { method: "POST", path: /^\/auth\/2fa\/(setup|enable|disable|recovery-codes|forget-devices)$/, need: "user" },
+  { method: "POST", path: /^\/auth\/2fa\/(setup|enable|disable|recovery-codes|forget-devices|email\/setup|email\/enable)$/, need: "user" },
   // Schedule, time off, labor vs. sales, forecast. Everyone can read their locations;
   // editors change the schedule, time off and sales; schedule settings stay owner/admin.
   { method: "GET", path: /^\/schedule$/, need: "user", sites: async (req) => [typeof req.query.siteId === "string" ? req.query.siteId : undefined] },
@@ -149,7 +149,7 @@ const ACCOUNTANT_RULES: { method: string; path: RegExp; sites?: SiteResolver; pu
   { method: "PUT", path: /^\/auth\/profile$/ },
   { method: "GET", path: /^\/auth\/me$/ },
   { method: "GET", path: /^\/auth\/2fa$/ },
-  { method: "POST", path: /^\/auth\/2fa\/(setup|enable|disable|recovery-codes|forget-devices)$/ },
+  { method: "POST", path: /^\/auth\/2fa\/(setup|enable|disable|recovery-codes|forget-devices|email\/setup|email\/enable)$/ },
   { method: "GET", path: /^\/bootstrap$/ },
   { method: "GET", path: /^\/timesheets$/ },
   { method: "GET", path: /^\/timesheets\/[^/]+$/, sites: fromRow, published: tsId },

@@ -1,5 +1,4 @@
-import { Database, HandCoins, HardDriveDownload, History, MapPin, RefreshCw, Shield, SlidersHorizontal, Tags, Users, type LucideIcon } from "lucide-react";
-import { Database, HandCoins, HardDriveDownload, History, Mail, MapPin, Shield, SlidersHorizontal, Tags, Users, type LucideIcon } from "lucide-react";
+import { Database, HandCoins, HardDriveDownload, History, Mail, MapPin, RefreshCw, Shield, SlidersHorizontal, Tags, Users, type LucideIcon } from "lucide-react";
 import { isAdmin, type Role } from "@/lib/roles";
 
 /**

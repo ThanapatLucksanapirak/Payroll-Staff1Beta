@@ -194,7 +194,7 @@ test("publish shows the payroll to the accountant and emails them", async () => 
   assert.equal(pub.body.published.email.ok, true);
   assert.equal(sent.length, 1);
   assert.deepEqual(sent[0].to, ["acct@example.com"], "only accountants are emailed");
-  assert.match(sent[0].subject, /Payroll published/);
+  assert.match(sent[0].subject, /Payroll ready/);
   assert.match(sent[0].text, /https:\/\/payroll\.example\.com\/#\/timesheet\//);
 
   const list = await call("GET", "/api/timesheets", undefined, "acct");
@@ -337,4 +337,88 @@ test("accountants don't get employees' standing bonuses and deductions", async (
   assert.equal(acct.status, 200);
   assert.deepEqual(acct.body.recurring, []);
   if (put.status === 200) assert.ok(owner.body.recurring.length >= 1);
+});
+
+// ── Two-step sign-in with emailed codes ──────────────────────────────────────
+const lastCode = () => {
+  const m = /(\d{3}) (\d{3})/.exec(sent.at(-1)?.subject ?? "");
+  return m ? m[1] + m[2] : "";
+};
+
+test("emails come from Shijiri Payroll Service by default and look branded", async () => {
+  const { emailConfigSchema, brandedHtml } = await import("../server/email");
+  const d = emailConfigSchema.parse({});
+  assert.equal(d.fromAddress, "contact@shijiri.com");
+  assert.equal(d.fromName, "Shijiri Payroll Service");
+  const html = brandedHtml({ brand: "Shijiri <Payroll>", heading: "Hi", paragraphs: ["a & b"], code: "123456", details: [["Period", "Nov 1"]] });
+  assert.ok(html.includes("Shijiri &lt;Payroll&gt;") && html.includes("a &amp; b") && html.includes("123456"));
+  assert.ok(!html.includes("<Payroll>"), "escaped");
+});
+
+test("an accountant turns on email codes and signs in with one", async () => {
+  sent.length = 0;
+  await call("PUT", "/api/auth/profile", { notificationEmail: "dana@example.com" }, "acct");
+  const st = await call("GET", "/api/auth/2fa", undefined, "acct");
+  assert.equal(st.body.emailAvailable, true);
+  assert.equal(st.body.email, "d•••@example.com");
+  assert.equal((await call("POST", "/api/auth/2fa/email/setup", { password: "wrong" }, "acct")).status, 400);
+  const setup = await call("POST", "/api/auth/2fa/email/setup", { password: "acct password" }, "acct");
+  assert.equal(setup.status, 200, JSON.stringify(setup.body));
+  assert.deepEqual(sent.at(-1)!.to, ["dana@example.com"]);
+  const code = lastCode();
+  assert.match(code, /^\d{6}$/);
+  assert.ok(!JSON.stringify(setup.body).includes(code), "the code is never in the response");
+  // Asking again straight away is refused.
+  assert.equal((await call("POST", "/api/auth/2fa/email/setup", { password: "acct password" }, "acct")).status, 429);
+  const wrong = code === "000000" ? "111111" : "000000";
+  assert.equal((await call("POST", "/api/auth/2fa/email/enable", { code: wrong }, "acct")).status, 400);
+  const on = await call("POST", "/api/auth/2fa/email/enable", { code }, "acct");
+  assert.equal(on.status, 200, JSON.stringify(on.body));
+  assert.equal(on.body.recoveryCodes.length, 10);
+  assert.equal((await call("POST", "/api/auth/2fa/email/enable", { code }, "acct")).status, 400, "a code works once");
+  assert.equal((await call("GET", "/api/auth/2fa", undefined, "acct")).body.method, "email");
+  // The email can't be removed while it's used for codes.
+  assert.equal((await call("PUT", "/api/auth/profile", { notificationEmail: "" }, "acct")).status, 409);
+
+  // Sign in: password, then the emailed code.
+  const login = await call("POST", "/api/auth/login", { username: "acct", password: "acct password" });
+  assert.equal(login.status, 200);
+  assert.equal(login.body.twoFactor, "verify");
+  assert.equal(login.body.method, "email");
+  assert.equal(login.body.sentTo, "d•••@example.com");
+  assert.ok(!login.body.user, "no session yet");
+  const loginCode = lastCode();
+  assert.equal((await call("POST", "/api/auth/2fa/login/resend", { ticket: login.body.ticket })).status, 429, "resend waits 30 s");
+  const bad = await call("POST", "/api/auth/2fa/login/verify", { ticket: login.body.ticket, code: loginCode === "000000" ? "111111" : "000000" });
+  assert.equal(bad.status, 401);
+  const res = await fetch(base + "/api/auth/2fa/login/verify", { method: "POST", headers: { "Content-Type": "application/json", "X-Requested-With": "payroll" }, body: JSON.stringify({ ticket: login.body.ticket, code: loginCode }) });
+  assert.equal(res.status, 200);
+  assert.ok((res.headers.get("set-cookie") ?? "").includes("="));
+});
+
+test("emailed codes allow 5 tries and expire", async () => {
+  const users = await import("../server/users");
+  const tf = await import("../server/twofactor");
+  const u = (await users.listUsers({ fresh: true })).find((x) => x.username === "acct")!;
+  const t0 = Date.now() + 120_000;
+  sent.length = 0;
+  const r = await tf.sendEmailCode(u.id, "login", t0);
+  assert.equal(r.ok, true);
+  const code = lastCode();
+  const wrong = code === "000000" ? "111111" : "000000";
+  for (let i = 0; i < 5; i++) assert.equal(await tf.useCode(u.id, wrong, t0), null);
+  assert.equal(await tf.useCode(u.id, code, t0), null, "locked after 5 wrong tries");
+  await tf.sendEmailCode(u.id, "login", t0 + 60_000);
+  const fresh = lastCode();
+  assert.equal(await tf.useCode(u.id, fresh, t0 + 60_000 + tf.EMAIL_CODE_MS + 1), null, "expired");
+});
+
+test("only an owner can change the email of someone using email codes", async () => {
+  const users = await import("../server/users");
+  await users.createUser(null, { username: "admin2", password: "admin2 password", role: "admin" });
+  await login("admin2", "admin2", "admin2 password");
+  const list = await call("GET", "/api/users", undefined, "owner");
+  const acct = list.body.find((u: any) => u.username === "acct");
+  assert.equal((await call("PATCH", `/api/users/${acct.id}`, { notificationEmail: "evil@example.com" }, "admin2")).status, 403);
+  assert.equal((await call("PATCH", `/api/users/${acct.id}`, { notificationEmail: "books@example.com" }, "owner")).status, 200);
 });

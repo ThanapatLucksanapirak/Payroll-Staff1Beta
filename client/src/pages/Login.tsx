@@ -18,7 +18,7 @@ export function LoginPage({ appName, setupRequired, dbError, onDone }: { appName
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   /** Second sign-in step (two-factor), after a correct password. */
-  const [second, setSecond] = useState<{ kind: "verify" | "setup"; ticket: string } | null>(null);
+  const [second, setSecond] = useState<{ kind: "verify" | "setup"; ticket: string; method?: "app" | "email"; sentTo?: string; emailError?: string } | null>(null);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -28,10 +28,10 @@ export function LoginPage({ appName, setupRequired, dbError, onDone }: { appName
     if (setupRequired && !username.trim()) { setError("Choose a username."); return; }
     setBusy(true);
     try {
-      const r = await api<{ twoFactor?: "verify" | "setup"; ticket?: string }>("POST", setupRequired ? "/api/auth/setup" : "/api/auth/login", setupRequired
+      const r = await api<{ twoFactor?: "verify" | "setup"; ticket?: string; method?: "app" | "email"; sentTo?: string; emailError?: string }>("POST", setupRequired ? "/api/auth/setup" : "/api/auth/login", setupRequired
         ? { username: username.trim(), displayName: displayName.trim() || undefined, password, setupCode }
         : { username: username.trim(), password, remember });
-      if (r?.twoFactor && r.ticket) { setPassword(""); setSecond({ kind: r.twoFactor, ticket: r.ticket }); return; }
+      if (r?.twoFactor && r.ticket) { setPassword(""); setSecond({ kind: r.twoFactor, ticket: r.ticket, method: r.method, sentTo: r.sentTo, emailError: r.emailError }); return; }
       session.set();
       onDone();
     } catch (err) {
