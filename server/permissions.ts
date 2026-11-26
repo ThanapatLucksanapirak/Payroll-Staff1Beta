@@ -16,7 +16,7 @@
 import type { Express, NextFunction, Request, Response } from "express";
 import { z } from "zod";
 import {
-  type Permission, type RolePermissions, DEFAULT_ROLE_PERMISSIONS, LIMITED_ROLES, PERMISSIONS, PERMISSION_INFO,
+  type Permission, type RolePermissions, ACCOUNTANT_PERMISSIONS, DEFAULT_ROLE_PERMISSIONS, LIMITED_ROLES, PERMISSIONS, PERMISSION_INFO,
   normalizeRolePermissions, permissionsForRole,
 } from "@shared/permissions";
 import { db } from "./db";
@@ -61,6 +61,7 @@ export async function permissionsOf(user: Pick<UserRecord, "role">): Promise<Per
 
 export async function hasPermission(user: Pick<UserRecord, "role">, perm: Permission): Promise<boolean> {
   if (isAdmin(user)) return true;
+  if (user.role === "accountant") return ACCOUNTANT_PERMISSIONS.includes(perm);
   return (await getRolePermissions())[user.role as "manager" | "viewer"]?.[perm] ?? false;
 }
 

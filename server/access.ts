@@ -10,6 +10,7 @@ import * as settings from "./settings";
 import { type UserRecord, canAccessSite, canEdit, isAdmin } from "./users";
 import type { Permission } from "@shared/permissions";
 import { hasPermission } from "./permissions";
+import { isPublished } from "./publish";
 
 export const CSRF_HEADER = "x-requested-with";
 export const CSRF_VALUE = "payroll";
@@ -136,6 +137,47 @@ const POLICY: Rule[] = [
   { method: "PUT", path: /^\/sites\/[^/]+\/portal$/, need: "admin", sites: fromParam },
 ];
 
+/**
+ * Accountants: read-only, published payroll only. Default deny, so nothing
+ * else (Live, punches, employees, schedule, settings, drafts) is reachable even
+ * when another rule above would let a viewer in. `published` names the
+ * timesheet that must be published; the routes themselves filter lists
+ * (GET /timesheets, pay/ytd, pay/previous) to published payroll.
+ */
+const ACCOUNTANT_RULES: { method: string; path: RegExp; sites?: SiteResolver; published?: (req: Request) => string }[] = [
+  { method: "POST", path: /^\/auth\/(logout-all|change-password)$/ },
+  { method: "PUT", path: /^\/auth\/profile$/ },
+  { method: "GET", path: /^\/auth\/me$/ },
+  { method: "GET", path: /^\/auth\/2fa$/ },
+  { method: "POST", path: /^\/auth\/2fa\/(setup|enable|disable|recovery-codes|forget-devices)$/ },
+  { method: "GET", path: /^\/bootstrap$/ },
+  { method: "GET", path: /^\/timesheets$/ },
+  { method: "GET", path: /^\/timesheets\/[^/]+$/, sites: fromRow, published: tsId },
+  { method: "GET", path: /^\/timesheets\/[^/]+\/pay\/previous$/, sites: fromRow, published: tsId },
+  { method: "GET", path: /^\/sites\/[^/]+\/pay\/(settings|ytd)$/, sites: fromParam },
+];
+const ACCOUNTANT_MESSAGE = "Accountant accounts can only see published payroll.";
+
+async function authorizeAccountant(req: Request, res: Response, next: NextFunction, user: UserRecord, method: string) {
+  const rule = ACCOUNTANT_RULES.find((r) => r.method === method && r.path.test(req.path));
+  if (!rule) return res.status(403).json({ error: ACCOUNTANT_MESSAGE });
+  try {
+    if (rule.sites && user.siteIds.length) {
+      const ids = await rule.sites(req);
+      if (ids.some((id) => id !== undefined && !canAccessSite(user, id))) return res.status(403).json({ error: "Your account doesn't have access to this location." });
+    }
+    if (rule.published) {
+      const id = rule.published(req);
+      const row = await (await db()).getTimesheet(id);
+      if (!row) return res.status(404).json({ error: "This timesheet no longer exists." });
+      if (!(await isPublished(id))) return res.status(403).json({ error: "This payroll hasn't been published yet." });
+    }
+  } catch (err) {
+    return next(err);
+  }
+  next();
+}
+
 const MESSAGES: Record<Need, string> = {
   user: "Please sign in.",
   editor: "Your account is view-only. Ask an administrator if you need to make changes.",
@@ -178,6 +220,7 @@ export function authorize(publicPaths: Set<string>) {
     const user = res.locals.user as UserRecord | undefined;
     if (!user) return res.status(401).json({ error: "Your session has expired. Please sign in again." });
     const method = req.method === "HEAD" ? "GET" : req.method;
+    if (user.role === "accountant") return authorizeAccountant(req, res, next, user, method);
     const rule = POLICY.find((r) => r.method === method && r.path.test(req.path));
     const need: Need = rule ? (typeof rule.need === "function" ? rule.need(req) : rule.need) : "admin";
     const perm = rule?.perm ? (typeof rule.perm === "function" ? rule.perm(req) : rule.perm) : undefined;

@@ -73,3 +73,4 @@ Each area has a user guide in `docs/features/`:
 - Schedule (`schedule.md`): Schedule page `/schedule`, late / no-show alerts on Live, time off, early clock-in rule, labor vs. sales, payroll forecast
 - Access (`access.md`): Settings → Users → Roles, two-factor sign-in, installable app, offsite backups
 - Employee portal (`portal.md`): `/me` for staff (hours, pay statements, schedule, time-off requests); off by default per location
+- Accountant (`accountant.md`): Accountant role sees only published payroll; Publish bar on finalized timesheets; Settings → Email (SMTP, test email) and per-user notification email

@@ -44,6 +44,7 @@ Running the installer again is safe: it repairs or upgrades the install and keep
 | `sudo payroll backup` / `backups` / `restore FILE` | Save, list and restore data backups |
 | `sudo payroll auto-update on\|off` | Turn automatic updates on or off |
 | `sudo payroll tunnel setup\|status\|remove` | Manage the Cloudflare Tunnel |
+| `sudo payroll tunnel hosts --kiosk kiosk.example.com` | Tell the app which address is the kiosk (and `--app` for the admin) |
 | `sudo payroll admin reset-password` | Reset an administrator's password |
 | `sudo payroll admin disable-2fa` | Turn off two-factor sign-in for an account (lost phone) |
 | `payroll logs -f` | Follow the app's log |

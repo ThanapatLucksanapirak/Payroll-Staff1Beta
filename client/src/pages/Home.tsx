@@ -8,7 +8,7 @@ import { todayISO } from "@shared/dates";
 import { useApp } from "@/context/AppData";
 import { api, errorMessage } from "@/lib/api";
 import { timeAgo } from "@/lib/doc";
-import { canEdit, isAdmin } from "@/lib/roles";
+import { canEdit, isAccountant, isAdmin } from "@/lib/roles";
 import { useNewTimesheet } from "@/components/NewTimesheet";
 import { SiteDot } from "@/components/AppShell";
 import { StatusBadge } from "@/components/StatusBadge";
@@ -93,7 +93,7 @@ export function HomePage() {
       )}
       {checklist && <PayrollChecklistDialog site={site} onClose={() => setChecklist(false)} />}
 
-      <HomeLaborTiles />
+      {!isAccountant(app.user) && <HomeLaborTiles />}
 
       {list.isLoading ? (
         <div className="space-y-4"><div className="grid gap-4 sm:grid-cols-3">{[0, 1, 2].map((i) => <Skeleton key={i} className="h-32 rounded-xl" />)}</div><Skeleton className="h-64 rounded-xl" /></div>
@@ -103,7 +103,9 @@ export function HomePage() {
         <EmptyState
           icon={Table2}
           title={`Welcome to ${app.prefs.appName}`}
-          description={!editable
+          description={isAccountant(app.user)
+            ? `Nothing has been published for ${site.name} yet. You'll see payroll here once it's published${app.user.notificationEmail ? ", and you'll get an email" : ""}.`
+            : !editable
             ? `There are no timesheets for ${site.name} yet. They'll show up here once your team runs payroll.`
             : timeSource === "kiosk"
               ? `There are no timesheets for ${site.name} yet. Build one from the time clock or upload a file to run your first payroll.`
@@ -156,7 +158,7 @@ export function HomePage() {
                         <p className="truncate text-[14px] font-medium">{t.customLabel || t.filename || "Untitled"}</p>
                         <p className="truncate text-xs text-muted-foreground">{t.periodStart ? `${app.date(t.periodStart)} – ${app.date(t.periodEnd)}` : "No dates"} · {t.employeeCount} people · edited {timeAgo(t.updatedAt ?? t.createdAt)}</p>
                       </div>
-                      <span className="hidden sm:block"><StatusBadge status={t.status} /></span>
+                      <span className="hidden sm:block"><StatusBadge status={t.status} publishedAt={t.publishedAt} /></span>
                       <span className="w-24 text-right text-[14px] font-semibold tabular">{app.money(t.totalPay)}</span>
                       <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground/60" />
                     </Link>
@@ -181,7 +183,7 @@ export function HomePage() {
                     highlightLast
                   />
                 )}
-                {timeSource !== "kiosk" && (
+                {!isAccountant(app.user) && timeSource !== "kiosk" && (
                   <div className="mt-4 flex items-center justify-between border-t border-border/70 pt-3 text-[13px]">
                     <span className="text-muted-foreground">Square</span>
                     {squareOn
@@ -191,7 +193,7 @@ export function HomePage() {
                         : <span className="text-muted-foreground">Not connected</span>}
                   </div>
                 )}
-                {timeSource !== "square" && (
+                {!isAccountant(app.user) && timeSource !== "square" && (
                   <div className={cn("flex items-center justify-between pt-3 text-[13px]", timeSource === "kiosk" ? "mt-4 border-t border-border/70" : "mt-3")}>
                     <span className="text-muted-foreground">Time clock</span>
                     <Link href="/live" className="inline-flex items-center gap-1 font-medium text-primary hover:underline" data-testid="link-home-live"><Radio className="h-3.5 w-3.5" />See who's in<ArrowRight className="h-3.5 w-3.5" /></Link>
