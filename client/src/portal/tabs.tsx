@@ -289,7 +289,7 @@ export function TimeOffTab({ me }: { me: Me }) {
   const labelCls = "mb-1.5 block text-[14px] font-semibold";
   return (
     <section data-testid="portal-timeoff">
-      <Title>Time off</Title>
+      <Title>My time off</Title>
       <form onSubmit={send} className="mb-8 space-y-4 rounded-2xl border border-card-border bg-card p-5 shadow-card">
         <h2 className="text-[19px] font-semibold">Ask for time off</h2>
         <div className="grid grid-cols-2 gap-3">

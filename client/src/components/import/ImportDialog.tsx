@@ -71,7 +71,7 @@ export function ImportDialog({ open, onOpenChange, site, mode, initialSource, on
 function SourcePicker({ onPick, showBlank, site }: { onPick: (s: ImportSource) => void; showBlank: boolean; site: Site }) {
   const timeSource = site.timeSource ?? "square";
   // Same source colours as the Home quick actions (categories use chart-*; the blank option stays neutral).
-  const tint: Record<ImportSource, string> = { square: "bg-chart-1/10 text-chart-1 dark:bg-chart-1/20", kiosk: "bg-chart-4/10 text-chart-4 dark:bg-chart-4/20", csv: "bg-chart-2/10 text-chart-2 dark:bg-chart-2/20", pdf: "bg-chart-3/10 text-chart-3 dark:bg-chart-3/20", blank: "bg-foreground/[0.06] text-foreground/70 dark:bg-foreground/10" };
+  const tint: Record<ImportSource, string> = { square: "bg-foreground/[0.06] text-foreground/70 dark:bg-foreground/10", kiosk: "bg-foreground/[0.06] text-foreground/70 dark:bg-foreground/10", csv: "bg-foreground/[0.06] text-foreground/70 dark:bg-foreground/10", pdf: "bg-foreground/[0.06] text-foreground/70 dark:bg-foreground/10", blank: "bg-foreground/[0.06] text-foreground/70 dark:bg-foreground/10" };
   const opts: { id: ImportSource; title: string; desc: string; icon: any }[] = [
     ...(timeSource !== "square" ? [{ id: "kiosk" as const, title: "From the time clock", desc: "Clock-ins and outs from the kiosk for a date range", icon: Tablet }] : []),
     ...(timeSource !== "kiosk" ? [{ id: "square" as const, title: "Pull from Square", desc: "Fetch closed timecards for a date range", icon: CalendarRange }] : []),

@@ -90,6 +90,12 @@ export default {
           border: "var(--sidebar-accent-border)"
         },
         segment: "hsl(var(--segment) / <alpha-value>)",
+        brand: {
+          ink: "hsl(var(--brand-ink) / <alpha-value>)",
+          rice: "hsl(var(--brand-rice) / <alpha-value>)",
+          tonal: "hsl(var(--brand-tonal) / <alpha-value>)",
+          muted: "hsl(var(--brand-muted) / <alpha-value>)",
+        },
         success: { DEFAULT: "hsl(var(--success) / <alpha-value>)", soft: "hsl(var(--success-soft) / <alpha-value>)" },
         warning: { DEFAULT: "hsl(var(--warning) / <alpha-value>)", soft: "hsl(var(--warning-soft) / <alpha-value>)" },
         danger: { DEFAULT: "hsl(var(--danger) / <alpha-value>)", soft: "hsl(var(--danger-soft) / <alpha-value>)" },

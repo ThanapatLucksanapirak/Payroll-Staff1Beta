@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { api, errorMessage, session } from "@/lib/api";
-import { Mark, Wordmark } from "@/components/Logo";
+import { BrandPanel } from "@/components/BrandPanel";
 import { TwoFactorStep } from "@/components/TwoFactorLogin";
 
 export function LoginPage({ appName, setupRequired, dbError, onDone }: { appName: string; setupRequired: boolean; dbError?: string | null; onDone: () => void }) {
@@ -53,12 +53,7 @@ export function LoginPage({ appName, setupRequired, dbError, onDone }: { appName
   return (
     <div className="grid min-h-dvh grid-cols-1 grid-rows-[auto_1fr] bg-card dark:bg-background min-[861px]:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] min-[861px]:grid-rows-1">
       {/* Brand panel (header band on phones) */}
-      <aside className="relative flex flex-col overflow-hidden bg-[#2e1525] px-5 pb-[22px] pt-5 text-[#f7f1e9] dark:shadow-[inset_-1px_0_0_hsl(var(--border))] min-[861px]:px-12 min-[861px]:py-10">
-        <Mark aria-hidden aria-label={undefined} role="presentation" className="pointer-events-none absolute -right-9 -top-2.5 h-auto w-[150px] text-[#45203a] min-[861px]:-right-[22%] min-[861px]:top-[12%] min-[861px]:w-full" />
-        <Wordmark className="relative h-6 w-auto self-start text-[#f7f1e9] min-[861px]:h-8" />
-        <p className="relative mt-7 font-display text-[26px] font-normal leading-[1.08] tracking-[-0.012em] min-[861px]:mt-auto min-[861px]:text-[44px]">Every shift counted.<br />Every hour paid.</p>
-        <p className="relative mt-[18px] hidden max-w-[34ch] text-[15px] leading-[22px] text-[#d9c9cf] min-[861px]:block">Shijiri Payroll keeps the hours, tips and pay for every Shijiri kitchen and floor.</p>
-      </aside>
+      <BrandPanel />
 
       {/* Form side */}
       <main className="flex flex-col px-5 pb-5 pt-7 min-[861px]:px-12 min-[861px]:py-8">

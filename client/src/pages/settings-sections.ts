@@ -12,7 +12,6 @@ export interface SettingsSectionMeta {
   description: string;
   icon: LucideIcon;
   /** Tile colour for the macOS-style icon. */
-  tint: string;
   group: "Payroll" | "App" | "Access" | "System";
   keywords?: string;
   /** Owners and administrators only (the server enforces this too). */
@@ -20,18 +19,18 @@ export interface SettingsSectionMeta {
 }
 
 export const SETTINGS_SECTIONS: SettingsSectionMeta[] = [
-  { id: "locations", label: "Locations & rules", description: "Sites, pay rules, Square and time clock", icon: MapPin, tint: "bg-[#0a84ff]", group: "Payroll", adminOnly: true, keywords: "site rules cutoffs overtime square timezone pay period kiosk time clock devices pair" },
-  { id: "categories", label: "Pay categories", description: "Shared rate templates", icon: Tags, tint: "bg-[#ff9f0a]", group: "Payroll", adminOnly: true, keywords: "rates chef server wage" },
-  { id: "pay", label: "Pay extras", description: "Cash, holidays, standing items, advances, accounting", icon: HandCoins, tint: "bg-[#34c759]", group: "Payroll", adminOnly: true, keywords: "cash denominations bills coins rounding holiday premium recurring bonus deduction uniform advance loan tips points quickbooks xero journal accounts" },
-  { id: "preferences", label: "Preferences", description: "Appearance, formats, PDF", icon: SlidersHorizontal, tint: "bg-[#8e8e93]", group: "App", adminOnly: true, keywords: "theme dark light date currency autosave pdf branding logo" },
-  { id: "email", label: "Email", description: "Notify your accountant when payroll is published", icon: Mail, tint: "bg-[#ff9500]", group: "App", adminOnly: true, keywords: "email smtp gmail outlook microsoft 365 resend postmark notifications accountant test" },
-  { id: "security", label: "Account & password", description: "Your name, password and sessions", icon: Shield, tint: "bg-[#5e5ce6]", group: "Access", keywords: "account profile password login session sign out" },
-  { id: "users", label: "Users", description: "People who can sign in, and their roles", icon: Users, tint: "bg-[#32ade6]", group: "Access", adminOnly: true, keywords: "users roles owner admin manager viewer accountant invite accounts notification email" },
-  { id: "activity", label: "Activity", description: "Who changed what, and when", icon: History, tint: "bg-[#ff375f]", group: "Access", adminOnly: true, keywords: "audit log history activity changes" },
-  { id: "database", label: "Database", description: "Storage and connection", icon: Database, tint: "bg-[#30d158]", group: "System", adminOnly: true, keywords: "supabase sqlite storage" },
-  { id: "data", label: "Backup & history", description: "Backups, restore, retention", icon: HardDriveDownload, tint: "bg-[#bf5af2]", group: "System", adminOnly: true, keywords: "backup restore export retention trash" },
-  { id: "updates", label: "Software update", description: "Version and Update now", icon: RefreshCw, tint: "bg-[#0a84ff]", group: "System", adminOnly: true, keywords: "update upgrade version new release install" },
-  { id: "about", label: "About", description: "Installed version and what's new", icon: Info, tint: "bg-[#8e8e93]", group: "System", adminOnly: true, keywords: "about version history changelog what's new release notes updates installed commit" },
+  { id: "locations", label: "Locations & rules", description: "Sites, pay rules, Square and time clock", icon: MapPin, group: "Payroll", adminOnly: true, keywords: "site rules cutoffs overtime square timezone pay period kiosk time clock devices pair" },
+  { id: "categories", label: "Pay categories", description: "Shared rate templates", icon: Tags, group: "Payroll", adminOnly: true, keywords: "rates chef server wage" },
+  { id: "pay", label: "Pay extras", description: "Cash, holidays, standing items, advances, accounting", icon: HandCoins, group: "Payroll", adminOnly: true, keywords: "cash denominations bills coins rounding holiday premium recurring bonus deduction uniform advance loan tips points quickbooks xero journal accounts" },
+  { id: "preferences", label: "Preferences", description: "Appearance, formats, PDF", icon: SlidersHorizontal, group: "App", adminOnly: true, keywords: "theme dark light date currency autosave pdf branding logo" },
+  { id: "email", label: "Email", description: "Notify your accountant when payroll is published", icon: Mail, group: "App", adminOnly: true, keywords: "email smtp gmail outlook microsoft 365 resend postmark notifications accountant test" },
+  { id: "security", label: "Account & password", description: "Your name, password and sessions", icon: Shield, group: "Access", keywords: "account profile password login session sign out" },
+  { id: "users", label: "Users", description: "People who can sign in, and their roles", icon: Users, group: "Access", adminOnly: true, keywords: "users roles owner admin manager viewer accountant invite accounts notification email" },
+  { id: "activity", label: "Activity", description: "Who changed what, and when", icon: History, group: "Access", adminOnly: true, keywords: "audit log history activity changes" },
+  { id: "database", label: "Database", description: "Storage and connection", icon: Database, group: "System", adminOnly: true, keywords: "supabase sqlite storage" },
+  { id: "data", label: "Backup & history", description: "Backups, restore, retention", icon: HardDriveDownload, group: "System", adminOnly: true, keywords: "backup restore export retention trash" },
+  { id: "updates", label: "Software update", description: "Version and Update now", icon: RefreshCw, group: "System", adminOnly: true, keywords: "update upgrade version new release install" },
+  { id: "about", label: "About", description: "Installed version and what's new", icon: Info, group: "System", adminOnly: true, keywords: "about version history changelog what's new release notes updates installed commit" },
 ];
 
 /** The sections this user may open: everyone gets their own account; the rest are for owners and administrators. */

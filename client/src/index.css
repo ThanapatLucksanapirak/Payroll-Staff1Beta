@@ -49,6 +49,12 @@
     --ring: 321 50% 40%;                /* #99346f, used at /35 for the halo */
     --radius: 0.75rem;
 
+    /* Shijiri brand moments only (sign-in panel, portal band): ink, rice, tonal mark, muted line */
+    --brand-ink: 322 38% 13%;           /* #2e1525 */
+    --brand-rice: 36 45% 94%;           /* #f7f1e9, 15:1 on ink */
+    --brand-tonal: 318 37% 20%;         /* #45203a */
+    --brand-muted: 338 18% 82%;         /* #d9c9cf, 10.6:1 on ink */
+
     /* Status palette (unchanged hues; neutral warmed) */
     --success: 136 59% 32%;
     --success-soft: 137 50% 94%;
@@ -61,7 +67,7 @@
     --info: 211 100% 42%;
     --info-soft: 211 100% 96%;
 
-    --chart-1: 321 48% 42%;             /* Shijiri plum */
+    --chart-1: 215 22% 42%;             /* slate: data, never the brand plum */
     --chart-2: 136 50% 42%;
     --chart-3: 33 100% 48%;
     --chart-4: 214 70% 52%;             /* was 280 purple: too close to brand */
@@ -100,7 +106,7 @@
     --destructive-foreground: 0 0% 100%;
     --border: 320 4% 19%;
     --input: 320 4% 26%;
-    --ring: 320 34% 72%;
+    --ring: 320 34% 82%;
 
     --success: 135 55% 58%;
     --success-soft: 135 35% 16%;
@@ -113,7 +119,7 @@
     --info: 211 100% 68%;
     --info-soft: 211 50% 17%;
 
-    --chart-1: 320 40% 70%;
+    --chart-1: 215 25% 68%;
     --chart-2: 135 55% 55%;
     --chart-3: 38 100% 60%;
     --chart-4: 214 85% 68%;

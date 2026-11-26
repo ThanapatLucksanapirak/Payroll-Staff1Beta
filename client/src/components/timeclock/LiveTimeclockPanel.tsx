@@ -70,7 +70,7 @@ export function LiveTimeclockPanel({ site }: { site: Site }) {
             </div>
           </div>
           <div className={cn("mt-4 flex flex-wrap gap-2", single && "sm:mt-0 sm:shrink-0 sm:justify-end")}>
-            <Button asChild size="sm" variant={r?.counts.fix ? "default" : "outline"}><Link href="/live/fix" data-testid="link-fix-punches"><Wrench />Fix punches & approve<ChevronRight /></Link></Button>
+            <Button asChild size="sm" variant={r?.counts.fix ? "tinted" : "outline"}><Link href="/live/fix" data-testid="link-fix-punches"><Wrench />Fix punches & approve<ChevronRight /></Link></Button>
             {editable && !!r?.counts.clean && (
               <Button size="sm" variant="tinted" disabled={busy} onClick={approve} data-testid="button-live-approve-clean">{busy ? <Loader2 className="animate-spin" /> : <ShieldCheck />}Approve {r.counts.clean} clean day{r.counts.clean === 1 ? "" : "s"}</Button>
             )}

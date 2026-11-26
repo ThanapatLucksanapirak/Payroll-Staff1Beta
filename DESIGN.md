@@ -58,6 +58,11 @@ Rules:
 - Never hard-code a hex or a Tailwind palette colour (`text-gray-500`,
   `bg-blue-600`) in the admin app or portal. Use the tokens. The kiosk and the
   emails are the deliberate exceptions (see below).
+- Icon tiles (Settings list, Home quick actions, import sources) are neutral
+  (`bg-foreground/[0.06] text-foreground/70`), never a rainbow of hues.
+- Charts: `chart-1` is slate for single-series data; plum is never a data colour.
+- Brand-moment colours are tokens too: `brand-ink`, `brand-rice`, `brand-tonal`,
+  `brand-muted` (Tailwind `bg-brand-ink` etc.). Use them only on brand panels.
 - Status colour means status. A green number is "good / paid", amber is "needs a
   look", red is "wrong or blocked". Don't use them for decoration or for
   category colour; categories use `chart-*`.

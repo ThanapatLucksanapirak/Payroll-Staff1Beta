@@ -64,12 +64,12 @@ export function HomePage() {
   const editable = canEdit(app.user);
   const admin = isAdmin(app.user);
   const quick = [
-    ...(timeSource !== "square" ? [{ icon: Tablet, tint: "bg-chart-4/10 text-chart-4 dark:bg-chart-4/20", title: "Time clock", sub: "Hours from the kiosk", source: "kiosk" as const, testid: "kiosk" }] : []),
-    ...(timeSource !== "kiosk" ? [{ icon: CalendarRange, tint: "bg-chart-1/10 text-chart-1 dark:bg-chart-1/20", title: "Pull from Square", sub: squareOn ? "Fetch timecards" : "Not connected", source: "square" as const, testid: "square" }] : []),
-    { icon: FileSpreadsheet, tint: "bg-chart-2/10 text-chart-2 dark:bg-chart-2/20", title: "Upload CSV", sub: "Square, Toast, Sling…", source: "csv" as const, testid: "csv" },
-    { icon: FileText, tint: "bg-chart-3/10 text-chart-3 dark:bg-chart-3/20", title: "Toast PDF", sub: "Schedule or time entries", source: "pdf" as const, testid: "pdf" },
+    ...(timeSource !== "square" ? [{ icon: Tablet, tint: "bg-foreground/[0.06] text-foreground/70 dark:bg-foreground/10", title: "Time clock", sub: "Hours from the kiosk", source: "kiosk" as const, testid: "kiosk" }] : []),
+    ...(timeSource !== "kiosk" ? [{ icon: CalendarRange, tint: "bg-foreground/[0.06] text-foreground/70 dark:bg-foreground/10", title: "Pull from Square", sub: squareOn ? "Fetch timecards" : "Not connected", source: "square" as const, testid: "square" }] : []),
+    { icon: FileSpreadsheet, tint: "bg-foreground/[0.06] text-foreground/70 dark:bg-foreground/10", title: "Upload CSV", sub: "Square, Toast, Sling…", source: "csv" as const, testid: "csv" },
+    { icon: FileText, tint: "bg-foreground/[0.06] text-foreground/70 dark:bg-foreground/10", title: "Toast PDF", sub: "Schedule or time entries", source: "pdf" as const, testid: "pdf" },
     { icon: Plus, tint: "bg-foreground/[0.06] text-foreground/70 dark:bg-foreground/10", title: "New timesheet", sub: "Blank or any source", source: undefined, testid: "new" },
-    ...(timeSource !== "square" ? [{ icon: ListChecks, tint: "bg-chart-5/10 text-chart-5 dark:bg-chart-5/20", title: "Payroll checklist", sub: "What's left to fix", source: undefined, testid: "checklist", action: () => setChecklist(true) }] : []),
+    ...(timeSource !== "square" ? [{ icon: ListChecks, tint: "bg-foreground/[0.06] text-foreground/70 dark:bg-foreground/10", title: "Payroll checklist", sub: "What's left to fix", source: undefined, testid: "checklist", action: () => setChecklist(true) }] : []),
   ] as { icon: any; tint: string; title: string; sub: string; source: Parameters<typeof newTimesheet>[0]; testid: string; action?: () => void }[];
   const today = new Date(`${todayISO(site.rules.timezone)}T12:00:00`).toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" });
 
