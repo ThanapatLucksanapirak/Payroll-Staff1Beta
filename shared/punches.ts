@@ -72,6 +72,12 @@ export interface PunchMeta {
   station?: string;
   /** Kiosk photo: "saved" when a snapshot was stored, "none" when the camera was unavailable. */
   photo?: "saved" | "none";
+  /**
+   * A punch saved offline, kept but flagged for a manager: "missing" when it has
+   * no photo or its photo showed no face, "unchecked" when the server's face
+   * check couldn't run on its photo.
+   */
+  face?: "missing" | "unchecked";
   /** The kiosk fix request this punch was created from. */
   fixRequestId?: string;
   [key: string]: unknown;

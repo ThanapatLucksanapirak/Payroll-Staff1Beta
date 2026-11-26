@@ -15,6 +15,7 @@ import { PUNCH_TYPES, type Punch, type PunchMeta, allowedActions, clockState, lo
 import { type KioskDeviceOptions, DEVICE_LOGIN_MODES, IDLE_MAX, IDLE_MIN, breakDue, checkAction, daySummary, matchStation, normalizeDeviceOptions, notesFor, weakPinReason } from "@shared/kiosk";
 import { getSiteConfig, listNotes } from "./kioskConfig";
 import { decodePhoto, deletePhoto, savePhoto } from "./kioskPhotos";
+import { checkFaceJpeg, loadFaceModel } from "./faceCheck";
 import { registerKioskDeviceFeatureRoutes } from "./kioskFeatures";
 import { getAuthSecret } from "./config";
 import { db } from "./db";
@@ -339,6 +340,8 @@ async function withPinAttempt<T>(lockKey: string, fn: () => Promise<T>): Promise
 
 /** Device-token endpoints. Register before the admin auth middleware. */
 export function registerKioskRoutes(app: Express) {
+  // Load the face detector in the background so the first photo punch isn't slow.
+  if (process.env.NODE_ENV === "production") void loadFaceModel().catch(() => undefined);
   // Pairing with a short code: the only kiosk call without a device token.
   app.post("/api/kiosk/pair", h(async (req, res) => {
     const ip = req.ip ?? "unknown";
@@ -499,16 +502,39 @@ export function registerKioskRoutes(app: Express) {
       const station = matchStation((await getSiteConfig(site.id)).stations, body.station);
       if (station) meta.station = station;
     }
-    // Photos on: a live punch must come with a photo (the kiosk checks it shows a
-    // face before sending). Punches queued while offline are still accepted
-    // without one, so a punch saved on the tablet is never lost over a photo.
-    if (options.photo && !body.at && !body.photo) {
+    // Photos on: a live punch must come with a photo that shows a face. The
+    // server checks the face (server/faceCheck.ts), so it's the same on every
+    // device. A punch queued while offline is still accepted without one (or
+    // without a face), flagged "No face", so a punch saved on the tablet is never
+    // lost. The server decides what counts as offline: only an `at` more than 2
+    // minutes old. A fresher `at` is treated as live, so sending one can't skip
+    // the check.
+    const queuedOffline = !!body.at && at < now - 2 * 60_000;
+    if (options.photo && !queuedOffline && !body.photo) {
       return res.status(422).json({ error: "Face not detected. This time clock takes a photo with each punch: show your face to the camera and try again.", code: "photo" });
     }
     const photoBytes = options.photo && body.photo ? decodePhoto(body.photo) : null;
-    if (options.photo && !body.at && !photoBytes) {
+    if (options.photo && !queuedOffline && !photoBytes) {
       return res.status(422).json({ error: "The photo didn't come through. Show your face to the camera and try again.", code: "photo" });
     }
+    if (options.photo && photoBytes) {
+      const face = await checkFaceJpeg(photoBytes);
+      if (!face.ok) {
+        if (!queuedOffline) {
+          const error = face.reason === "busy"
+            ? "The face check is busy. Wait a moment and try again."
+            : face.reason === "unavailable"
+            ? "The face check isn't working on the server right now. Ask a manager to add your punch."
+            : face.reason === "bad_image"
+              ? "The photo didn't come through. Show your face to the camera and try again."
+              : "Face not detected. Show your face to the camera and try again.";
+          return res.status(face.reason === "unavailable" || face.reason === "busy" ? 503 : 422).json({ error, code: "photo", reason: face.reason });
+        }
+        // A punch saved offline: kept, but flagged for the manager ("unchecked" when the check couldn't run)
+        meta.face = face.reason === "unavailable" || face.reason === "busy" ? "unchecked" : "missing";
+      }
+    }
+    if (options.photo && !photoBytes) meta.face = "missing"; // queued offline with no photo: kept, flagged
     let photoSaved = false;
     // Photos on: every punch records whether it has one ("none" for a queued punch without one).
     if (options.photo) {
@@ -634,8 +660,6 @@ function kioskAssetSet(): Set<string> {
   return set;
 }
 
-/** The face-check model and runtime the kiosk loads (see client/src/kiosk/face.ts). */
-const FACE_FILES = new Set(["blaze_face_short_range.tflite", "vision_wasm_internal.js", "vision_wasm_internal.wasm", "vision_wasm_nosimd_internal.js", "vision_wasm_nosimd_internal.wasm"].map((f) => `/face/${f}`));
 
 const DEV_PREFIXES = ["/@vite/", "/@fs/", "/@id/", "/@react-refresh", "/node_modules/", "/src/", "/vite-hmr"];
 
@@ -657,8 +681,6 @@ export function kioskHostGuard() {
     // Installable kiosk (home-screen icon, manifest, the static-shell service worker,
     // and the Android app's Digital Asset Links file)
     if (p === "/kiosk.webmanifest" || p === "/sw.js" || p === "/.well-known/assetlinks.json" || /^\/icons\/[\w.-]+$/.test(p)) return next();
-    // Face check for photo on punch (model and WebAssembly runtime)
-    if (FACE_FILES.has(p)) return next();
     if (kioskAssetSet().has(p)) return next();
     if (process.env.NODE_ENV !== "production" && DEV_PREFIXES.some((x) => p.startsWith(x))) return next();
     if (p.startsWith("/api/")) return res.status(404).json({ error: "Not found." });

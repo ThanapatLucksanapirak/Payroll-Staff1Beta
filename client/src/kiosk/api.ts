@@ -59,8 +59,12 @@ export const MAX_QUEUED_PHOTOS = 20;
 
 export class KioskError extends Error {
   constructor(public status: number, message: string, public code?: string, public body?: any) { super(message); }
-  /** No answer from the server (offline, timeout, or the server is down). */
-  get offline() { return this.status === 0 || this.status >= 502; }
+  /**
+   * No answer from the server (offline, timeout, or the server is down). A
+   * refusal the server itself sent (it has a code, such as "photo" when the face
+   * check is unavailable or busy) is an answer: it's shown, never queued.
+   */
+  get offline() { return this.status === 0 || (this.status >= 502 && !this.code); }
 }
 
 export const token = {
