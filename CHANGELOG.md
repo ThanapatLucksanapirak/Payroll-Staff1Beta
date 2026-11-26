@@ -6,7 +6,7 @@ Settings → About, next to the matching update.
 Add an entry with every pull request: a `## YYYY-MM-DD · Title (#PR)` heading and a
 few short bullets written for the people who use the app, not for developers.
 
-## 2026-11-26 · Face check works on the kiosk web address (#PR)
+## 2026-11-26 · Face check works on the kiosk web address (#35)
 - On the time clock's own web address, the face check couldn't load, so every punch said "This tablet couldn't check for a face", on iPhone and iPad too. It loads now, and faces are recognized again.
 
 ## 2026-11-26 · Clearer camera messages on the time clock (#34)
