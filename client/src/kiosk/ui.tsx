@@ -17,9 +17,9 @@ export const initials = (n: string) => n.split(" ").filter(Boolean).slice(0, 2).
 /** High-contrast colours for each action (WCAG AA for the label on the fill). */
 export const ACTION_STYLE: Record<PunchType, { cls: string; panel: string; icon: typeof LogIn }> = {
   in: { cls: "bg-emerald-700 text-white active:bg-emerald-800", panel: "bg-emerald-700 text-white", icon: LogIn },
-  break_start: { cls: "bg-amber-400 text-neutral-950 active:bg-amber-500", panel: "bg-amber-400 text-neutral-950", icon: Coffee },
+  break_start: { cls: "bg-amber-400 text-stone-950 active:bg-amber-500", panel: "bg-amber-400 text-stone-950", icon: Coffee },
   break_end: { cls: "bg-sky-700 text-white active:bg-sky-800", panel: "bg-sky-700 text-white", icon: Play },
-  out: { cls: "bg-neutral-900 text-white active:bg-neutral-700", panel: "bg-neutral-900 text-white", icon: LogOut },
+  out: { cls: "bg-stone-900 text-white active:bg-stone-700", panel: "bg-stone-900 text-white", icon: LogOut },
 };
 
 /** Go back home after `ms` without a touch or key press. */
@@ -40,7 +40,7 @@ export function useIdle(ms: number, onIdle: () => void, deps: unknown[] = []) {
 /** A large, glove-friendly secondary button. */
 export function BigSecondary({ children, onClick, testid, className = "" }: { children: React.ReactNode; onClick: () => void; testid?: string; className?: string }) {
   return (
-    <button type="button" onClick={onClick} className={`kiosk-tap min-h-16 rounded-2xl px-8 text-xl font-medium text-neutral-800 ring-2 ring-neutral-300 transition active:scale-[0.98] active:bg-neutral-100 active:ring-neutral-400 disabled:opacity-50 ${className}`} data-testid={testid}>
+    <button type="button" onClick={onClick} className={`kiosk-tap min-h-16 rounded-2xl px-8 text-xl font-medium text-stone-800 ring-2 ring-stone-300 transition active:scale-[0.98] active:bg-stone-100 active:ring-stone-400 disabled:opacity-50 ${className}`} data-testid={testid}>
       {children}
     </button>
   );
