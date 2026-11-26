@@ -95,7 +95,7 @@ export function UsersSettings() {
                       <td className="px-4 py-2.5">
                         <p className="font-medium">{u.displayName || u.username}{self && <span className="ml-1.5 text-xs font-normal text-muted-foreground">(you)</span>}</p>
                         <p className="text-xs text-muted-foreground">Signs in as <span className="font-mono">{u.username}</span>{u.notificationEmail ? ` · ${u.notificationEmail}` : ""}</p>
-                        <p className="mt-0.5 text-xs text-muted-foreground md:hidden">{siteNames(u)}<span className="sm:hidden"> · Last sign-in {u.lastLoginAt ? timeAgo(u.lastLoginAt) : "never"}</span></p>
+                        <p className="mt-0.5 text-xs text-muted-foreground md:hidden">{siteNames(u)}<span className="sm:hidden"> · Last sign-in {u.id === me?.id ? "now" : u.lastLoginAt ? timeAgo(u.lastLoginAt) : "never"}</span></p>
                       </td>
                       <td className="px-4 py-2.5">
                         <div className="flex flex-wrap items-center gap-1">
@@ -105,7 +105,7 @@ export function UsersSettings() {
                         </div>
                       </td>
                       <td className="px-4 py-2.5 hidden md:table-cell text-muted-foreground max-w-[16rem] truncate">{siteNames(u)}</td>
-                      <td className="px-4 py-2.5 hidden sm:table-cell text-muted-foreground">{u.lastLoginAt ? timeAgo(u.lastLoginAt) : "Never"}</td>
+                      <td className="px-4 py-2.5 hidden sm:table-cell text-muted-foreground">{u.id === me?.id ? "Now (you)" : u.lastLoginAt ? timeAgo(u.lastLoginAt) : "Never"}</td>
                       <td className="px-4 py-2.5 text-right">
                         {manage && (
                           <DropdownMenu>

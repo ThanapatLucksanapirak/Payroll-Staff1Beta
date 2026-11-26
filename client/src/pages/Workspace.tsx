@@ -39,6 +39,7 @@ export function WorkspacePage({ id }: { id: string }) {
   const accountant = isAccountant(app.user);
   const ts = useTimesheet(id, { autosave: app.prefs.autosave && !readOnly });
   const [tab, setTab] = useState("payroll");
+  const [focusFlagged, setFocusFlagged] = useState(0);
   const [checklist, setChecklist] = useState(false);
   const [sharing, setSharing] = useState(false);
   const doc = ts.doc;
@@ -118,17 +119,20 @@ export function WorkspacePage({ id }: { id: string }) {
     setFinalRequested(true);
   };
 
-  const exportPdf = async (kind: "report" | "summary" | "statements" | "payout" = "report") => {
+  const exportPdf = async (kind: "report" | "summary" | "statements" | "payout" = "report", quiet = false) => {
     try {
       const pdf = await import("@/lib/pdf");
       // YTD on statements: finalized timesheets of the year (other than this one) plus this one.
       const o = { result, prefs: app.prefs, site, title: doc.label || `Payroll ${periodTitle}`, notes: doc.notes, ytd: ytd.data ? ytdStatementMap(ytd.data.rows, result) : undefined, ytdYear, cash: pay.settings.cash, draft: doc.status !== "final" };
-      if (kind === "summary") pdf.downloadSummaryPdf({ ...o, fileBase: `${base}_summary` });
+      if (kind === "summary") pdf.downloadSummaryPdf({ ...o, fileBase: `${base}_manager_summary` });
       else if (kind === "statements") pdf.downloadPayStatementsPdf({ ...o, fileBase: `${base}_pay_statements` });
       else if (kind === "payout") pdf.downloadPayoutSheetPdf({ ...o, fileBase: `${base}_payout` });
       else pdf.downloadPayrollPdf({ ...o, fileBase: `${base}_payroll` });
+      if (!quiet) downloaded(({ report: "Full report", summary: "Manager summary", statements: "Pay statements", payout: "Pay-out sheet" } as const)[kind] + " (PDF)");
     } catch (e) { toast({ title: "PDF export failed", description: errorMessage(e), variant: "destructive" }); }
   };
+  // The file arrives silently in most browsers: say it did.
+  const downloaded = (what: string) => toast({ title: `${what} downloaded`, description: doc.status === "final" ? undefined : "This is a draft: numbers can still change." });
   const base = safeFilename(`${site.name} ${doc.label || result.periodStart || "payroll"}${doc.status === "final" ? "" : " DRAFT"}`);
 
   return (
@@ -171,18 +175,18 @@ export function WorkspacePage({ id }: { id: string }) {
                     <DropdownMenuSeparator />
                   </>}
                   {!accountant && <>
-                    <DropdownMenuItem onClick={() => setChecklist(true)} data-testid="button-payroll-checklist"><ListChecks />Check before export…</DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => setChecklist(true)} data-testid="button-payroll-checklist"><ListChecks /><Item title="Check before export…" sub={result.totals.flaggedDays ? `Includes ${result.totals.flaggedDays} flagged day${result.totals.flaggedDays === 1 ? "" : "s"} to review` : "Anything that needs a look first"} /></DropdownMenuItem>
                     <DropdownMenuSeparator />
                   </>}
                   <DropdownMenuLabel>{doc.status === "draft" ? "Download draft" : "Download"}</DropdownMenuLabel>
-                  <DropdownMenuItem onClick={() => exportPdf("report")} data-testid="button-export-pdf"><FileDown />Full report (PDF)</DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => exportPdf("summary")} data-testid="button-export-summary-pdf"><FileText />Manager summary (PDF)</DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => exportPdf("statements")} data-testid="button-export-statements-pdf"><Files />Pay statements (PDF)</DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => exportPdf("payout")} data-testid="button-export-payout-pdf"><Banknote />Pay-out sheet (PDF)</DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => exportPdf("report")} data-testid="button-export-pdf"><FileDown /><Item title="Full report (PDF)" sub="Every employee's days and pay, for your records" /></DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => exportPdf("summary")} data-testid="button-export-summary-pdf"><FileText /><Item title="Manager summary (PDF)" sub="One page of totals" /></DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => exportPdf("statements")} data-testid="button-export-statements-pdf"><Files /><Item title="Pay statements (PDF)" sub="One page per employee, to hand out" /></DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => exportPdf("payout")} data-testid="button-export-payout-pdf"><Banknote /><Item title="Pay-out sheet (PDF)" sub="Who to pay, how much, and how" /></DropdownMenuItem>
                   <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={async () => downloadBlob((await import("@/lib/pdf")).payrollSummaryCsv(result), `${base}_summary.csv`, "text/csv")} data-testid="button-export-csv"><FileSpreadsheet />Summary CSV</DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => downloadBlob(shiftsToCsv(doc.shifts), `${base}_shifts.csv`, "text/csv")} data-testid="button-export-shifts"><Table2 />Shifts CSV (re-importable)</DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => downloadBlob(journalCsv(result, pay.settings.accounts, { date: result.periodEnd || doc.periodEnd, memo: `Payroll ${site.name} ${periodTitle}` }), `${base}_journal.csv`, "text/csv")} data-testid="button-export-journal"><BookOpen />Accounting journal (CSV)</DropdownMenuItem>
+                  <DropdownMenuItem onClick={async () => { downloadBlob((await import("@/lib/pdf")).payrollSummaryCsv(result), `${base}_summary.csv`, "text/csv"); downloaded("Summary CSV"); }} data-testid="button-export-csv"><FileSpreadsheet /><Item title="Summary CSV" sub="Totals per employee, for a spreadsheet" /></DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => { downloadBlob(shiftsToCsv(doc.shifts), `${base}_shifts.csv`, "text/csv"); downloaded("Shifts CSV"); }} data-testid="button-export-shifts"><Table2 /><Item title="Shifts CSV" sub="Every shift; can be imported again" /></DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => { downloadBlob(journalCsv(result, pay.settings.accounts, { date: result.periodEnd || doc.periodEnd, memo: `Payroll ${site.name} ${periodTitle}` }), `${base}_journal.csv`, "text/csv"); downloaded("Accounting journal (CSV)"); }} data-testid="button-export-journal"><BookOpen /><Item title="Accounting journal (CSV)" sub="For your accountant or bookkeeping software" /></DropdownMenuItem>
                   {admin && <>
                     <DropdownMenuSeparator />
                     <DropdownMenuLabel>Send</DropdownMenuLabel>
@@ -220,7 +224,7 @@ export function WorkspacePage({ id }: { id: string }) {
           </div>
         )}
         {doc.status === "final" && !ts.dirty && <PublishPanel id={id} title={title} />}
-        {canShare && <ShareDialog id={id} open={sharing} onOpenChange={setSharing} makePdf={makePdf} onDownload={exportPdf} />}
+        {canShare && <ShareDialog id={id} open={sharing} onOpenChange={setSharing} makePdf={makePdf} onDownload={(k) => exportPdf(k, true)} />}
         {ts.saveState === "error" && ts.saveError && /finalized|locked/i.test(ts.saveError) && (
           <div className="flex flex-wrap items-center gap-3 rounded-xl bg-warning-soft px-4 py-3 text-[13px]" role="alert">
             <Lock className="h-4 w-4 shrink-0 text-warning" />
@@ -241,13 +245,13 @@ export function WorkspacePage({ id }: { id: string }) {
             <TabsTrigger value="details" className={tabCls} data-testid="tab-details">Details</TabsTrigger>
           </TabsList>
         </div>
-        <TabsContent value="payroll" className="mt-5"><PayrollTab {...props} onRates={() => setTab("rates")} /></TabsContent>
+        <TabsContent value="payroll" className="mt-5"><PayrollTab {...props} onRates={() => setTab("rates")} focusFlagged={focusFlagged} /></TabsContent>
         <TabsContent value="rates" className="mt-5"><RatesTab {...props} /></TabsContent>
         <TabsContent value="shifts" className="mt-5"><ShiftsTab {...props} /></TabsContent>
         <TabsContent value="extras" className="mt-5"><ExtrasTab {...props} pay={pay.settings} editable={!readOnly} resync={paySync.resync} /></TabsContent>
         <TabsContent value="details" className="mt-5"><DetailsTab {...props} /></TabsContent>
       </Tabs>
-      {checklist && <PayrollChecklistDialog site={site} period={result.periodStart ? { start: result.periodStart, end: result.periodEnd } : null} result={result} onTab={setTab} onClose={() => setChecklist(false)} />}
+      {checklist && <PayrollChecklistDialog site={site} period={result.periodStart ? { start: result.periodStart, end: result.periodEnd } : null} result={result} onTab={(t, i) => { setTab(t); if (i?.id === "flagged") setFocusFlagged(Date.now()); }} onClose={() => setChecklist(false)} />}
       <ReopenDialog timesheet={reopening ? { id, siteId: doc.siteId, title } : null} onClose={() => setReopening(false)} onReopened={() => void ts.reload()} />
     </div>
   );
@@ -274,3 +278,8 @@ function SaveIndicator({ state, error, savedAt, legacy }: { state: SaveState; er
 
 /** Phones: let the five segments fit 358px without scrolling. */
 const tabCls = "max-sm:min-w-0 max-sm:px-2";
+
+/** An Export menu entry: what it is, and who or what it's for. */
+function Item({ title, sub }: { title: string; sub: string }) {
+  return <span className="flex min-w-0 flex-col">{title}<span className="text-xs font-normal leading-snug text-muted-foreground">{sub}</span></span>;
+}

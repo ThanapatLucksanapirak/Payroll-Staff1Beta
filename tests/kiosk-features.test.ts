@@ -212,10 +212,13 @@ after(async () => {
 
 test("device options: defaults, admin-only changes, reflected in the kiosk state", async () => {
   const list = await A("GET", `/api/sites/${siteId}/kiosk-devices`);
-  assert.deepEqual(list.body[0].options, { photo: false, loginMode: "site", idleSeconds: 10, stations: true });
+  // New devices take a photo with each punch (and so run the face check) unless an admin turns it off.
+  assert.deepEqual(list.body[0].options, { photo: true, loginMode: "site", idleSeconds: 10, stations: true });
   let st = await K("GET", "/api/kiosk/state");
   assert.equal(st.body.site.loginMode, "pin");
-  assert.deepEqual(st.body.options, { photo: false, idleSeconds: 10, stations: [], breakReminderHours: null });
+  assert.deepEqual(st.body.options, { photo: true, idleSeconds: 10, stations: [], breakReminderHours: null });
+  assert.equal((await A("PUT", `/api/sites/${siteId}/kiosk-devices/${deviceId}/options`, { photo: false })).status, 200);
+  assert.equal((await K("GET", "/api/kiosk/state")).body.options.photo, false, "an admin can turn photos off");
 
   assert.equal((await as(manager)("PUT", `/api/sites/${siteId}/kiosk-devices/${deviceId}/options`, { photo: true })).status, 403, "managers can't change devices");
   assert.equal((await A("PUT", `/api/sites/${siteId}/kiosk-devices/${deviceId}/options`, { idleSeconds: 1 })).status, 400);
@@ -346,7 +349,10 @@ test("wrong-action guard: the server refuses and suggests the right action", asy
 });
 
 test("two devices punching the same employee moments apart are handled in arrival order", async () => {
-  const other = (await A("POST", `/api/sites/${siteId}/kiosk-devices`, { name: "Back door" })).body.token;
+  const back = (await A("POST", `/api/sites/${siteId}/kiosk-devices`, { name: "Back door" })).body;
+  const other = back.token;
+  // This test is about ordering, not photos: turn photos off for the new device.
+  assert.equal((await A("PUT", `/api/sites/${siteId}/kiosk-devices/${back.device.id}/options`, { photo: false })).status, 200);
   for (let round = 0; round < 5; round++) {
     const id = await K("POST", "/api/kiosk/identify", { pin: "5678" }, other);
     assert.equal(id.body.status, "out");

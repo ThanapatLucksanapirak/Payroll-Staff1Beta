@@ -14,6 +14,16 @@ html, body { height: 100%; overflow: hidden; overscroll-behavior: none; }
    the status bar, notch, rounded corners and home indicator. */
 .kiosk-safe { padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left); }
 .kiosk-scroll { overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
+/* The live camera view on the action screen ("Please show your face"): big
+   enough to check your face is in frame, smaller on short screens. */
+.kiosk-mirror { width: 11rem; height: 11rem; flex-shrink: 0; }
+@media (min-width: 640px) and (min-height: 900px) { .kiosk-mirror { width: 15rem; height: 15rem; } }
+@media (min-width: 1000px) and (min-height: 1100px) { .kiosk-mirror { width: 17rem; height: 17rem; } }
+@media (max-height: 760px) { .kiosk-mirror { width: 9rem; height: 9rem; } }
+@media (max-height: 640px) { .kiosk-mirror { width: 7.5rem; height: 7.5rem; } }
+@media (max-height: 440px) { .kiosk-mirror { width: 6rem; height: 6rem; } }
+/* Centre a screen's content, but never push its top out of reach when it is taller than the screen. */
+.kiosk-safe-center { justify-content: center; justify-content: safe center; }
 /* Short phone screens (portrait): a smaller keypad and clock so the PIN screen fits without scrolling. */
 @media (max-height: 760px) and (max-width: 639px) {
   .kiosk-key { width: 4.25rem; height: 4.25rem; font-size: 2rem; }
@@ -152,6 +162,7 @@ html { touch-action: manipulation; -webkit-text-size-adjust: 100%; text-size-adj
   [data-testid="kiosk-done"] > span:nth-last-child(2) { margin-top: 1rem; }
   [data-testid="kiosk-done"] > span:last-child { margin-top: 0.5rem; font-size: 1rem; }
   [data-testid="kiosk-timezone"] { display: none; }
+  [data-testid="kiosk-next-hint"] { font-size: 1rem; line-height: 1.35rem; }
 }
 @media (max-height: 640px) and (max-width: 1023px) {
   [data-testid="kiosk-done"] > .kiosk-pop { width: 3.5rem; height: 3.5rem; }
@@ -175,6 +186,16 @@ html { touch-action: manipulation; -webkit-text-size-adjust: 100%; text-size-adj
   .kiosk-actions > p[role="alert"] { margin-top: 0.25rem; font-size: 1rem; }
   .kiosk-actions .kiosk-tap:not([data-testid^="kiosk-action-"]) { min-height: 3.25rem; font-size: 1.125rem; padding: 0 1.25rem; }
   .kiosk-actions > div:not(:has(> [data-testid^="kiosk-action-"])) { margin-top: 0.75rem; }
+  .kiosk-actions > [data-testid="kiosk-camera"] { margin-top: 0; gap: 0.5rem; }
+  /* With the camera on, short phones must still show the buttons, the message and Cancel
+     without scrolling: the message below already says what's wrong, so the caption goes;
+     a blocked camera shows a small icon; two actions sit side by side, icon above the label. */
+  .kiosk-actions[data-error] [data-testid="kiosk-camera-caption"] { display: none; }
+  .kiosk-actions .kiosk-mirror-off { width: 4.5rem; height: 4.5rem; border-radius: 1.25rem; }
+  .kiosk-actions .kiosk-mirror-off svg { width: 2rem; height: 2rem; }
+  .kiosk-actions:has([data-testid="kiosk-camera"])[data-count="2"] > div:has(> [data-testid^="kiosk-action-"]) { grid-template-columns: 1fr 1fr; }
+  .kiosk-actions:has([data-testid="kiosk-camera"])[data-count="2"] [data-testid^="kiosk-action-"] { flex-direction: column; gap: 0.25rem; height: 5rem; font-size: 1.25rem; line-height: 1.5rem; }
+  .kiosk-actions:has([data-testid="kiosk-camera"])[data-count="2"] [data-testid^="kiosk-action-"] svg { width: 1.75rem; height: 1.75rem; }
 }
 @media (max-height: 640px) and (max-width: 1023px) {
   .kiosk-actions > span:first-child { width: 3rem; height: 3rem; font-size: 1.125rem; }

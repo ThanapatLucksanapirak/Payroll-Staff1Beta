@@ -135,9 +135,10 @@ function Devices({ site, enabled }: { site: Site; enabled: boolean }) {
         </ul>
       )}
       <form className="flex flex-wrap items-end gap-2" onSubmit={(e) => { e.preventDefault(); void add(); }}>
-        <Field label="New device name" className="min-w-[12rem] flex-1"><Input value={name} maxLength={60} onChange={(e) => setName(e.target.value)} placeholder="e.g. Front door tablet" data-testid="input-device-name" /></Field>
-        <Button type="submit" variant="outline" disabled={busy} data-testid="button-add-device">{busy ? <Loader2 className="animate-spin" /> : <Plus />} Add device</Button>
+        <Field label="New device name" className="min-w-[12rem] flex-1"><Input value={name} maxLength={60} disabled={!enabled} onChange={(e) => setName(e.target.value)} placeholder="e.g. Front door tablet" data-testid="input-device-name" /></Field>
+        <Button type="submit" variant="outline" disabled={busy || !enabled} data-testid="button-add-device">{busy ? <Loader2 className="animate-spin" /> : <Plus />} Add device</Button>
       </form>
+      {!enabled && <p className="text-xs text-muted-foreground" data-testid="text-add-device-off">Switch to Time clock or Both and save first. A tablet can't clock anyone in while hours come from Square.</p>}
       {created && <PairDialog created={created} onClose={() => setCreated(null)} />}
     </div>
   );

@@ -69,7 +69,7 @@ export function LoginPage({ appName, setupRequired, dbError, onDone }: { appName
               <div>
                 <Label htmlFor="setup-code" className={labelCls}>Setup code</Label>
                 <Input id="setup-code" autoFocus autoComplete="off" spellCheck={false} placeholder="XXXXX-XXXXX" className={`${fieldCls} font-mono uppercase tracking-wider`} value={setupCode} onChange={(e) => setSetupCode(e.target.value)} data-testid="input-setup-code" />
-                <p className="mt-[7px] text-[12.5px] leading-[18px] text-muted-foreground">Shown by the installer. You can also find it on the server in the data folder, in setup-code.txt.</p>
+                <p className="mt-[7px] text-[12.5px] leading-[18px] text-muted-foreground">The code your installer gave you. It's also on the server, in the data folder, in setup-code.txt.</p>
               </div>
             )}
             {setupRequired && (
@@ -81,7 +81,9 @@ export function LoginPage({ appName, setupRequired, dbError, onDone }: { appName
             <div>
               <Label htmlFor="username" className={labelCls}>Username</Label>
               <Input id="username" className={fieldCls} autoFocus={!setupRequired} autoComplete="username" autoCapitalize="none" spellCheck={false} value={username} onChange={(e) => setUsername(e.target.value)} placeholder={setupRequired ? "e.g. alex" : undefined} data-testid="input-username" />
-              {!setupRequired && <p className="mt-[7px] text-[12.5px] leading-[18px] text-muted-foreground">Used one shared password before? Your username is <span className="font-mono text-[12px]">admin</span>.</p>}
+              {setupRequired && <p className="mt-[7px] text-[12.5px] leading-[18px] text-muted-foreground">You'll use this to sign in. Your name above is what others see.</p>}
+              {/* Shown only after a failed sign-in, and the same on every install, so it says nothing about which accounts exist. */}
+              {!setupRequired && error && <p className="mt-[7px] text-[12.5px] leading-[18px] text-muted-foreground" data-testid="text-username-hint">Check your username. Older installs that used one shared password sign in as <span className="font-mono text-[12px]">admin</span>.</p>}
             </div>
             <div>
               <Label htmlFor="pw" className={labelCls}>{setupRequired ? "New password" : "Password"}</Label>
@@ -91,7 +93,7 @@ export function LoginPage({ appName, setupRequired, dbError, onDone }: { appName
               </div>
               {setupRequired
                 ? <p className="mt-[7px] text-[12.5px] leading-[18px] text-muted-foreground">At least 8 characters.</p>
-                : <p className="mt-[7px] text-[12.5px] leading-[18px] text-muted-foreground">Forgot it? Ask an owner to reset your password.</p>}
+                : <p className="mt-[7px] text-[12.5px] leading-[18px] text-muted-foreground">Forgot it? Ask an owner to reset your password. If you're the only owner, reset it on the server with <span className="font-mono text-[12px]">sudo payroll admin reset-password</span>.</p>}
             </div>
             {setupRequired && (
               <div>

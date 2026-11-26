@@ -477,3 +477,11 @@ test("sessions end on sign-out, PIN change, deactivation and portal off", async 
   assert.equal((await A("PUT", `/api/sites/${siteId}/portal`, { enabled: false })).status, 200);
   assert.equal((await P(b, "GET", "/api/portal/me")).status, 401);
 });
+
+test("sign-in status: an anonymous visitor can't tell which accounts exist", async () => {
+  assert.equal((await A("POST", "/api/users", { username: "admin", displayName: "Old admin", password: "old-shared-pass-1", role: "admin" })).status, 200);
+  const anon = await call("GET", "/api/auth/status", undefined, CSRF);
+  assert.equal(anon.status, 200);
+  assert.deepEqual(Object.keys(anon.body).sort(), ["appName", "authenticated", "db", "setupRequired", "user"]);
+  assert.equal(anon.body.user, null);
+});

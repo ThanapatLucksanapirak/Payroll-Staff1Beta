@@ -215,6 +215,7 @@ export function KioskApp() {
     }
     // Photo at the moment of the tap. It must show a face: a blocked or covered
     // camera, or nobody in view, stops the punch with a message saying why.
+    // There is no way to punch without a face: a manager adds the punch on Live.
     setBusy(true);
     void camera.capture().then((shot) => {
       setBusy(false);
@@ -303,6 +304,7 @@ export function KioskApp() {
         ) : screen.k === "actions" ? (
           <ActionsScreen
             tz={tz} who={screen.who} offline={screen.offline} error={screen.error} busy={busy} idleMs={idleMs}
+            camera={cameraOn ? { attach: camera.attach, status: camera.status, faceSeen: camera.faceSeen } : undefined}
             onPunch={(t) => choose(t, screen)} onCancel={home} onFix={screen.offline ? undefined : () => setScreen({ k: "fix", who: screen.who, pin: screen.pin, offline: screen.offline })}
           />
         ) : screen.k === "station" ? (
@@ -319,7 +321,7 @@ export function KioskApp() {
           <ConfirmScreen c={screen.c} tz={tz} onDone={home} />
         )}
       </main>
-      {cameraOn && <CameraPreview attach={camera.attach} status={camera.status} faceSeen={camera.faceSeen} />}
+      {cameraOn && screen.k !== "actions" && <CameraPreview attach={camera.attach} status={camera.status} faceSeen={camera.faceSeen} />}
       {showInfo && (
         <InfoSheet
           state={state} options={options} pending={pending} online={online} canUnpair={guarded && !!managerPin} guarded={guarded}
@@ -410,23 +412,50 @@ function TopBar({ state, online, pending, onInfo, onExitFullscreen }: { state: K
   );
 }
 
-/** Small live preview so people know a photo is taken with each punch, and whether their face is in view. */
-function CameraPreview({ attach, status, faceSeen }: { attach: (el: HTMLVideoElement | null) => void; status: CameraStatus; faceSeen: boolean | null }) {
+type CameraProps = { attach: (el: HTMLVideoElement | null) => void; status: CameraStatus; faceSeen: boolean | null };
+
+/** Live preview in the corner (on the "are you sure?" screen), so people know a photo is taken and whether their face is in view. */
+function CameraPreview({ attach, status, faceSeen }: CameraProps) {
   const broken = status === "blocked" || status === "unavailable";
   const warn = broken || faceSeen === false;
   return (
     <div className={`pointer-events-none fixed bottom-[calc(1rem+env(safe-area-inset-bottom))] left-[calc(1rem+env(safe-area-inset-left))] z-40 flex items-center gap-3 rounded-2xl p-2 pr-4 shadow-lg ring-1 ${warn ? "bg-red-50 ring-red-300" : "bg-white/95 ring-stone-200"}`} data-testid="kiosk-camera" data-status={status} data-face={faceSeen === null ? "" : faceSeen ? "yes" : "no"}>
       {broken ? (
-        <span className="flex h-16 w-16 items-center justify-center rounded-xl bg-red-100 text-red-700"><CameraOff className="h-7 w-7" /></span>
+        <span className="flex h-24 w-24 items-center justify-center rounded-xl bg-red-100 text-red-700 sm:h-32 sm:w-32"><CameraOff className="h-9 w-9" /></span>
       ) : (
-        <video ref={attach} className={`h-16 w-16 -scale-x-100 rounded-xl bg-stone-200 object-cover ${faceSeen === false ? "ring-2 ring-red-400" : faceSeen ? "ring-2 ring-emerald-400" : ""}`} muted playsInline autoPlay />
+        <video ref={attach} className={`h-24 w-24 -scale-x-100 rounded-xl bg-stone-200 object-cover sm:h-32 sm:w-32 ${faceSeen === false ? "ring-4 ring-red-400" : faceSeen ? "ring-4 ring-emerald-500" : ""}`} muted playsInline autoPlay />
       )}
-      <span className={`text-sm font-medium ${warn ? "text-red-900" : "text-stone-700"}`}>
-        {status === "blocked" ? <>Camera blocked<br /><span className="font-normal">Punching needs the camera</span></>
-          : status === "unavailable" ? <>Camera not available<br /><span className="font-normal">Punching needs the camera</span></>
-          : faceSeen === false ? <>Face not detected<br /><span className="font-normal">Look at the camera</span></>
-          : <><Camera className="mr-1 inline h-4 w-4" />Photo taken<br />with your punch</>}
-      </span>
+      <CameraCaption status={status} faceSeen={faceSeen} />
+    </div>
+  );
+}
+
+function CameraCaption({ status, faceSeen, center }: { status: CameraStatus; faceSeen: boolean | null; center?: boolean }) {
+  const broken = status === "blocked" || status === "unavailable";
+  const warn = broken || faceSeen === false;
+  return (
+    <span className={`text-base font-medium leading-snug ${center ? "text-center" : ""} ${warn ? "text-red-800" : faceSeen ? "text-emerald-800" : "text-stone-700"}`} data-testid="kiosk-camera-caption">
+      {status === "blocked" ? <>Camera blocked<br /><span className="font-normal">Punching needs the camera</span></>
+        : status === "unavailable" ? <>Camera not available<br /><span className="font-normal">Punching needs the camera</span></>
+        : faceSeen === false ? <>Face not detected<br /><span className="font-normal">Please show your face</span></>
+        : faceSeen ? <><Check className="mr-1 inline h-5 w-5" />Face found<br /><span className="font-normal text-stone-700">Photo taken with your punch</span></>
+        : <><Camera className="mr-1 inline h-5 w-5" />Please show your face<br /><span className="font-normal">Photo taken with your punch</span></>}
+    </span>
+  );
+}
+
+/** The big camera view at the top of the action screen (in place of the initials), so people can see their face is in frame. */
+function CameraMirror({ attach, status, faceSeen }: CameraProps) {
+  const broken = status === "blocked" || status === "unavailable";
+  const ring = broken || faceSeen === false ? "ring-red-500" : faceSeen ? "ring-emerald-500" : "ring-stone-300";
+  return (
+    <div className="flex flex-col items-center gap-3" data-testid="kiosk-camera" data-status={status} data-face={faceSeen === null ? "" : faceSeen ? "yes" : "no"}>
+      {broken ? (
+        <span className={`kiosk-mirror kiosk-mirror-off flex items-center justify-center rounded-[2rem] bg-red-50 text-red-700 ring-[6px] ${ring}`}><CameraOff className="h-14 w-14" /></span>
+      ) : (
+        <video ref={attach} className={`kiosk-mirror -scale-x-100 rounded-[2rem] bg-stone-200 object-cover ring-[6px] transition-[box-shadow] ${ring}`} muted playsInline autoPlay data-testid="kiosk-camera-video" />
+      )}
+      <CameraCaption status={status} faceSeen={faceSeen} center />
     </div>
   );
 }
@@ -568,13 +597,13 @@ function NamesScreen({ tz, employees, onPick }: { tz: string; employees: RosterE
   );
 }
 
-function ActionsScreen({ tz, who, offline, error, busy, idleMs, onPunch, onCancel, onFix }: { tz: string; who: Identified; offline: boolean; error?: string; busy?: boolean; idleMs: number; onPunch: (t: PunchType) => void; onCancel: () => void; onFix?: () => void }) {
+function ActionsScreen({ tz, who, offline, error, busy, idleMs, camera, onPunch, onCancel, onFix }: { tz: string; who: Identified; offline: boolean; error?: string; busy?: boolean; idleMs: number; camera?: CameraProps; onPunch: (t: PunchType) => void; onCancel: () => void; onFix?: () => void }) {
   useIdle(idleMs, onCancel);
   const statusLine = who.status === "out" ? "You're not clocked in" : `${STATUS_TEXT[who.status]} since ${who.since ? timeOf(who.since, tz) : "—"}`;
   const breakDue = !offline && who.status === "in" && !!who.breakDue;
   return (
-    <div className="kiosk-actions flex flex-1 flex-col items-center justify-center px-6 pb-10 text-center kiosk-fade-up">
-      <Avatar name={who.employee.name} big status={who.status} />
+    <div className="kiosk-actions kiosk-safe-center flex flex-1 flex-col items-center px-6 pb-10 pt-2 text-center kiosk-fade-up" data-error={error ? "" : undefined} data-count={who.actions.length}>
+      {camera ? <CameraMirror {...camera} /> : <Avatar name={who.employee.name} big status={who.status} />}
       <h1 className="mt-5 max-w-full text-4xl font-display font-normal tracking-[-0.01em] text-stone-950 [overflow-wrap:anywhere] sm:text-5xl" data-testid="kiosk-employee-name">{who.employee.name}</h1>
       <p className="mt-2 text-2xl text-stone-700">
         {statusLine}{!offline && who.todayMinutes > 0 ? ` · ${duration(who.todayMinutes)} today` : ""}{!offline && who.station && who.status !== "out" ? ` · ${who.station}` : ""}

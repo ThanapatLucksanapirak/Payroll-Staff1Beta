@@ -99,6 +99,9 @@ export async function createDevice(siteId: string, name: string) {
     const d: KioskDevice = {
       id: `dev_${randomUUID().replace(/-/g, "").slice(0, 12)}`, siteId, name, tokenHash: sha(token), pairCodeHash: sha(normCode(pairCode)),
       pairCodeExpiresAt: new Date(Date.now() + PAIR_CODE_MS).toISOString(), createdAt: new Date().toISOString(), lastSeenAt: null,
+      // New devices take a photo with each punch, so the face check is on from the start.
+      // Older devices without saved options keep the old default (off).
+      options: { photo: true },
     };
     await saveDevices([...(await loadDevices()), d]);
     return { device: d, token, pairCode };
@@ -157,6 +160,10 @@ function pinLockedFor(deviceId: string): number {
   const f = pinFails.get(deviceId);
   if (!f) return 0;
   return Math.max(0, f.lockedUntil - Date.now());
+}
+/** Wrong PINs left before this device locks (for the "2 tries left" warning). */
+function pinTriesLeft(deviceId: string): number {
+  return PIN_MAX_FAILS - (pinFails.get(deviceId)?.n ?? 0);
 }
 function recordPin(deviceId: string, ok: boolean) {
   if (ok) { pinFails.delete(deviceId); return; }
@@ -306,7 +313,8 @@ export async function authenticateEmployee(req: Request, res: Response, body: { 
     if (!e) {
       const nowLocked = pinLockedFor(device.id);
       if (nowLocked) { lockedResponse(res, nowLocked); return null; }
-      res.status(403).json({ error: "That PIN didn't match. Try again.", code: "pin" });
+      const left = pinTriesLeft(device.id);
+      res.status(403).json({ error: left <= 2 ? `That PIN didn't match. ${left} ${left === 1 ? "try" : "tries"} left before this clock locks for a while.` : "That PIN didn't match. Try again.", code: "pin", triesLeft: left });
       return null;
     }
     return e;
