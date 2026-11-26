@@ -2,12 +2,13 @@
 // employee reaches the action screen (so it has warmed up by the time they
 // tap), and a small JPEG is grabbed at the moment of the punch.
 //
-// When photos are on, a punch needs a photo with a face in it: if the camera
-// is blocked, missing or covered, or no face is seen, the kiosk says so and
-// the punch isn't sent (see capture()). There is no way to punch without a
-// face: a manager can add the punch on Live, or turn photos off for the device.
+// When photos are on, a punch needs a photo with a face in it. A blocked,
+// missing or covered camera is caught here; whether a face is in the photo is
+// decided by the server when the punch arrives (server/faceCheck.ts), which
+// refuses it with a message the kiosk shows. There is no way to punch without
+// a face: a manager can add the punch on Live, or turn photos off for the device.
 import { useCallback, useEffect, useRef, useState } from "react";
-import { FACE_MESSAGES, checkFace, loadFaceDetector } from "./face";
+import { FACE_MESSAGES, checkFrame } from "./face";
 
 const WIDTH = 320;
 const QUALITY = 0.6;
@@ -42,7 +43,6 @@ export function useCamera(active: boolean) {
 
   useEffect(() => {
     if (!active) { setStatus("off"); setFaceSeen(null); return; }
-    void loadFaceDetector(); // warm up while the camera starts
     const md = typeof navigator !== "undefined" ? navigator.mediaDevices : undefined;
     if (!md?.getUserMedia) { setStatus("unavailable"); return; }
     let cancelled = false;
@@ -108,14 +108,15 @@ export function useCamera(active: boolean) {
     }
   }, []);
 
-  // Live "face found" hint while the camera runs.
+  // Live hint while the camera runs: red when the lens looks covered (false), otherwise unknown (null).
+  // Whether a face is in the photo is only known once the server checks it.
   useEffect(() => {
     if (status !== "ready") { setFaceSeen(null); return; }
     let stop = false;
     let timer: ReturnType<typeof setTimeout> | undefined;
     const tick = async () => {
       const c = frame();
-      if (c) { const r = await checkFace(c); if (!stop) setFaceSeen(r.ok); }
+      if (c && !stop) setFaceSeen(checkFrame(c).ok ? null : false);
       if (!stop) timer = setTimeout(tick, 700);
     };
     timer = setTimeout(tick, 300);
@@ -123,9 +124,9 @@ export function useCamera(active: boolean) {
   }, [status, frame]);
 
   /**
-   * Take the punch photo: a small JPEG of the current frame, only if the camera
-   * works and a face is in it (on two frames). Otherwise a message saying why
-   * (the punch must not be sent).
+   * Take the punch photo: a small JPEG of the current frame, if the camera works
+   * and the lens isn't covered. Otherwise a message saying why (the punch must
+   * not be sent). The server then checks the photo for a face.
    */
   const capture = useCallback(async (): Promise<Capture> => {
     if (status === "blocked") return { ok: false, message: CAMERA_MESSAGES.blocked };
@@ -133,13 +134,8 @@ export function useCamera(active: boolean) {
     if (status === "starting") return { ok: false, message: CAMERA_MESSAGES.starting };
     const canvas = frame();
     if (!canvas) return { ok: false, message: FACE_MESSAGES.no_frame };
-    const face = await checkFace(canvas);
-    if (!face.ok) return { ok: false, message: FACE_MESSAGES[face.reason] };
-    // Confirm on a second frame a moment later, so one lucky frame isn't enough.
-    await new Promise((r) => setTimeout(r, 150));
-    const again = frame();
-    const second = again ? await checkFace(again) : ({ ok: false, reason: "no_frame" } as const);
-    if (!second.ok) return { ok: false, message: FACE_MESSAGES[second.reason] };
+    const look = checkFrame(canvas);
+    if (!look.ok) return { ok: false, message: FACE_MESSAGES[look.reason] };
     try {
       const url = canvas.toDataURL("image/jpeg", QUALITY);
       return url.startsWith("data:image/jpeg") ? { ok: true, photo: url } : { ok: false, message: FACE_MESSAGES.no_frame };

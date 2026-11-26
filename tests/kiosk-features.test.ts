@@ -161,7 +161,8 @@ const A = (method: string, url: string, body?: unknown) => as(admin)(method, url
 const K = (method: string, url: string, body?: unknown, t = token) => call(method, url, body, { "X-Kiosk-Token": t });
 
 /** A tiny but valid-looking JPEG (magic bytes plus padding). */
-const JPEG = `data:image/jpeg;base64,${Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.alloc(400, 7), Buffer.from([0xff, 0xd9])]).toString("base64")}`;
+// A real photo with a face in it: the server checks punch photos for a face.
+const JPEG = `data:image/jpeg;base64,${fs.readFileSync(path.join(import.meta.dirname, "fixtures", "face.jpg")).toString("base64")}`;
 
 async function signIn(username: string, password: string) {
   const r = await call("POST", "/api/auth/login", { username, password }, { "X-Requested-With": "payroll" });
@@ -280,22 +281,67 @@ test("punch with station and photo; photo served only to editors; not in backups
   // Garbage instead of a JPEG: refused too
   const junk = await K("POST", "/api/kiosk/punch", { id: randomUUID(), type: "break_start", pin: "1234", photo: "data:image/jpeg;base64,AAAA" });
   assert.equal(junk.status, 422);
-  // A punch queued while offline is never lost over a photo: accepted, recorded as "no photo"
-  const queued = await K("POST", "/api/kiosk/punch", { id: randomUUID(), type: "break_start", pin: "1234", photo: null, at: new Date().toISOString() });
+  const photoOf = (f: string) => `data:image/jpeg;base64,${fs.readFileSync(path.join(import.meta.dirname, "fixtures", f)).toString("base64")}`;
+  // The server checks the photo for a face: no face, no punch (same on every device)
+  for (const f of ["no-face.jpg", "palm.jpg"]) {
+    const r = await K("POST", "/api/kiosk/punch", { id: randomUUID(), type: "break_start", pin: "1234", photo: photoOf(f) });
+    assert.equal(r.status, 422, f);
+    assert.equal(r.body.code, "photo");
+    assert.equal(r.body.reason, "no_face");
+    assert.match(r.body.error, /Face not detected/);
+  }
+  // A fresh `at` (within 2 minutes) counts as live: sending one can't skip the photo or the face check
+  for (const photo of [null, undefined, photoOf("no-face.jpg")]) {
+    const fresh = await K("POST", "/api/kiosk/punch", { id: randomUUID(), type: "break_start", pin: "1234", photo, at: new Date(Date.now() - 60_000).toISOString() });
+    assert.equal(fresh.status, 422, JSON.stringify(fresh.body));
+    assert.equal(fresh.body.code, "photo");
+  }
+  // An offline time can't be used to dodge the check for long: the server only takes one from the last 24 hours, not ahead of its clock
+  const ahead = await K("POST", "/api/kiosk/punch", { id: randomUUID(), type: "break_start", pin: "1234", photo: null, at: new Date(Date.now() + 5 * 60_000).toISOString() });
+  assert.equal(ahead.status, 422);
+  assert.equal(ahead.body.code, "time");
+  const old = await K("POST", "/api/kiosk/punch", { id: randomUUID(), type: "break_start", pin: "1234", photo: null, at: new Date(Date.now() - 25 * 3600_000).toISOString() });
+  assert.equal(old.status, 422);
+  assert.equal(old.body.code, "time");
+  // Punches queued while offline (an `at` over 2 minutes old) are never lost over a photo: kept, flagged "No face"
+  assert.equal((await A("PATCH", `/api/punches/${pid}`, { at: new Date(Date.now() - 30 * 60_000).toISOString(), note: "earlier" })).status, 200);
+  const queued = await K("POST", "/api/kiosk/punch", { id: randomUUID(), type: "break_start", pin: "1234", photo: null, at: new Date(Date.now() - 10 * 60_000).toISOString() });
   assert.equal(queued.status, 200, JSON.stringify(queued.body));
   assert.equal(queued.body.punch.photo, "none");
-  const back = await K("POST", "/api/kiosk/punch", { id: randomUUID(), type: "break_end", pin: "1234", photo: JPEG });
-  assert.equal(back.status, 200);
+  const offline = await K("POST", "/api/kiosk/punch", { id: randomUUID(), type: "break_end", pin: "1234", photo: photoOf("no-face.jpg"), at: new Date(Date.now() - 6 * 60_000).toISOString() });
+  assert.equal(offline.status, 200, JSON.stringify(offline.body));
+  const stored = (await A("GET", `/api/sites/${siteId}/timeclock`)).body.punches;
+  assert.deepEqual(stored.find((x: any) => x.id === queued.body.punch.id).meta, { photo: "none", face: "missing" }, "queued without a photo");
+  assert.deepEqual(stored.find((x: any) => x.id === offline.body.punch.id).meta, { photo: "saved", face: "missing" }, "queued without a face");
+  // Queued while the server's face check can't run: kept, flagged "unchecked" (not "No face")
+  const { faceLimits } = await import("../server/faceCheck");
+  const keepLimit = faceLimits.timeoutMs;
+  faceLimits.timeoutMs = -1;
+  try {
+    const live503 = await K("POST", "/api/kiosk/punch", { id: randomUUID(), type: "break_start", pin: "1234", photo: JPEG });
+    assert.equal(live503.status, 503);
+    assert.equal(live503.body.reason, "unavailable");
+    const late = await K("POST", "/api/kiosk/punch", { id: randomUUID(), type: "break_start", pin: "1234", photo: JPEG, at: new Date(Date.now() - 4 * 60_000).toISOString() });
+    assert.equal(late.status, 200, JSON.stringify(late.body));
+    const lateMeta = (await A("GET", `/api/sites/${siteId}/timeclock`)).body.punches.find((x: any) => x.id === late.body.punch.id).meta;
+    assert.deepEqual(lateMeta, { photo: "saved", face: "unchecked" });
+  } finally {
+    faceLimits.timeoutMs = keepLimit;
+  }
+  assert.equal((await K("POST", "/api/kiosk/punch", { id: randomUUID(), type: "break_end", pin: "1234", photo: JPEG })).status, 200);
+  // Live again with a face: fine
+  assert.equal((await K("POST", "/api/kiosk/punch", { id: randomUUID(), type: "break_start", pin: "1234", photo: JPEG })).status, 200);
+  assert.equal((await K("POST", "/api/kiosk/punch", { id: randomUUID(), type: "break_end", pin: "1234", photo: JPEG })).status, 200);
   // Unknown station is ignored, not an error
   const benIn = await K("POST", "/api/kiosk/punch", { id: randomUUID(), type: "in", pin: "5678", station: "Roof", photo: JPEG });
   assert.equal(benIn.status, 200);
   assert.equal(benIn.body.punch.station, null);
 
   // Editing a punch keeps its meta
-  const edited = await A("PATCH", `/api/punches/${pid}`, { at: new Date(Date.now() - 60_000).toISOString(), note: "adjust" });
+  const edited = await A("PATCH", `/api/punches/${pid}`, { at: new Date(Date.now() - 40 * 60_000).toISOString(), note: "adjust" });
   assert.equal(edited.status, 200, JSON.stringify(edited.body));
   assert.equal(edited.body.meta.station, "Sushi bar");
-  assert.equal(edited.body.edits.length, 1);
+  assert.equal(edited.body.edits.length, 2);
 
   // Backups keep the punch meta but never the photo bytes
   const backup = await A("GET", "/api/backup");

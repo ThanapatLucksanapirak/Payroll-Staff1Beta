@@ -10,7 +10,13 @@ few short bullets written for the people who use the app, not for developers.
 - Wrong passwords now count against the account being tried, not only the device trying. After 8 wrong passwords for one account, that account waits 15 minutes, whichever devices the guesses came from. Signing in successfully clears it.
 - Signing in to your own account no longer resets the wrong-password count for everyone else on the same network. One network gets 30 wrong tries in 15 minutes, shared by everyone on it.
 - Two-step sign-in codes are limited the same way: 8 wrong codes for an account lock its second step for 15 minutes, even when the password is entered again to get a new code screen.
-- Changing your password now has the same limit on wrong "current password" tries.
+- Changing your password, and every other "enter your password" check, counts toward the same 8 wrong tries per account as signing in.
+
+## 2026-11-26 · Your server checks punch photos for a face (#37)
+- The time clock no longer tries to recognize faces on the phone or tablet. It takes the photo and your server checks it for a face before it accepts the punch, so it works the same on iPhone, iPad and Android, and can't be skipped.
+- No face, no punch: the kiosk says "Face not detected" and asks the person to try again.
+- A punch saved on a tablet while it was offline is still kept, but if it has no photo or its photo shows no face it gets a "No face" tag on Live. If the server couldn't check its photo, the tag says "Not checked".
+- If the server's face check isn't working or is busy, the kiosk says so and doesn't save the punch for later.
 
 ## 2026-11-26 · Switching database keeps time clock punches (#36)
 - Settings → Database → switch with "Copy my data" now copies every time clock punch along with timesheets, locations, rates and the password. Before, the new database started with no clock-ins or clock-outs.
