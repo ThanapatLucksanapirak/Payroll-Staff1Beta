@@ -276,7 +276,7 @@ export function KioskApp() {
           <span className="flex-1">{notice}</span><X className="h-5 w-5 shrink-0" />
         </button>
       )}
-      <main className="flex min-h-0 flex-1 flex-col">
+      <main className="kiosk-scroll flex min-h-0 flex-1 flex-col">
         {screen.k === "manager" ? (
           <PinScreen tz={tz} key={`manager-${screen.next}`} heading={{ title: "Manager PIN", sub: screen.next === "settings" ? "Enter the manager PIN to open device settings" : "Enter the manager PIN to leave full screen" }} maxLength={8} error={screen.error} shake={screen.shake} idleMs={Math.max(idleMs, 30_000)} onSubmit={submitManager} onBack={home} />
         ) : !state.site.enabled ? (
@@ -357,10 +357,10 @@ function BigClock({ tz, compact }: { tz: string; compact?: boolean }) {
   const date = fmt(tz, { weekday: "long", month: "long", day: "numeric" }).format(new Date(now));
   return (
     <div className="select-none" aria-live="off">
-      <div className={`tabular font-light tracking-tight text-stone-950 ${compact ? "text-6xl sm:text-7xl" : "text-7xl sm:text-8xl lg:text-9xl"}`} data-testid="kiosk-clock">
+      <div className={`tabular font-light tracking-tight text-stone-950 ${compact ? "text-6xl sm:text-7xl" : "kiosk-clock-big text-7xl sm:text-8xl lg:text-9xl"}`} data-testid="kiosk-clock">
         {main}{period && <span className={`ml-2 font-normal text-stone-700 ${compact ? "text-2xl" : "text-3xl sm:text-4xl"}`}>{period}</span>}
       </div>
-      <div className={`mt-2 font-medium text-stone-800 ${compact ? "text-lg" : "text-xl sm:text-2xl"}`}>{date}</div>
+      <div className={`kiosk-date mt-2 font-medium text-stone-800 ${compact ? "text-lg" : "text-xl sm:text-2xl"}`}>{date}</div>
     </div>
   );
 }
@@ -487,7 +487,7 @@ function Key({ label, onPress, primary, subtle, disabled, aria }: { label: React
       disabled={disabled}
       onPointerDown={(e) => { e.preventDefault(); if (!disabled) onPress(); }}
       onKeyDown={(e) => { if (e.key === " ") onPress(); }}
-      className={`kiosk-tap flex h-20 w-20 items-center justify-center rounded-full text-4xl font-normal transition-all duration-100 active:scale-95 sm:h-28 sm:w-28 sm:text-5xl ${
+      className={`kiosk-tap kiosk-key flex h-20 w-20 items-center justify-center rounded-full text-4xl font-normal transition-all duration-100 active:scale-95 sm:h-28 sm:w-28 sm:text-5xl ${
         primary ? "kiosk-primary kiosk-go shadow-sm disabled:shadow-none" : subtle ? "text-stone-800 active:bg-stone-200" : "bg-stone-100 text-stone-950 ring-2 ring-stone-200 active:bg-stone-300 active:ring-stone-300"
       }`}
       data-testid={`kiosk-key-${aria ?? label}`}

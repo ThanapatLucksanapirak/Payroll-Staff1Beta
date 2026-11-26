@@ -37,6 +37,9 @@ body {
 /* App-like on phones: no double-tap zoom, and form fields at least 16px on
    touch screens so iOS doesn't zoom in on focus (see lib/noZoom.ts). */
 html { touch-action: manipulation; -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+/* No rubber-band bounce or pull-to-refresh on the page itself (it reads as the
+   whole app sliding around); long pages still scroll normally. */
+html, body { overscroll-behavior: none; }
 @media (pointer: coarse) {
   input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]), textarea, select { font-size: max(16px, 1em) !important; }
 }

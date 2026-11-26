@@ -6,6 +6,11 @@ Settings → About, next to the matching update.
 Add an entry with every pull request: a `## YYYY-MM-DD · Title (#PR)` heading and a
 few short bullets written for the people who use the app, not for developers.
 
+## 2026-11-26 · Steadier screens on iPhone and iPad (#PR)
+- The app no longer slides around as a whole when you scroll: the side menu stays put and only the page content scrolls, with no empty black band at the bottom.
+- The time clock fits the screen on phones and tablets, with a smaller keypad on short phones, so the PIN screen no longer scrolls.
+- Date and time boxes (for example Arrive before and Stay until, and From and To in New timesheet) are now the same size as other boxes on iPhone and iPad and stay inside their card.
+
 ## 2026-11-26 · New Shijiri look (#24)
 - A new Shijiri logo, colours and sign-in page, shared by the admin app, time clock, staff portal and emails.
 - Easier to use on phones: timesheets, schedule, settings and the two-factor notice fit small screens.

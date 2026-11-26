@@ -5,7 +5,22 @@
 
 /* The kiosk has its own look: plain white, large type, built for touch. It
    does not use the admin app's theme variables on purpose. */
-html, body, #root { height: 100%; }
+/* The kiosk is one fixed screen: the page itself never scrolls or bounces
+   (iOS rubber-banding). If a screen is taller than the device, only the
+   content area (.kiosk-scroll) scrolls, inside the fixed frame. */
+html, body { height: 100%; overflow: hidden; overscroll-behavior: none; }
+#root { height: 100%; height: 100dvh; overflow: hidden; }
+.kiosk-scroll { overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
+/* Short phone screens (portrait): a smaller keypad and clock so the PIN screen fits without scrolling. */
+@media (max-height: 760px) and (max-width: 639px) {
+  .kiosk-key { width: 4.25rem; height: 4.25rem; font-size: 2rem; }
+  .kiosk-clock-big { font-size: 3.75rem; line-height: 1; }
+}
+@media (max-height: 600px) and (max-width: 639px) {
+  .kiosk-key { width: 3.75rem; height: 3.75rem; font-size: 1.75rem; }
+  .kiosk-clock-big { font-size: 3rem; }
+  .kiosk-clock-big + .kiosk-date { display: none; } /* the date is the first thing to go on the smallest screens */
+}
 body {
   margin: 0;
   background: #fafaf9;
