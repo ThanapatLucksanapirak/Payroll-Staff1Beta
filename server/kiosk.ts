@@ -602,22 +602,33 @@ export function registerTimeClockAdminRoutes(app: Express) {
 
 // ── KIOSK_HOST: a hostname that serves only the kiosk ────────────────────────
 let kioskAssets: Set<string> | null = null;
+
+/** Every file the kiosk page loads, from Vite's build manifest: its chunks, CSS and assets, including chunks loaded on demand. */
+export function kioskAssetsFromManifest(manifest: Record<string, { file: string; css?: string[]; assets?: string[]; imports?: string[]; dynamicImports?: string[] }>): Set<string> {
+  const set = new Set<string>();
+  const walk = (key: string) => {
+    const m = manifest[key];
+    if (!m || set.has(`/${m.file}`)) return;
+    set.add(`/${m.file}`);
+    for (const c of m.css ?? []) set.add(`/${c}`);
+    for (const a of m.assets ?? []) set.add(`/${a}`);
+    for (const i of m.imports ?? []) walk(i);
+    // Chunks loaded on demand too: the face check's MediaPipe bundle is a dynamic
+    // import. Without it the kiosk hostname answered 404, the detector never
+    // loaded and every punch was refused ("couldn't check for a face").
+    for (const i of m.dynamicImports ?? []) walk(i);
+  };
+  walk("kiosk.html");
+  return set;
+}
+
 /** Files the kiosk page needs, read from Vite's build manifest. */
 function kioskAssetSet(): Set<string> {
   if (kioskAssets) return kioskAssets;
-  const set = new Set<string>();
+  let set = new Set<string>();
   try {
     const base = typeof __dirname !== "undefined" ? path.resolve(__dirname, "public") : path.resolve(process.cwd(), "dist", "public");
-    const manifest = JSON.parse(fs.readFileSync(path.join(base, ".vite", "manifest.json"), "utf8"));
-    const walk = (key: string) => {
-      const m = manifest[key];
-      if (!m || set.has(`/${m.file}`)) return;
-      set.add(`/${m.file}`);
-      for (const c of m.css ?? []) set.add(`/${c}`);
-      for (const a of m.assets ?? []) set.add(`/${a}`);
-      for (const i of m.imports ?? []) walk(i);
-    };
-    walk("kiosk.html");
+    set = kioskAssetsFromManifest(JSON.parse(fs.readFileSync(path.join(base, ".vite", "manifest.json"), "utf8")));
   } catch { /* no build manifest (development) */ }
   kioskAssets = set;
   return set;
