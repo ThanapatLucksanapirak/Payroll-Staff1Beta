@@ -6,7 +6,7 @@ Settings → About, next to the matching update.
 Add an entry with every pull request: a `## YYYY-MM-DD · Title (#PR)` heading and a
 few short bullets written for the people who use the app, not for developers.
 
-## 2026-11-26 · Small safety checks (#PRNUM)
+## 2026-11-26 · Small safety checks (#43)
 - Pay extras: a holiday on a date that doesn't exist (like 2026-02-30) is refused instead of saved.
 - Locations: an unknown time zone is refused, so a typo can't shift every time at a location.
 - Settings → Activity now lists when an employee is added, changed or removed, and when a PIN is set or cleared (never the PIN itself).
