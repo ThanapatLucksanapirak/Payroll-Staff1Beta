@@ -11,6 +11,19 @@ few short bullets written for the people who use the app, not for developers.
 - Face match set-up: print the consent notice for an employee to sign, record that they signed it, then pick three clear photos of them as reference photos. The app checks each one shows only them and looks like the same person.
 - Delete someone's face data at any time (optionally with all their punch photos). It's also deleted when you remove the employee, and automatically after they haven't punched for a while (Settings → Locations & rules → Face data, default one year).
 - Face data stays on your server, encrypted, and is never in backups. Turning face match on at the time clock comes in the next update.
+## 2026-11-26 · Small safety checks (#43)
+- Pay extras: a holiday on a date that doesn't exist (like 2026-02-30) is refused instead of saved.
+- Locations: an unknown time zone is refused, so a typo can't shift every time at a location.
+- Settings → Activity now lists when an employee is added, changed or removed, and when a PIN is set or cleared (never the PIN itself).
+- The sign-in page no longer shows the database's name or technical errors to people who aren't signed in.
+- The local database file and its backup copies can only be read by the app's own server account.
+- Emailing PDFs or restoring a backup that is too large now says what was too large and the size limit.
+
+## 2026-11-26 · Time clock lockout and camera polish (#42)
+- The wrong-PIN countdown shows the right time from the very first second, isn't thrown off if someone changes the tablet's clock, and comes back if the page is reloaded during a lockout.
+- The lockout message now says that each lockout in a row lasts longer (1 minute, then 2, then 4, up to 15 minutes). This was already how it worked.
+- If camera access is taken away while the time clock is open, it now says "Camera blocked" (a manager can allow it again) instead of "Camera not available".
+- Admin app on iPhone and iPad: you can long-press a punch photo on Live to save it again.
 
 ## 2026-11-26 · New timesheet, time clock and backup fixes (#41)
 - New timesheet → Start blank: the window now closes once the timesheet is created, and a quick double tap no longer makes two of them. If creating fails, the reason shows in the window.

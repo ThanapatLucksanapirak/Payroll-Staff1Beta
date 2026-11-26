@@ -75,6 +75,10 @@ export class SqliteStore implements DataStore {
     this.db.pragma("busy_timeout = 5000");
     this.db.pragma("synchronous = NORMAL");
     this.db.pragma("foreign_keys = ON");
+    // Payroll data: readable by the server's own user only (new files were 0644).
+    for (const f of [this.file, `${this.file}-wal`, `${this.file}-shm`]) {
+      try { if (fs.existsSync(f)) fs.chmodSync(f, 0o600); } catch { /* e.g. a read-only or Windows file system */ }
+    }
     const quick = this.db.pragma("quick_check", { simple: true });
     if (quick !== "ok") console.error(`[db] integrity check reported: ${quick}`);
     await this.migrate(existed);
@@ -247,6 +251,7 @@ export class SqliteStore implements DataStore {
   async snapshotTo(file: string) {
     fs.mkdirSync(path.dirname(file), { recursive: true });
     await this.db.backup(file);
+    try { fs.chmodSync(file, 0o600); } catch { /* not supported here */ }
   }
   async health(): Promise<DatabaseHealth> {
     const t = Date.now();

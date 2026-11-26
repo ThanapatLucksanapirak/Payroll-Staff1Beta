@@ -56,7 +56,11 @@ export function registerAuthRoutes(app: Express) {
     let appName = "Shijiri Payroll";
     try { appName = (await settings.getPrefs()).appName; } catch { /* db down */ }
     const user = currentUser(res);
-    res.json({ setupRequired: await setupRequired().catch(() => false), authenticated: !!user, appName, db: dbStatus(), user: user ? toPublic(user) : null });
+    // Signed out, say only whether the database is up: its name, type and the raw
+    // error (host names, paths) are for signed-in users.
+    const st = dbStatus();
+    const db = user ? st : { connected: st.connected, error: st.connected ? null : "The app can't reach its database right now. An administrator can check the server." };
+    res.json({ setupRequired: await setupRequired().catch(() => false), authenticated: !!user, appName, db, user: user ? toPublic(user) : null });
   }));
 
   app.post("/api/auth/login", h(async (req, res) => {

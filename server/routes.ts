@@ -291,8 +291,16 @@ export function registerRoutes(app: Express) {
   }));
 
   // ── Sites ───────────────────────────────────────────────────────────────────
+  // A time zone the server can't use would make every time on the location wrong.
+  const checkTimezone = (tz: unknown) => {
+    if (tz === undefined) return;
+    try { new Intl.DateTimeFormat("en-US", { timeZone: String(tz) }); } catch {
+      throw Object.assign(new Error(`"${String(tz).slice(0, 60)}" isn't a time zone this app knows. Pick one from the list, like America/New_York.`), { status: 400 });
+    }
+  };
   app.post("/api/sites", h(async (req, res) => {
     const input = siteInputSchema.parse(req.body);
+    checkTimezone(input.rules?.timezone);
     res.json(await settings.createSite(input));
   }));
   app.put("/api/sites/:id", h(async (req, res) => {
@@ -300,6 +308,7 @@ export function registerRoutes(app: Express) {
     const patch: any = parsePatch(siteInputSchema, req.body);
     // Merge only the rule fields actually sent (the parsed patch has every rule filled with its default).
     if (patch.rules) patch.rules = siteRulesSchema.parse({ ...((await settings.getSite(String(req.params.id)))?.rules ?? {}), ...(req.body.rules as object) });
+    checkTimezone((req.body?.rules as any)?.timezone);
     const site = await settings.updateSite(String(req.params.id), patch as any);
     if (!site) return res.status(404).json({ error: "Location not found." });
     res.json(site);
@@ -586,7 +595,11 @@ export function registerRoutes(app: Express) {
       const first = err.issues[0];
       return res.status(400).json({ error: first ? `${first.path.join(".") || "input"}: ${first.message}` : "Invalid input.", details: err.issues.slice(0, 5) });
     }
-    if (err?.type === "entity.too.large") return res.status(413).json({ error: "That file is too large." });
+    if (err?.type === "entity.too.large") {
+      const limitMb = Number(err?.limit) > 0 ? Math.round(Number(err.limit) / 1048576) : 0;
+      const what = /\/share$/.test(_req.path) ? "Those PDFs are too big to email together. Send fewer at a time" : /\/backup\/restore$/.test(_req.path) ? "That backup file is too large to restore here" : "That's too much to send at once";
+      return res.status(413).json({ error: `${what}${limitMb ? ` (the limit is ${limitMb} MB)` : ""}.` });
+    }
     if (err?.type === "entity.parse.failed") {
       return res.status(400).json({ error: /\/backup\/restore$/.test(_req.path) ? "This file isn't a valid backup (it may be cut off or edited). Use a file from Download backup. Nothing was restored." : "The request wasn't valid JSON." });
     }

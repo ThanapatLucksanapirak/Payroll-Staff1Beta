@@ -31,8 +31,9 @@ server checks it for a face (face-api's SSD MobileNet detector on CPU, in
 every phone and tablet, and a modified kiosk can't skip it. The punch is
 refused, with a message on screen, when:
 
-- the camera is blocked (permission denied): "Camera blocked…";
-- there is no camera or it stopped: "Camera not available…";
+- the camera is blocked (permission denied, at start or taken away while the
+  kiosk is open): "Camera blocked…";
+- there is no camera or it stopped for another reason: "Camera not available…";
 - the lens is covered or the picture is black (checked on the tablet): "Camera covered or too dark";
 - no face is in the photo (the detector must be at least 60% sure): "Face not detected. Show your face to the camera and try again.";
 - the face check isn't working or is busy on the server: "Ask a manager to add your punch" or "Wait a moment and try again". The kiosk shows these and never saves the punch for later.
