@@ -60,6 +60,7 @@ function Shell({ children }: { children: ReactNode }) {
 
       {/* Desktop sidebar */}
       <aside
+        data-chrome
         className={cn(
           "hidden h-full shrink-0 flex-col border-r border-sidebar-border bg-sidebar/90 pb-[env(safe-area-inset-bottom)] pl-[env(safe-area-inset-left)] pt-[env(safe-area-inset-top)] backdrop-blur-xl transition-[width] duration-200 md:flex",
           collapsed ? "w-[calc(4.25rem+env(safe-area-inset-left))]" : "w-[calc(15.5rem+env(safe-area-inset-left))]",
@@ -74,7 +75,7 @@ function Shell({ children }: { children: ReactNode }) {
           bar, notch, rounded corners and home indicator. */}
       <div className="flex min-h-0 min-w-0 flex-1 flex-col md:pr-[env(safe-area-inset-right)] md:pt-[env(safe-area-inset-top)]">
         {/* Mobile top bar */}
-        <header className="glass z-40 shrink-0 flex h-[calc(3.5rem+env(safe-area-inset-top))] items-center gap-1 border-b border-border/70 pl-[max(0.5rem,env(safe-area-inset-left))] pr-[max(0.5rem,env(safe-area-inset-right))] pt-[env(safe-area-inset-top)] md:hidden">
+        <header data-chrome className="glass z-40 shrink-0 flex h-[calc(3.5rem+env(safe-area-inset-top))] items-center gap-1 border-b border-border/70 pl-[max(0.5rem,env(safe-area-inset-left))] pr-[max(0.5rem,env(safe-area-inset-right))] pt-[env(safe-area-inset-top)] md:hidden">
           <Button variant="ghost" size="icon" className="h-10 w-10" aria-label="Open menu" onClick={() => setMenuOpen(true)} data-testid="button-mobile-menu"><Menu className="h-5 w-5" /></Button>
           <Link href="/" className="flex min-w-0 shrink-0 items-center gap-2 rounded-md p-1 focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/35" aria-label="Home" data-testid="link-home-mobile">
             <Brand compact />
@@ -87,7 +88,7 @@ function Shell({ children }: { children: ReactNode }) {
       </div>
 
       {/* Mobile bottom tab bar */}
-      <nav aria-label="Sections" className="glass fixed inset-x-0 bottom-0 z-40 border-t border-border/70 pb-[env(safe-area-inset-bottom)] pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)] md:hidden">
+      <nav data-chrome aria-label="Sections" className="glass fixed inset-x-0 bottom-0 z-40 border-t border-border/70 pb-[env(safe-area-inset-bottom)] pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)] md:hidden">
         <ul className="mx-auto flex max-w-lg px-1">
           {visibleNav(user).filter((n) => n.tab).map((n) => {
             const active = n.isActive(loc);
@@ -105,7 +106,7 @@ function Shell({ children }: { children: ReactNode }) {
 
       {/* Mobile slide-over with the full sidebar */}
       <Sheet open={menuOpen} onOpenChange={setMenuOpen}>
-        <SheetContent side="left" aria-describedby={undefined}>
+        <SheetContent side="left" data-chrome aria-describedby={undefined}>
           <SheetTitle className="sr-only">Menu</SheetTitle>
           <SidebarBody collapsed={false} touch onSearch={() => { setMenuOpen(false); setPaletteOpen(true); }} />
         </SheetContent>

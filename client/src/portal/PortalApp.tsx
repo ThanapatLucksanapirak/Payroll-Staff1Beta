@@ -179,7 +179,7 @@ function Home({ me, onSignOut }: { me: Me; onSignOut: () => void }) {
 
   return (
     <div className="min-h-screen">
-      <header className="pt-safe glass sticky top-0 z-20 border-b border-border/70">
+      <header data-chrome className="pt-safe glass sticky top-0 z-20 border-b border-border/70">
         <div className="mx-auto flex max-w-xl items-center justify-between gap-3 px-5 py-3">
           <div className="flex min-w-0 items-center gap-3">
             <Mark aria-hidden aria-label={undefined} role="presentation" className="h-6 w-auto shrink-0 text-primary" />
@@ -201,7 +201,7 @@ function Home({ me, onSignOut }: { me: Me; onSignOut: () => void }) {
         {tab === "timeoff" && <TimeOffTab me={me} />}
       </main>
 
-      <nav className="pb-safe glass fixed inset-x-0 bottom-0 z-20 border-t border-border/70" aria-label="Sections">
+      <nav data-chrome className="pb-safe glass fixed inset-x-0 bottom-0 z-20 border-t border-border/70" aria-label="Sections">
         <ul className="mx-auto grid max-w-xl grid-cols-4">
           {TABS.map((t) => {
             const on = tab === t.id;
