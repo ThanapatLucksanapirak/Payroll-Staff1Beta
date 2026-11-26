@@ -275,9 +275,9 @@ export function registerPortalRoutes(app: Express) {
     const now = Date.now();
     const period = payPeriod(site.rules, offset, todayISO(tz));
     const r = localRange(addDays(period.start, -1), addDays(period.end, 2), tz);
-    const [punches, approvals, prefs] = await Promise.all([
+    const [punches, approvals, prefs, finalized] = await Promise.all([
       (await db()).listPunches({ siteId: site.id, employeeId: employee.id, from: r.from, to: r.to, limit: 5000 }),
-      getApprovals(site.id), settings.getPrefs(),
+      getApprovals(site.id), settings.getPrefs(), finalizedFor(site.id),
     ]);
     const mine = punches.filter((p) => p.employeeId === employee.id).map((p) => ({ ...p, employeeName: employee.name }));
     const days = buildWorkDays(mine, {
@@ -291,6 +291,18 @@ export function registerPortalRoutes(app: Express) {
       status: clock.status, since: clock.since,
       totalMinutes: list.reduce((a, d) => a + d.workedMinutes, 0),
       days: list,
+      // Hours on finalized timesheets that overlap this period. They cover hours that came from
+      // Square or a spreadsheet, which the time clock never saw, so the page isn't left at zero.
+      timesheets: finalized.flatMap((t) => {
+        if (!t.periodStart || !t.periodEnd || t.periodEnd < period.start || t.periodStart > period.end) return [];
+        const e = employeeSummaryFor(t.result, employee.name);
+        if (!e) return [];
+        // Only the days inside the period being viewed: a sheet can straddle two pay periods.
+        const inside = e.days.filter((day) => !day.cancelled && day.date >= period.start && day.date <= period.end);
+        if (!inside.length) return [];
+        const minutes = Math.round(inside.reduce((a, day) => a + day.hours, 0) * 60);
+        return [{ id: t.id, periodStart: t.periodStart, periodEnd: t.periodEnd, minutes, partial: inside.length < e.days.filter((day) => !day.cancelled).length }];
+      }).sort((a, b) => b.periodEnd.localeCompare(a.periodEnd)),
     });
   }));
 
@@ -300,7 +312,7 @@ export function registerPortalRoutes(app: Express) {
     const list = await finalizedFor(site.id);
     const out = list.flatMap((t) => {
       const e = employeeSummaryFor(t.result, employee.name);
-      return e ? [{ id: t.id, label: t.label, periodStart: t.periodStart, periodEnd: t.periodEnd, totalPay: e.totalPay, isNetPay: e.isNetPay }] : [];
+      return e ? [{ id: t.id, label: t.label, periodStart: t.periodStart, periodEnd: t.periodEnd, totalPay: e.totalPay, isNetPay: e.isNetPay, minutes: Math.round(e.hoursWorked * 60) }] : [];
     });
     res.json(out.sort((a, b) => b.periodEnd.localeCompare(a.periodEnd)));
   }));

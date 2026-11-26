@@ -67,6 +67,14 @@ export function RatesTab(p: WsProps) {
     } finally { setBusy(null); }
   };
 
+  // One click for everyone on Custom rates, instead of a dropdown per person.
+  const customRows = rows.filter((e) => e.categoryId === CUSTOM || !cats.some((c) => c.id === e.categoryId));
+  const setAll = (payBasis: EmployeeConfig["payBasis"]) => {
+    const keys = new Set(customRows.map((e) => employeeKey(e.name)));
+    edit((d) => ({ ...d, employees: d.employees.map((e) => (keys.has(employeeKey(e.name)) ? { ...e, payBasis } : e)) }));
+    toast({ title: `${customRows.length} ${customRows.length === 1 ? "person" : "people"} set to ${payBasis === "hourly" ? "Hourly" : "Day rate"}` });
+  };
+
   // Saved with an effective date (rate history); see SaveRatesDialog.
   const saveDefaults = () => setSaving(true);
 
@@ -74,9 +82,15 @@ export function RatesTab(p: WsProps) {
     <div className="space-y-4">
       <Section
         title="Employee pay rates"
-        description="Pick a category to use its rates, or choose Custom to set rates for one person."
+        description={<>Pick a category to use its rates, or choose Custom to set rates for one person. <b className="font-medium text-foreground">Save as defaults</b> remembers these rates for {site.name}; <b className="font-medium text-foreground">Load saved rates</b> fills them in on a new timesheet.</>}
         actions={!locked && (
           <>
+            {customRows.length > 1 && (
+              <Select value="" onValueChange={(v) => setAll(v as EmployeeConfig["payBasis"])}>
+                <SelectTrigger className="h-8 w-auto gap-1.5" data-testid="select-set-all-basis"><SelectValue placeholder="Set everyone to…" /></SelectTrigger>
+                <SelectContent><SelectItem value="hourly">Set everyone to Hourly</SelectItem><SelectItem value="day_rate">Set everyone to Day rate</SelectItem></SelectContent>
+              </Select>
+            )}
             <Button variant="outline" size="sm" onClick={loadSaved} disabled={!!busy} data-testid="button-load-rates">{busy === "load" ? <Loader2 className="animate-spin" /> : <Download />} Load saved rates</Button>
             <Button variant="outline" size="sm" onClick={saveDefaults} disabled={!!busy || !rows.length} data-testid="button-save-rates">{busy === "save" ? <Loader2 className="animate-spin" /> : <Save />} Save as defaults</Button>
           </>
@@ -89,7 +103,7 @@ export function RatesTab(p: WsProps) {
                 <tr className="text-left text-xs text-muted-foreground">
                   <th className="sticky left-0 z-10 bg-card pb-2 font-medium">Employee</th><th className="pb-2 font-medium">Category</th><th className="pb-2 font-medium">Pay basis</th>
                   <th className="pb-2 font-medium">Full day</th><th className="pb-2 font-medium">Half day</th><th className="pb-2 font-medium">Hourly</th>
-                  <th className="pb-2 font-medium text-center">Net</th><th className="pb-2 font-medium">Paid by</th><th className="pb-2 font-medium text-center">Include</th>
+                  <th className="pb-2 font-medium text-center" title="On: no tax or deductions are taken, the amount shown is what you pay. Off: the amount is before tax.">Net <span className="sr-only">(no tax taken)</span><span aria-hidden className="cursor-help text-muted-foreground/70">ⓘ</span></th><th className="pb-2 font-medium">Paid by</th><th className="pb-2 font-medium text-center">Include</th>
                 </tr>
               </thead>
               <tbody>

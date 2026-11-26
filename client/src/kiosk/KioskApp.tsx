@@ -500,12 +500,12 @@ function PinScreen({ tz, employee, heading, error, shake, maxLength = 6, idleMs,
           <div className="kiosk-fade-up">
             <Avatar name={employee.name} big />
             <p className="mt-4 text-4xl font-display font-normal tracking-[-0.01em] text-stone-950">Hi, {firstName(employee.name)}</p>
-            <p className="mt-1 text-xl text-stone-700">Enter your PIN</p>
+            <p className="mt-1 text-xl text-stone-700">Enter your PIN, then tap <Check className="inline h-5 w-5 align-[-0.15em]" strokeWidth={2.75} aria-label="the check mark" /></p>
           </div>
         ) : (
           <>
             <BigClock tz={tz} />
-            <p className="kiosk-prompt mt-4 text-xl font-medium text-stone-700 [text-wrap:balance] sm:mt-6 sm:text-2xl lg:mt-10">Enter your PIN to clock in or out</p>
+            <p className="kiosk-prompt mt-4 text-xl font-medium text-stone-700 [text-wrap:balance] sm:mt-6 sm:text-2xl lg:mt-10">Enter your PIN, then tap <Check className="inline h-6 w-6 align-[-0.15em]" strokeWidth={2.75} aria-label="the check mark" /> to clock in or out</p>
           </>
         )}
       </div>
@@ -515,7 +515,8 @@ function PinScreen({ tz, employee, heading, error, shake, maxLength = 6, idleMs,
             <span key={i} className={`h-5 w-5 rounded-full transition-all duration-150 ${i < pin.length ? "scale-110 bg-[#7a295e]" : "bg-stone-300"}`} />
           ))}
         </div>
-        <p className={`mt-2 min-h-7 text-lg font-medium ${error ? "text-red-700" : "text-transparent"}`} role="alert">{error || "·"}</p>
+        {/* Once a PIN could be complete, say what to do next: PINs are 4 to 6 digits, so it can't send itself. */}
+        <p className={`mt-2 min-h-7 text-lg font-medium ${error ? "text-red-700" : pin.length >= 4 && !busy ? "text-stone-700" : "text-transparent"}`} role={error ? "alert" : undefined} aria-live="polite" data-testid="kiosk-pin-hint">{error || (pin.length >= 4 && !busy ? "Tap the check mark to continue" : "·")}</p>
         <div className="mt-3 grid grid-cols-3 gap-3 sm:gap-5">
           {["1", "2", "3", "4", "5", "6", "7", "8", "9"].map((d) => <Key key={d} onPress={() => press(d)} label={d} />)}
           {onBack && employee ? <Key onPress={onBack} label={<ArrowLeft className="h-8 w-8" />} subtle aria="Back" /> : <Key onPress={back} label={<Delete className="h-8 w-8" />} subtle aria="Delete" />}
