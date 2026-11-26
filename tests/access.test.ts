@@ -303,6 +303,14 @@ test("two-factor: enroll with a code, then sign-in takes a second step", async (
   // A ticket allows only a few tries.
   for (let i = 0; i < 5; i++) await call("POST", "/api/auth/2fa/login/verify", { ticket: s4.body.ticket, code: "000000" }, { as: "o4" });
   assert.equal((await call("POST", "/api/auth/2fa/login/verify", { ticket: s4.body.ticket, code: recovery[1] }, { as: "o4" })).status, 401);
+  // A fresh ticket (the password is known) doesn't give fresh tries: wrong codes
+  // add up per account, so 8 in a row lock the second step, even for the right code.
+  for (let i = 0; i < 3; i++) {
+    const s = await login(`o5${i}`, "owner", "owner-pass-1");
+    assert.equal((await call("POST", "/api/auth/2fa/login/verify", { ticket: s.body.ticket, code: "000000" }, { as: `o5${i}` })).status, 401);
+  }
+  const s5 = await login("o6", "owner", "owner-pass-1");
+  assert.equal((await call("POST", "/api/auth/2fa/login/verify", { ticket: s5.body.ticket, code: recovery[1] }, { as: "o6" })).status, 429, "2FA locked for this account");
   // "Forget devices" ends remembered devices.
   await call("POST", "/api/auth/2fa/forget-devices", {}, { as: "owner" });
   await call("POST", "/api/auth/logout", {}, { as: "o2" });

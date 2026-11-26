@@ -6,6 +6,12 @@ Settings → About, next to the matching update.
 Add an entry with every pull request: a `## YYYY-MM-DD · Title (#PR)` heading and a
 few short bullets written for the people who use the app, not for developers.
 
+## 2026-11-26 · Stronger sign-in protection (#38)
+- Wrong passwords now count against the account being tried, not only the device trying. After 8 wrong passwords for one account, that account waits 15 minutes, whichever devices the guesses came from. Signing in successfully clears it.
+- Signing in to your own account no longer resets the wrong-password count for everyone else on the same network. One network gets 30 wrong tries in 15 minutes, shared by everyone on it.
+- Two-step sign-in codes are limited the same way: 8 wrong codes for an account lock its second step for 15 minutes, even when the password is entered again to get a new code screen.
+- Changing your password now has the same limit on wrong "current password" tries.
+
 ## 2026-11-26 · Switching database keeps time clock punches (#36)
 - Settings → Database → switch with "Copy my data" now copies every time clock punch along with timesheets, locations, rates and the password. Before, the new database started with no clock-ins or clock-outs.
 - The confirmation says how many punches were copied.
