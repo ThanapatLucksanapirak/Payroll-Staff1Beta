@@ -64,7 +64,7 @@ export function ImportDialog({ open, onOpenChange, site, mode, initialSource, on
             {source === "kiosk" && <KioskStep site={site} onResult={setReview} />}
             {source === "csv" && <CsvStep onResult={setReview} />}
             {source === "pdf" && <PdfStep site={site} onResult={setReview} />}
-            {source === "blank" && <BlankStep site={site} onResult={(r) => onComplete(r)} />}
+            {source === "blank" && <BlankStep site={site} onResult={async (r) => { await onComplete(r); onOpenChange(false); setTimeout(reset, 200); }} />}
           </div>
         )}
       </DialogContent>
@@ -320,13 +320,26 @@ function PdfStep({ site, onResult }: { site: Site; onResult: (r: ImportResult) =
   );
 }
 
-function BlankStep({ site, onResult }: { site: Site; onResult: (r: ImportResult) => void }) {
+function BlankStep({ site, onResult }: { site: Site; onResult: (r: ImportResult) => Promise<void> | void }) {
   const [label, setLabel] = useState("");
   const [busy, setBusy] = useState(false);
+  // A ref, not just state: a fast double tap submits twice before React re-renders.
+  const sending = useRef(false);
+  const [error, setError] = useState("");
   return (
-    <form className="space-y-4" onSubmit={async (e) => { e.preventDefault(); setBusy(true); try { await onResult({ shifts: [], source: "manual", filename: label || "Manual timesheet", label, warnings: [] }); } finally { setBusy(false); } }}>
+    <form className="space-y-4" onSubmit={async (e) => {
+      e.preventDefault();
+      if (sending.current) return;
+      sending.current = true;
+      setBusy(true);
+      setError("");
+      try { await onResult({ shifts: [], source: "manual", filename: label || "Manual timesheet", label, warnings: [] }); }
+      catch (err) { setError(errorMessage(err)); }
+      finally { sending.current = false; setBusy(false); }
+    }}>
       <div className="space-y-1.5"><Label>Name (optional)</Label><Input value={label} onChange={(e) => setLabel(e.target.value)} placeholder={`e.g. ${site.name} — week 45`} data-testid="input-blank-label" /></div>
       <p className="text-xs text-muted-foreground">You can add shifts, manual employees and lump-sum pay inside the timesheet.</p>
+      {error && <ErrorNote>{error}</ErrorNote>}
       <Button type="submit" className="w-full" disabled={busy} data-testid="button-blank-create">{busy && <Loader2 className="animate-spin" />} Create timesheet</Button>
     </form>
   );

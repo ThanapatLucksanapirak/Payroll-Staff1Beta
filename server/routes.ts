@@ -209,6 +209,36 @@ async function restoreFrom(raw: unknown, opts: { allowEmpty?: boolean } = {}) {
   };
 }
 
+/**
+ * Send `{...head, list1: [...], list2: [...]}` as JSON, one item at a time,
+ * waiting for the socket to drain, so no full-size JSON string is built. The rows
+ * themselves are still in memory (the store loads them first).
+ */
+async function streamJson(res: Response, head: Record<string, unknown>, lists: Record<string, unknown[]>) {
+  res.status(200).setHeader("Content-Type", "application/json; charset=utf-8");
+  const write = (chunk: string) => new Promise<void>((resolve, reject) => {
+    if (res.destroyed) return reject(new Error("client went away"));
+    if (res.write(chunk)) return resolve();
+    const done = () => { res.off("close", gone); resolve(); };
+    const gone = () => { res.off("drain", done); reject(new Error("client went away")); };
+    res.once("drain", done);
+    res.once("close", gone);
+  });
+  let buf = "";
+  const add = async (s: string) => { buf += s; if (buf.length >= 64 * 1024) { const b = buf; buf = ""; await write(b); } };
+  try {
+    await add(JSON.stringify(head).slice(0, -1));
+    for (const [name, items] of Object.entries(lists)) {
+      await add(`,${JSON.stringify(name)}:[`);
+      for (let i = 0; i < items.length; i++) await add((i ? "," : "") + JSON.stringify(items[i]));
+      await add("]");
+    }
+    res.end(buf + "}");
+  } catch {
+    res.destroy();
+  }
+}
+
 export function registerRoutes(app: Express) {
   // /live checks its own short-lived ticket (EventSource cannot send headers).
   const PUBLIC = new Set(["/health", "/auth/status", "/auth/login", "/auth/setup", "/auth/logout", "/live", "/email/google/callback", ...TWO_FACTOR_PUBLIC]);
@@ -510,11 +540,14 @@ export function registerRoutes(app: Express) {
     const store = await db();
     const secret = (k: string) => k === "password_hash" || k === USERS_KEY || k.startsWith("square_token:") || k.startsWith("kiosk_manager_pin:") || k === "square_access_token" || k.startsWith("email:");
     const all = await store.allSettings();
-    res.json({
-      app: "payroll-admin", version: 2, exportedAt: new Date().toISOString(),
+    const timesheets = await store.allTimesheets();
+    const punches = await store.allPunches();
+    // Serialized row by row: one JSON.stringify of the whole database added a
+    // full-size string (and its copies) on top of the loaded rows.
+    await streamJson(res, { app: "payroll-admin", version: 2, exportedAt: new Date().toISOString() }, {
       settings: all.filter((s) => !NEVER_BACKED_UP(s.key) && (includeSecrets || !secret(s.key))),
-      timesheets: await store.allTimesheets(),
-      punches: await store.allPunches(),
+      timesheets,
+      punches,
     });
   }));
   app.post("/api/backup/restore", express.json({ limit: "100mb" }), h(async (req, res) => {
@@ -556,6 +589,13 @@ export function registerRoutes(app: Express) {
       return res.status(400).json({ error: /\/backup\/restore$/.test(_req.path) ? "This file isn't a valid backup (it may be cut off or edited). Use a file from Download backup. Nothing was restored." : "The request wasn't valid JSON." });
     }
     if (err?.code === "empty_lists") return res.status(409).json({ error: err.message, code: err.code, wouldDelete: err.wouldDelete });
+    // SQLite stayed locked past busy_timeout (e.g. a long backup or restore): a short,
+    // retryable outage, not a crash. The time clock saves the punch and sends it later.
+    if (err?.code === "SQLITE_BUSY" || err?.code === "SQLITE_LOCKED" || /database is locked/i.test(String(err?.message ?? ""))) {
+      res.setHeader("Retry-After", "5");
+      // No `code`: the kiosk treats a 5xx without one as "no answer" and queues the punch.
+      return res.status(503).json({ error: "The database is busy for a moment. Please try again.", busy: true });
+    }
     const status = Number(err?.status) || 500;
     if (status >= 500) console.error("[api]", err);
     res.status(status).json({ error: err?.message || "Something went wrong." });

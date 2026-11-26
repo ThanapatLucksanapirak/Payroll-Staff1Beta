@@ -185,6 +185,22 @@ export function registerPayRoutes(app: Express, deps: { rowFromDoc: (doc: Timesh
     next();
   }));
 
+  // Created already final (an API client or an import of a finalized sheet): take the
+  // same pay snapshot and record the same advance repayments as finalizing a draft.
+  app.post("/api/timesheets", g(async (req, res, next) => {
+    const parsed = timesheetDocSchema.safeParse(req.body?.doc);
+    if (parsed.success && parsed.data.status === "final") {
+      req.body.doc = await syncForFinal(parsed.data, undefined);
+      const json = res.json.bind(res);
+      res.json = ((body: any) => {
+        if (res.statusCode >= 400 || !body?.id) return json(body);
+        commitFinal(String(body.id)).catch((err) => console.error("[pay] could not record advance repayments:", err)).finally(() => json(body));
+        return res;
+      }) as Response["json"];
+    }
+    next();
+  }));
+
   app.patch("/api/timesheets/:id", g(async (req, res, next) => {
     const id = String(req.params.id);
     const store = await db();

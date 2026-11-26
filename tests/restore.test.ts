@@ -246,3 +246,21 @@ test("a timesheet without an id refuses the whole restore", async () => {
   assert.equal(mixed.status, 400);
   assert.equal((await call("GET", "/api/timesheets")).body.length, n, "nothing changed");
 });
+
+test("a large backup download streams as valid JSON with every row", async () => {
+  const { db } = await import("../server/db");
+  const store = await db();
+  const boot = await call("GET", "/api/bootstrap");
+  const siteId = boot.body.sites[0].id;
+  const before1 = (await store.allPunches()).length;
+  for (let i = 0; i < 3000; i++) {
+    const at = new Date(Date.UTC(2025, 0, 1) + i * 60_000).toISOString();
+    await store.insertPunch({ id: `big${String(i).padStart(6, "0")}`, siteId, employeeId: "e1", employeeName: 'Ana "Quote" Ruiz ☃', type: i % 2 ? "out" : "in", at, source: "kiosk", deviceId: "d1", note: "x".repeat(40), createdAt: at, editedAt: null, edits: [] } as any);
+  }
+  const res = await call("GET", "/api/backup");
+  assert.equal(res.status, 200);
+  assert.equal(res.body.app, "payroll-admin");
+  assert.equal(res.body.punches.length, before1 + 3000);
+  assert.ok(Array.isArray(res.body.settings) && res.body.settings.length > 0);
+  assert.ok(Array.isArray(res.body.timesheets));
+});
