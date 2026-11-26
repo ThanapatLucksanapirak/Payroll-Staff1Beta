@@ -6,6 +6,11 @@ Settings → About, next to the matching update.
 Add an entry with every pull request: a `## YYYY-MM-DD · Title (#PR)` heading and a
 few short bullets written for the people who use the app, not for developers.
 
+## 2026-11-27 · New look around the Payroll by Shijiri Group logo (#49)
+- The new logo is on the sign-in screen, the sidebar, the time clock and the staff portal.
+- New browser tab icon and home-screen and Android app icons: the logo's gold and orange blocks with the red dot. Installed apps may take a restart to show the new icon.
+- Buttons, selection and focus are now Payroll orange instead of plum, in light and dark mode. Emails use the logo blocks and an orange button.
+
 ## 2026-11-27 · Face data is kept through a database switch or restore (#47)
 - Switching to another database, or restoring an older backup, no longer lets the daily clean-up delete saved face data. Face data isn't in backups, so before this it couldn't be got back after switching back.
 - The clean-up now skips a location when the database in use doesn't have it, has no employees there, or has no punches there within the face data retention period.
