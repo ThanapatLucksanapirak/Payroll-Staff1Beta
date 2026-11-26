@@ -6,6 +6,13 @@ Settings → About, next to the matching update.
 Add an entry with every pull request: a `## YYYY-MM-DD · Title (#PR)` heading and a
 few short bullets written for the people who use the app, not for developers.
 
+## 2026-11-26 · iPhone home screen edges, and labor from Square (#32)
+- On an iPhone added to the home screen, the app now fills the whole screen neatly: the tab bar sits above the home bar, the top bar clears the status bar and camera, and nothing is cut off by the rounded corners, in portrait and landscape. The time clock and staff portal got the same care.
+- Home and Reports: for a location that tracks time in Square, "Labor vs. sales" now counts this week's Square timecards at your saved pay rates (marked est.), instead of showing $0.00 labor until a timesheet is saved. The payroll forecast counts them too.
+- If Square won't share timecards, Reports says so. When there are sales but no labor cost yet, Home and Reports show "—" instead of 0.0%, and say whether it's because no hours are in yet or someone has no pay rate.
+- Reports: the labor vs. sales table fits on phones (hours sit under the labor cost).
+- Long-pressing a tab, button or link no longer opens Safari's link menu (Open, Add to Reading List, Copy Link), and buttons don't get text-selected. Typed text and page content can still be selected.
+
 ## 2026-11-26 · Face check works on the kiosk web address (#35)
 - On the time clock's own web address, the face check couldn't load, so every punch said "This tablet couldn't check for a face", on iPhone and iPad too. It loads now, and faces are recognized again.
 

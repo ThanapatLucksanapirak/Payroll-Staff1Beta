@@ -24,7 +24,7 @@ import * as settings from "./settings";
 import { listEmployees } from "./employees";
 import { broadcast } from "./live";
 import { actorOf, audit } from "./audit";
-import { SquareError, pullDailySales } from "./square";
+import { SquareError, pullDailySales, pullTimecards } from "./square";
 
 const isoDate = z.string().refine(isISODate, "Use a YYYY-MM-DD date.");
 const DAY = 86_400_000;
@@ -213,20 +213,54 @@ async function squareSales(site: Site, from: string, to: string): Promise<{ data
   }
 }
 
+// ── Square timecards (cached briefly) ────────────────────────────────────────
+// Sites that track time in Square have no punches here, and their timesheets are
+// usually made after the period ends. Until then, labor and the forecast are
+// estimated from Square timecards at the saved rates.
+const timecardCache = new Map<string, { at: number; shifts: Shift[] }>();
+
+async function squareShifts(site: Site, from: string, to: string): Promise<{ shifts: Shift[]; message: string | null }> {
+  const token = await settings.getSquareToken(site.id);
+  if (!token) return { shifts: [], message: null };
+  const today = todayISO(site.rules.timezone);
+  const end = to > today ? today : to;
+  if (end < from) return { shifts: [], message: null };
+  const k = `${site.id}|${site.squareLocationId}|${from}|${end}`;
+  const hit = timecardCache.get(k);
+  if (hit && Date.now() - hit.at < SALES_TTL) return { shifts: hit.shifts, message: null };
+  try {
+    const { shifts } = await pullTimecards(token, { locationId: site.squareLocationId || undefined, start: from, end, timezone: site.rules.timezone });
+    if (timecardCache.size > 200) timecardCache.clear();
+    timecardCache.set(k, { at: Date.now(), shifts });
+    return { shifts, message: null };
+  } catch (err: any) {
+    const scope = err instanceof SquareError && (err.code === "INSUFFICIENT_SCOPES" || err.code === "FORBIDDEN");
+    return {
+      shifts: [],
+      message: scope
+        ? "Your Square token can't read timecards, so labor only counts saved timesheets. Give it the Timecards (read) permission in the Square Developer Dashboard."
+        : `Couldn't get timecards from Square (${err?.message ?? "unknown error"}), so labor only counts saved timesheets.`,
+    };
+  }
+}
+
 /** Labor cost vs. sales per date. */
 export async function laborBetween(site: Site, from: string, to: string) {
   const [ts, sq, manual] = await Promise.all([timesheetDays(site, from, to), squareSales(site, from, to), manualSales(site.id, from, to)]);
   let fromPunches: Record<string, DayCost> = {};
   let missingRates: string[] = [];
-  if (site.timeSource !== "square") {
-    const ps = await punchShifts(site, from, to);
+  const estimateSource = site.timeSource === "square" ? "square" as const : "punches" as const;
+  const { shifts, message: laborMessage } = estimateSource === "square"
+    ? await squareShifts(site, from, to)
+    : { shifts: (await punchShifts(site, from, to)).shifts, message: null };
+  if (shifts.length) {
     const rates = { employees: await settings.getWageProfile(site.id), categories: await settings.getCategories(), rules: site.rules };
-    const est = laborFromShifts(ps.shifts, rates, from, to);
+    const est = laborFromShifts(shifts, rates, from, to);
     fromPunches = est.days;
     missingRates = est.missingRates;
   }
-  const report = laborReport({ from, to, fromTimesheets: ts.days, fromPunches, sales: mergeSales(sq.data, manual) });
-  return { ...report, square: sq.status, missingRates };
+  const report = laborReport({ from, to, fromTimesheets: ts.days, fromPunches, estimateSource, sales: mergeSales(sq.data, manual) });
+  return { ...report, square: sq.status, missingRates, laborMessage };
 }
 
 /** Projected payroll for a pay period. */
@@ -238,7 +272,7 @@ export async function forecastFor(site: Site, start: string, end: string, now = 
   const names = Object.fromEntries(directory.map((e) => [e.id, e.name]));
   let actual: Shift[] = [];
   let open: { employee: string; date: string; start: number }[] = [];
-  let basis: "punches" | "timesheets" = "punches";
+  let basis: "punches" | "timesheets" | "square" = "punches";
   const upTo = today < end ? today : end;
   if (today >= start) {
     if (site.timeSource !== "square") {
@@ -249,7 +283,12 @@ export async function forecastFor(site: Site, start: string, end: string, now = 
         .map((o) => { const l = instantToLocal(o.since, tz); return { employee: o.employee, date: l.date, start: l.minutes }; });
     } else {
       basis = "timesheets";
-      actual = (await timesheetDays(site, start, upTo)).shifts;
+      // Saved timesheets first; Square timecards fill the days no timesheet covers yet.
+      const [ts, sq] = await Promise.all([timesheetDays(site, start, upTo), squareShifts(site, start, upTo)]);
+      const covered = new Set([...Object.keys(ts.days), ...ts.shifts.map((s) => s.date)]);
+      const fromSquare = sq.shifts.filter((s) => !covered.has(s.date));
+      actual = [...ts.shifts, ...fromSquare];
+      if (fromSquare.length) basis = "square";
     }
   }
   const [{ shifts: scheduled }, timeOff, employees, categories] = await Promise.all([

@@ -118,8 +118,8 @@ export function KioskApp() {
 
   const home = useCallback(() => { setBusy(false); setScreen({ k: "home" }); }, []);
 
-  if (!paired) return <PairScreen notice={notice} onPaired={() => { setNotice(null); setPaired(true); }} />;
-  if (!state) return <Splash online={online} onRetry={refresh} />;
+  if (!paired) return <div className="kiosk-safe flex h-full flex-col"><PairScreen notice={notice} onPaired={() => { setNotice(null); setPaired(true); }} /></div>;
+  if (!state) return <div className="kiosk-safe flex h-full flex-col"><Splash online={online} onRetry={refresh} /></div>;
 
   const tz = state.site.timezone;
   const idleMs = Math.max(5, options.idleSeconds || 10) * 1000;
@@ -275,7 +275,9 @@ export function KioskApp() {
   const fullBleed = screen.k === "done";
 
   return (
-    <div className="flex h-full flex-col bg-white">
+    // Edge to edge in the home-screen app (viewport-fit=cover): every screen but the
+    // full-colour confirmation keeps clear of the notch, rounded corners and home indicator.
+    <div className={`flex h-full flex-col bg-white ${fullBleed ? "" : "kiosk-safe"}`}>
       {!fullBleed && <TopBar state={state} online={online} pending={pending} onInfo={openSettings} onExitFullscreen={requestExitFullscreen} />}
       {notice && !fullBleed && (
         <button className="mx-auto mt-2 flex max-w-xl items-center gap-2 rounded-2xl bg-amber-50 px-4 py-3 text-left text-base text-amber-950 ring-2 ring-amber-300" onClick={() => setNotice(null)}>
@@ -417,7 +419,7 @@ function CameraPreview({ attach, status, faceSeen }: CameraProps) {
   const broken = status === "blocked" || status === "unavailable";
   const warn = broken || faceSeen === false;
   return (
-    <div className={`pointer-events-none fixed bottom-4 left-4 z-40 flex items-center gap-3 rounded-2xl p-2 pr-4 shadow-lg ring-1 ${warn ? "bg-red-50 ring-red-300" : "bg-white/95 ring-stone-200"}`} data-testid="kiosk-camera" data-status={status} data-face={faceSeen === null ? "" : faceSeen ? "yes" : "no"}>
+    <div className={`pointer-events-none fixed bottom-[calc(1rem+env(safe-area-inset-bottom))] left-[calc(1rem+env(safe-area-inset-left))] z-40 flex items-center gap-3 rounded-2xl p-2 pr-4 shadow-lg ring-1 ${warn ? "bg-red-50 ring-red-300" : "bg-white/95 ring-stone-200"}`} data-testid="kiosk-camera" data-status={status} data-face={faceSeen === null ? "" : faceSeen ? "yes" : "no"}>
       {broken ? (
         <span className="flex h-24 w-24 items-center justify-center rounded-xl bg-red-100 text-red-700 sm:h-32 sm:w-32"><CameraOff className="h-9 w-9" /></span>
       ) : (
@@ -643,7 +645,7 @@ function PairScreen({ notice, onPaired }: { notice: string | null; onPaired: () 
   const apk = useAndroidAppDownload();
   return (
     <Centered>
-      {apk && <div className="fixed right-4 top-3 z-10"><AndroidAppButton url={apk} /></div>}
+      {apk && <div className="fixed right-[calc(1rem+env(safe-area-inset-right))] top-[calc(0.75rem+env(safe-area-inset-top))] z-10"><AndroidAppButton url={apk} /></div>}
       <div className="w-full max-w-md kiosk-fade-up">
         <h1 className="text-4xl font-display font-normal tracking-[-0.01em] text-stone-950">Set up this time clock</h1>
         <p className="mt-3 text-lg text-stone-700">In the admin app, open <b className="font-semibold text-stone-900">Settings → Locations &amp; rules → Time clock</b>, add a device, then open its pairing link here or type its code.</p>
@@ -700,7 +702,7 @@ function InfoSheet({ state, options, pending, online, canUnpair, guarded, idleMs
     } finally { setBusy(false); }
   };
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/30 p-4 sm:items-center" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/30 p-4 pb-[max(1rem,env(safe-area-inset-bottom))] sm:items-center" onClick={onClose}>
       <div className="w-full max-w-md rounded-3xl bg-white p-6 shadow-2xl kiosk-fade-up" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-start justify-between">
           <div>
