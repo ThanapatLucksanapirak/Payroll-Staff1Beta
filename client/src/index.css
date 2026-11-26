@@ -205,3 +205,9 @@ input::-webkit-date-and-time-value { text-align: left; margin: 0; }
     align-items: center;
   }
 }
+
+/* Printing from the browser: let the whole page flow instead of the fixed, scrolling shell. */
+@media print {
+  [data-testid="app-shell"] { position: static; overflow: visible; display: block; }
+  [data-testid="app-shell"] main { overflow: visible; }
+}
