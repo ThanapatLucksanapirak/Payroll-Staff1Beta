@@ -17,6 +17,7 @@ import { broadcast } from "./live";
 import { applyScheduleRules } from "./schedule";
 import { breakDue } from "@shared/kiosk";
 import { getSiteConfig } from "./kioskConfig";
+import { actorOf, audit } from "./audit";
 
 const DAY = 86_400_000;
 export const PUNCH_ID_RE = /^[A-Za-z0-9_-]{8,64}$/;
@@ -120,6 +121,31 @@ export async function removePunch(id: string, opts: { force?: boolean; note?: st
       broadcast({ type: "punch", action: "deleted", siteId: cur.siteId, punch: cur, note: opts.note ?? "" });
     }
     return ok;
+  });
+}
+
+/**
+ * Cancel an employee's open shift: delete its clock-in and any break punches
+ * after it, as if they never clocked in. For a clock-in made by mistake, or one
+ * left open because the kiosk went offline. Returns the deleted punches.
+ */
+export async function cancelOpenShift(site: Site, employeeId: string, opts: { note: string; by?: string | null }, now = Date.now()): Promise<Punch[]> {
+  return withLock(`${site.id}|${employeeId}`, async () => {
+    const store = await db();
+    const from = new Date(now - STALE_SHIFT_HOURS * 3600_000 - DAY).toISOString();
+    const list = (await store.listPunches({ siteId: site.id, employeeId, from, to: new Date(now + 1).toISOString() })).sort(byTime);
+    const st = clockState(list, now);
+    if (st.status === "out" || !st.shiftStart) throw new PunchError("They aren't clocked in, so there's nothing to cancel.", 409, "state");
+    const shift = list.filter((p) => p.at >= st.shiftStart! && p.type !== "out");
+    const removed: Punch[] = [];
+    for (const p of shift) {
+      if (await store.deletePunch(p.id)) {
+        removed.push(p);
+        broadcast({ type: "punch", action: "deleted", siteId: p.siteId, punch: p, note: opts.note });
+      }
+    }
+    console.log(`[timeclock] open shift of ${removed[0]?.employeeName ?? employeeId} cancelled (${removed.length} punch(es))${opts.by ? ` by ${opts.by}` : ""}: ${opts.note}`);
+    return removed;
   });
 }
 
@@ -242,6 +268,21 @@ export function registerPunchRoutes(app: Express) {
       note: body.note, audience: "admin", force: body.force,
     });
     res.json(r.punch);
+  }));
+
+  // Cancel someone's current clock-in (and breaks since), e.g. the kiosk went offline.
+  app.post("/api/sites/:siteId/employees/:id/cancel-shift", h(async (req, res) => {
+    const site = await siteOr404(req, res); if (!site) return;
+    const { note } = z.object({ note: z.string().trim().min(1, "Add a short note saying why.").max(300) }).parse(req.body ?? {});
+    const employeeId = String(req.params.id);
+    const actor = actorOf(req, res);
+    const removed = await cancelOpenShift(site, employeeId, { note, by: actor.userName });
+    const first = removed[0];
+    audit({
+      ...actor, action: "punch.cancel-shift", target: `site:${site.id}`,
+      detail: `${first?.employeeName ?? employeeId}: clock-in at ${first?.at ?? "?"} cancelled (${removed.length} punch${removed.length === 1 ? "" : "es"} removed). ${note}`,
+    });
+    res.json({ ok: true, removed: removed.map((p) => ({ id: p.id, type: p.type, at: p.at })) });
   }));
 
   app.patch("/api/punches/:id", h(async (req, res) => {

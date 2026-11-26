@@ -3,7 +3,7 @@
 // Stored as JSON in DATA_DIR/config.json and written atomically.
 import fs from "node:fs";
 import path from "node:path";
-import { randomBytes } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import { type DatabaseConfig, databaseConfigSchema } from "@shared/schema";
 
 export const DATA_DIR = path.resolve(process.env.DATA_DIR || path.join(process.cwd(), "data"));
@@ -16,6 +16,8 @@ export interface LocalConfig {
   /** Last known user accounts, so sign-in still works while the database is unreachable. */
   usersCache?: unknown[];
   setupCode?: string;
+  /** Key that encrypts employee PINs so owners can look them up (kept here, never in the database or backups). */
+  pinKey?: string;
 }
 
 let cache: LocalConfig | null = null;
@@ -82,4 +84,15 @@ export function effectiveDatabaseConfig(): DatabaseConfig {
   if (cfg.database) return cfg.database;
   if (managedSupabase()) return { kind: "managed" };
   return { kind: "sqlite" };
+}
+
+/** 32-byte key for encrypting employee PINs (created on first use). */
+export function getPinKey(): Buffer {
+  const env = process.env.PIN_KEY;
+  if (env) return Buffer.from(env, "base64url").length === 32 ? Buffer.from(env, "base64url") : createHash("sha256").update(env).digest();
+  const cfg = loadConfig();
+  if (cfg.pinKey) return Buffer.from(cfg.pinKey, "base64url");
+  const key = randomBytes(32);
+  saveConfig({ pinKey: key.toString("base64url") });
+  return key;
 }

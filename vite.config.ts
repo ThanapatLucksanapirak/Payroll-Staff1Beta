@@ -1,9 +1,36 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import path from "node:path";
+import fs from "node:fs";
+import type { Plugin } from "vite";
+
+// The kiosk's face check (photo on punch) runs MediaPipe's WebAssembly runtime,
+// served from /face/ next to the model in client/public/face. The runtime files
+// come from node_modules: served from there in development, copied into the
+// build otherwise, so they never have to be committed.
+const FACE_WASM_DIR = path.resolve(import.meta.dirname, "node_modules", "@mediapipe", "tasks-vision", "wasm");
+const FACE_FILES = ["vision_wasm_internal.js", "vision_wasm_internal.wasm", "vision_wasm_nosimd_internal.js", "vision_wasm_nosimd_internal.wasm"];
+function faceRuntime(): Plugin {
+  return {
+    name: "kiosk-face-runtime",
+    configureServer(server) {
+      server.middlewares.use((req, res, next) => {
+        const name = (req.url ?? "").split("?")[0].replace(/^\/face\//, "");
+        if (!req.url?.startsWith("/face/") || !FACE_FILES.includes(name)) return next();
+        res.setHeader("Content-Type", name.endsWith(".wasm") ? "application/wasm" : "text/javascript");
+        fs.createReadStream(path.join(FACE_WASM_DIR, name)).pipe(res);
+      });
+    },
+    generateBundle() {
+      for (const name of FACE_FILES) {
+        this.emitFile({ type: "asset", fileName: `face/${name}`, source: fs.readFileSync(path.join(FACE_WASM_DIR, name)) });
+      }
+    },
+  };
+}
 
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react(), faceRuntime()],
   resolve: {
     alias: {
       "@": path.resolve(import.meta.dirname, "client", "src"),

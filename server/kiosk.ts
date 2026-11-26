@@ -491,10 +491,19 @@ export function registerKioskRoutes(app: Express) {
       const station = matchStation((await getSiteConfig(site.id)).stations, body.station);
       if (station) meta.station = station;
     }
+    // Photos on: a live punch must come with a photo (the kiosk checks it shows a
+    // face before sending). Punches queued while offline are still accepted
+    // without one, so a punch saved on the tablet is never lost over a photo.
+    if (options.photo && !body.at && !body.photo) {
+      return res.status(422).json({ error: "Face not detected. This time clock takes a photo with each punch: look at the camera and try again.", code: "photo" });
+    }
+    const photoBytes = options.photo && body.photo ? decodePhoto(body.photo) : null;
+    if (options.photo && !body.at && !photoBytes) {
+      return res.status(422).json({ error: "The photo didn't come through. Look at the camera and try again.", code: "photo" });
+    }
     let photoSaved = false;
     if (options.photo && body.photo !== undefined) {
-      const bytes = body.photo ? decodePhoto(body.photo) : null;
-      photoSaved = !!bytes && savePhoto(site.id, body.id, bytes);
+      photoSaved = !!photoBytes && savePhoto(site.id, body.id, photoBytes);
       meta.photo = photoSaved ? "saved" : "none";
     }
 
@@ -624,6 +633,8 @@ export function kioskHostGuard() {
     if (p === "/api/health" || p.startsWith("/api/kiosk/") || p === "/kiosk" || p === "/kiosk/" || p === "/favicon.svg") return next();
     // Installable kiosk (home-screen icon, manifest and the static-shell service worker)
     if (p === "/kiosk.webmanifest" || p === "/sw.js" || /^\/icons\/[\w.-]+$/.test(p)) return next();
+    // Face check for photo on punch (model and WebAssembly runtime)
+    if (/^\/face\/[\w.-]+\.(js|wasm|tflite)$/.test(p)) return next();
     if (kioskAssetSet().has(p)) return next();
     if (process.env.NODE_ENV !== "production" && DEV_PREFIXES.some((x) => p.startsWith(x))) return next();
     if (p.startsWith("/api/")) return res.status(404).json({ error: "Not found." });
