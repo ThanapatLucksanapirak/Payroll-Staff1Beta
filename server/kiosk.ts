@@ -517,12 +517,14 @@ export function registerKioskRoutes(app: Express) {
       const face = await checkFaceJpeg(photoBytes);
       if (!face.ok) {
         if (!body.at) {
-          const error = face.reason === "unavailable"
+          const error = face.reason === "busy"
+            ? "The face check is busy. Wait a moment and try again."
+            : face.reason === "unavailable"
             ? "The face check isn't working on the server right now. Ask a manager to add your punch."
             : face.reason === "bad_image"
               ? "The photo didn't come through. Show your face to the camera and try again."
               : "Face not detected. Show your face to the camera and try again.";
-          return res.status(face.reason === "unavailable" ? 503 : 422).json({ error, code: "photo", reason: face.reason });
+          return res.status(face.reason === "unavailable" || face.reason === "busy" ? 503 : 422).json({ error, code: "photo", reason: face.reason });
         }
         meta.face = "missing"; // a punch saved offline: kept, but flagged for the manager
       }

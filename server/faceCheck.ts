@@ -15,7 +15,10 @@ export const FACE_MIN_SCORE = 0.6;
 
 export type FaceVerdict =
   | { ok: true; score: number }
-  | { ok: false; reason: "no_face" | "bad_image" | "unavailable"; score?: number };
+  | { ok: false; reason: "no_face" | "bad_image" | "unavailable" | "busy"; score?: number };
+
+/** A check that takes longer than this (waiting included) answers "unavailable"; more than this many waiting answer "busy". */
+export const faceLimits = { timeoutMs: 10_000, maxWaiting: 10 };
 
 type FaceApi = typeof import("@vladmandic/face-api");
 type Tf = typeof import("@tensorflow/tfjs");
@@ -51,11 +54,30 @@ export function loadFaceModel(): Promise<FaceApi> {
 /** One check at a time: the WebAssembly backend is single-threaded anyway. */
 let queue: Promise<unknown> = Promise.resolve();
 
+let waiting = 0;
+
 /** Is there a face in this JPEG? */
 export function checkFaceJpeg(bytes: Buffer): Promise<FaceVerdict> {
-  const run = queue.then(() => detect(bytes), () => detect(bytes));
+  if (waiting >= faceLimits.maxWaiting) return Promise.resolve({ ok: false, reason: "busy" });
+  waiting++;
+  const deadline = Date.now() + faceLimits.timeoutMs;
+  // Detection blocks the event loop (about 0.3 s each), so let the server breathe
+  // between checks, and skip a check whose request has already timed out.
+  const next = async (): Promise<FaceVerdict> => {
+    await new Promise((r) => setImmediate(r));
+    if (Date.now() > deadline) return { ok: false, reason: "unavailable" };
+    return detect(bytes);
+  };
+  const run = queue.then(next, next).finally(() => { waiting--; });
   queue = run.catch(() => undefined);
-  return run;
+  let timer: NodeJS.Timeout | undefined;
+  const timeout = new Promise<FaceVerdict>((resolve) => {
+    timer = setTimeout(() => {
+      console.error(`[face] face check took over ${faceLimits.timeoutMs} ms`);
+      resolve({ ok: false, reason: "unavailable" });
+    }, faceLimits.timeoutMs);
+  });
+  return Promise.race([run.catch((): FaceVerdict => ({ ok: false, reason: "unavailable" })), timeout]).finally(() => clearTimeout(timer));
 }
 
 async function detect(bytes: Buffer): Promise<FaceVerdict> {

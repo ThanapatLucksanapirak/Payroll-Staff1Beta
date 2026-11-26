@@ -301,6 +301,13 @@ test("punch with station and photo; photo served only to editors; not in backups
   assert.equal(offline.status, 200, JSON.stringify(offline.body));
   const flagged = (await A("GET", `/api/sites/${siteId}/timeclock`)).body.punches.find((x: any) => x.id === offline.body.punch.id);
   assert.deepEqual(flagged.meta, { photo: "saved", face: "missing" });
+  // An offline time can't be used to dodge the check for long: the server only takes one from the last 24 hours, not ahead of its clock
+  const ahead = await K("POST", "/api/kiosk/punch", { id: randomUUID(), type: "break_end", pin: "1234", photo: photoOf("no-face.jpg"), at: new Date(Date.now() + 5 * 60_000).toISOString() });
+  assert.equal(ahead.status, 422);
+  assert.equal(ahead.body.code, "time");
+  const old = await K("POST", "/api/kiosk/punch", { id: randomUUID(), type: "break_end", pin: "1234", photo: photoOf("no-face.jpg"), at: new Date(Date.now() - 25 * 3600_000).toISOString() });
+  assert.equal(old.status, 422);
+  assert.equal(old.body.code, "time");
   assert.equal((await K("POST", "/api/kiosk/punch", { id: randomUUID(), type: "break_end", pin: "1234", photo: JPEG })).status, 200);
   // Unknown station is ignored, not an error
   const benIn = await K("POST", "/api/kiosk/punch", { id: randomUUID(), type: "in", pin: "5678", station: "Roof", photo: JPEG });
