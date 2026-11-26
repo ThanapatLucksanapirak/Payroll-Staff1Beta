@@ -17,7 +17,11 @@ import { useApp } from "@/context/AppData";
 import { cn } from "@/lib/utils";
 
 export type ImportSource = "square" | "kiosk" | "csv" | "pdf" | "blank";
-export interface ImportResult { shifts: Shift[]; source: string; filename: string; label: string; warnings: string[] }
+export interface ImportResult {
+  shifts: Shift[]; source: string; filename: string; label: string; warnings: string[];
+  /** The day range that was pulled (Square, time clock): it becomes the pay period. */
+  period?: { start: string; end: string };
+}
 
 interface Props {
   open: boolean;
@@ -122,7 +126,7 @@ function SquareStep({ site, onResult }: { site: Site; onResult: (r: ImportResult
     try {
       const r = await api<{ shifts: Shift[]; warnings: string[] }>("GET", `/api/sites/${site.id}/square/pull?start=${start}&end=${end}`, undefined, { timeoutMs: 90000 });
       if (!r.shifts.length) { setError("No closed timecards were found for that range."); return; }
-      onResult({ shifts: r.shifts, source: "square", filename: `Square ${app.date(start)} – ${app.date(end)}`, label: "", warnings: r.warnings });
+      onResult({ shifts: r.shifts, source: "square", filename: `Square ${app.date(start)} – ${app.date(end)}`, label: "", warnings: r.warnings, period: { start, end } });
     } catch (e) { setError(errorMessage(e)); } finally { setBusy(false); }
   };
   return (
@@ -160,7 +164,7 @@ function KioskStep({ site, onResult }: { site: Site; onResult: (r: ImportResult)
     try {
       const r = await api<{ shifts: Shift[]; warnings: string[] }>("GET", `/api/sites/${site.id}/punches/shifts?start=${start}&end=${end}`, undefined, { timeoutMs: 60000 });
       if (!r.shifts.length) { setError(r.warnings.length ? r.warnings.join(" ") : "No completed shifts were found on the time clock for that range."); return; }
-      onResult({ shifts: r.shifts, source: "kiosk", filename: `Time clock ${app.date(start)} – ${app.date(end)}`, label: "", warnings: r.warnings });
+      onResult({ shifts: r.shifts, source: "kiosk", filename: `Time clock ${app.date(start)} – ${app.date(end)}`, label: "", warnings: r.warnings, period: { start, end } });
     } catch (e) { setError(errorMessage(e)); } finally { setBusy(false); }
   };
   return (

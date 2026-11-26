@@ -16,6 +16,7 @@ few short bullets written for the people who use the app, not for developers.
 - The order is clear: on a draft, Mark as final is the main button and Export says you're downloading a draft. Once it's final, Export becomes the main button.
 - Email PDFs is in the Export menu, with the same preview and confirm step. It's greyed out with the reason until the timesheet is final.
 - In the email preview, tapping Open payroll no longer blanks the preview. Links work once the email is sent.
+- Timesheets pulled from Square or the time clock keep the day range you picked as their pay period (for example Nov 9 – Nov 22), even if nobody worked on the first day. It's used in the header, the PDFs and email subjects, and you can change it in Details.
 
 ## 2026-11-26 · New Shijiri look (#24)
 - A new Shijiri logo, colours and sign-in page, shared by the admin app, time clock, staff portal and emails.

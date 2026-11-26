@@ -38,6 +38,12 @@ export function DetailsTab(p: WsProps) {
               <SelectContent><SelectItem value="draft">Draft — still editing</SelectItem><SelectItem value="final">Final — locked</SelectItem></SelectContent>
             </Select>
           </Field>
+          <Field label="Pay period" hint={doc.periodStart && doc.periodEnd ? "Shown on the PDFs and in emails. Shifts outside it widen it." : "Not set: it runs from the first to the last shift."}>
+            <div className="grid grid-cols-2 gap-2">
+              <Input type="date" aria-label="Pay period from" value={doc.periodStart} max={doc.periodEnd || undefined} disabled={locked} onChange={(e) => edit((d) => ({ ...d, periodStart: e.target.value }), "periodStart")} data-testid="input-details-period-start" />
+              <Input type="date" aria-label="Pay period to" value={doc.periodEnd} min={doc.periodStart || undefined} disabled={locked} onChange={(e) => edit((d) => ({ ...d, periodEnd: e.target.value }), "periodEnd")} data-testid="input-details-period-end" />
+            </div>
+          </Field>
           <Field label="Notes"><Textarea rows={4} value={doc.notes} disabled={locked} onChange={(e) => edit((d) => ({ ...d, notes: e.target.value }), "notes")} placeholder="Anything to remember about this pay period" data-testid="input-details-notes" /></Field>
           <div className="space-y-0.5 border-t border-border/70 pt-3 text-xs text-muted-foreground">
             <p>Source: {({ csv: "CSV file", square: "Square", pdf: "Schedule PDF", manual: "Manual", toast: "Toast", sling: "Sling" } as Record<string, string>)[doc.source] ?? doc.source}{doc.filename ? ` · ${doc.filename}` : ""}</p>

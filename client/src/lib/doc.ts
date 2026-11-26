@@ -37,7 +37,7 @@ export function applyProfile(current: EmployeeConfig[], profile: EmployeeConfig[
   return { employees, matched };
 }
 
-export function newDoc(site: Site, shifts: Shift[], opts: { source: string; filename: string; label?: string; profile?: EmployeeConfig[] }): TimesheetDoc {
+export function newDoc(site: Site, shifts: Shift[], opts: { source: string; filename: string; label?: string; profile?: EmployeeConfig[]; period?: { start: string; end: string } }): TimesheetDoc {
   return {
     siteId: site.id,
     label: opts.label ?? "",
@@ -45,8 +45,8 @@ export function newDoc(site: Site, shifts: Shift[], opts: { source: string; file
     source: opts.source,
     status: "draft",
     notes: "",
-    periodStart: "",
-    periodEnd: "",
+    periodStart: opts.period?.start ?? "",
+    periodEnd: opts.period?.end ?? "",
     rules: site.rules,
     shifts,
     employees: syncEmployees(shifts, [], site, opts.profile),
