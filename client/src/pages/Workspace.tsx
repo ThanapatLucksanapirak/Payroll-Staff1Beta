@@ -68,7 +68,10 @@ export function WorkspacePage({ id }: { id: string }) {
   // "Mark as final" saves straight away (autosave on or off), once the edit has rendered.
   const [finalRequested, setFinalRequested] = useState(false);
   useEffect(() => {
-    if (finalRequested && doc?.status === "final") { setFinalRequested(false); void ts.save(); }
+    if (finalRequested && doc?.status === "final") {
+      setFinalRequested(false);
+      void ts.save().then((ok) => { if (ok) toast({ title: "Marked as final", description: "It's locked. Use Export to download the PDFs or email them." }); });
+    }
   }, [finalRequested, doc?.status]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (ts.loadError) {
@@ -107,7 +110,7 @@ export function WorkspacePage({ id }: { id: string }) {
   const markFinal = async () => {
     const ok = await confirm({
       title: `Mark “${title}” as final?`,
-      description: `This locks the timesheet and records any advance repayments.${app.user.role === "owner" ? " You can reopen it later." : " Only an owner can reopen it."}`,
+      description: `This locks the timesheet and records any advance repayments.${app.user.role === "owner" ? " You can reopen it later." : " Only an owner can reopen it."} Then use Export to download or email the PDFs.`,
       confirmLabel: "Mark as final",
     });
     if (!ok) return;
@@ -154,16 +157,24 @@ export function WorkspacePage({ id }: { id: string }) {
             {/* The two main actions, always visible with their labels: Mark as final, then Export. */}
             <div className="ml-auto flex items-center gap-1.5 sm:ml-1">
               {canFinalize && (
-                <Button variant="outline" size="sm" className="max-sm:h-10" onClick={() => void markFinal()} disabled={ts.saveState === "saving" || ts.saveState === "conflict"} data-testid="button-mark-final"><Lock />Mark as final</Button>
+                <Button size="sm" className="max-sm:h-10" onClick={() => void markFinal()} disabled={ts.saveState === "saving" || ts.saveState === "conflict"} data-testid="button-mark-final"><Lock />Mark as final</Button>
               )}
               {can(app.user, "export") && <DropdownMenu>
-                <DropdownMenuTrigger asChild><Button size="sm" className="max-sm:h-10" data-testid="button-export"><Download />Export<ChevronDown className="-mr-0.5 opacity-70" /></Button></DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-60">
+                <DropdownMenuTrigger asChild><Button size="sm" variant={doc.status === "draft" ? "outline" : "default"} className="max-sm:h-10" data-testid="button-export"><Download />Export<ChevronDown className="-mr-0.5 opacity-70" /></Button></DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-64">
+                  {doc.status === "draft" && <>
+                    {/* Order of things: downloads work on a draft (to check it); emailing needs it final. */}
+                    <p className="px-2 py-1.5 text-xs leading-snug text-muted-foreground" data-testid="text-export-draft-note">
+                      <span className="font-medium text-foreground">This is a draft.</span> You can download it to check, but the numbers can still change. Mark it as final to lock it and email the PDFs.
+                    </p>
+                    {canFinalize && <DropdownMenuItem onClick={() => void markFinal()} data-testid="button-mark-final-menu"><Lock />Mark as final…</DropdownMenuItem>}
+                    <DropdownMenuSeparator />
+                  </>}
                   {!accountant && <>
                     <DropdownMenuItem onClick={() => setChecklist(true)} data-testid="button-payroll-checklist"><ListChecks />Check before export…</DropdownMenuItem>
                     <DropdownMenuSeparator />
                   </>}
-                  <DropdownMenuLabel>Download</DropdownMenuLabel>
+                  <DropdownMenuLabel>{doc.status === "draft" ? "Download draft" : "Download"}</DropdownMenuLabel>
                   <DropdownMenuItem onClick={() => exportPdf("report")} data-testid="button-export-pdf"><FileDown />Full report (PDF)</DropdownMenuItem>
                   <DropdownMenuItem onClick={() => exportPdf("summary")} data-testid="button-export-summary-pdf"><FileText />Manager summary (PDF)</DropdownMenuItem>
                   <DropdownMenuItem onClick={() => exportPdf("statements")} data-testid="button-export-statements-pdf"><Files />Pay statements (PDF)</DropdownMenuItem>
