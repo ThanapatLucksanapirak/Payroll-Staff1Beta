@@ -13,6 +13,11 @@ few short bullets written for the people who use the app, not for developers.
 - Finalizing a timesheet twice at the same moment is logged once. A tab left open on a timesheet that was finalized elsewhere stops trying to save it.
 - Viewers no longer see the Trash button, Home shows no change figure without an earlier pay period, "Leave out of totals" can be clicked, and the page shows "Loading your data…" while it retries.
 
+## 2026-11-27 · Faster photo punches, and small faces are found (#50)
+- The face check now runs in the background, so the rest of the app stays quick while time clocks send photos. Large photos are shrunk first.
+- A punch that can't work anyway (like clocking out when not clocked in) is refused right away, without checking the face.
+- Someone standing a bit far from the time clock is no longer told "Face not detected". When no face is found, the time clock now says to move closer and look straight at the camera.
+
 ## 2026-11-27 · Full logo in the app header (#56)
 - The sidebar and the phone top bar now show the whole "Payroll by SHIJIRI Group" logo, with "By SHIJIRI GROUP" in black (white in dark mode), instead of just "Payroll".
 
