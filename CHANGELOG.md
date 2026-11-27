@@ -9,6 +9,7 @@ few short bullets written for the people who use the app, not for developers.
 ## 2026-11-27 · Fewer "face check is busy" at the start of a shift (#61)
 - When many people punch with a photo at the same moment, the server now checks up to 40 photos in turn instead of turning away everyone after the first 10.
 - If the time clock is still told the face check is busy, it sends the same punch again by itself a couple of times, so nobody has to tap again.
+- Punches for one person are still handled one at a time, in the order they arrive, so two time clocks can't record them out of order. Only a rush of different people gets the quick "busy" answer.
 - A face check that gets stuck is stopped after 10 seconds instead of 20, so the next punches work sooner.
 - A photo punch now always gets an answer within about 10 seconds of arriving, even in a big rush, so the time clock never gives up and saves it for later.
 
