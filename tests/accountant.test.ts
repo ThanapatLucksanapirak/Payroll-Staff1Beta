@@ -231,6 +231,25 @@ test("parallel publishes of one timesheet send one email", async () => {
   await call("DELETE", `/api/timesheets/${tsB}/publish`, undefined, "owner");
 });
 
+test("an email cut off by a restart is not left 'sending': publishing again sends it", async () => {
+  const pub = await import("../server/publish");
+  const { db } = await import("../server/db");
+  const store = await db();
+  const row = await store.getTimesheet(tsB);
+  // As left by a server that stopped mid-send: same version, email still pending
+  const at = new Date().toISOString();
+  await store.setSetting(pub.PUBLISHED_KEY, JSON.stringify({ ...(await pub.getPublishedMap()), [tsB]: { at, byId: null, byName: "owner", version: row!.updated_at, email: { at, ok: false, sent: 0, message: "Sending the email…", pending: true } } }));
+  pub._forgetSendingForTests();
+  const rec = (await pub.getPublishedMap())[tsB];
+  assert.equal(rec.email?.pending, false);
+  assert.match(rec.email!.message, /restarted/);
+  sent.length = 0;
+  const r = await call("POST", `/api/timesheets/${tsB}/publish`, {}, "owner");
+  assert.equal(r.status, 200);
+  assert.equal(sent.length, 1, "resent");
+  await call("DELETE", `/api/timesheets/${tsB}/publish`, undefined, "owner");
+});
+
 test("publishing still works when email fails or is off", async () => {
   failSend = "Server down";
   const r = await call("POST", `/api/timesheets/${tsB}/publish`, {}, "owner");

@@ -33,10 +33,27 @@ export interface PublishRecord {
 }
 export type PublishedMap = Record<string, PublishRecord>;
 
+/** Emails this server process is sending now (id|at). A record marked pending that isn't here was
+ *  cut off (the server restarted mid-send, or it came from a backup): it reads as not sent, so
+ *  publishing again sends it. */
+const sendingNow = new Set<string>();
+const INTERRUPTED = "The email was not sent: the server restarted while sending it. Press Publish again to send it.";
+function settleInterrupted(map: PublishedMap): PublishedMap {
+  let out = map;
+  for (const [id, rec] of Object.entries(map)) {
+    if (!rec?.email?.pending || sendingNow.has(`${id}|${rec.at}`)) continue;
+    if (out === map) out = { ...map };
+    out[id] = { ...rec, email: { ...rec.email, ok: false, sent: 0, pending: false, message: INTERRUPTED } };
+  }
+  return out;
+}
+
 let cache: { store: unknown; map: PublishedMap; at: number } | null = null;
 const CACHE_MS = 3_000;
 /** Forget the cached map (after a restore or database switch). */
 export function invalidatePublishedCache() { cache = null; }
+/** Tests: forget the emails in flight, as a restart would. */
+export function _forgetSendingForTests() { sendingNow.clear(); cache = null; }
 
 export async function getPublishedMap(): Promise<PublishedMap> {
   const store = await db();
@@ -47,6 +64,7 @@ export async function getPublishedMap(): Promise<PublishedMap> {
     const v = raw ? JSON.parse(raw) : {};
     if (v && typeof v === "object" && !Array.isArray(v)) map = v;
   } catch { map = {}; }
+  map = settleInterrupted(map);
   cache = { store, map, at: Date.now() };
   return map;
 }
@@ -205,7 +223,8 @@ export function registerPublishRoutes(app: Express) {
       if (prev && prev.version === version && (prev.email?.ok || prev.email?.pending)) return { skip: prev } as const;
       const rec: PublishRecord = { at: new Date().toISOString(), byId: user.id, byName, email: null, version };
       if (notifyParam) rec.email = { at: rec.at, ok: false, sent: 0, message: "Sending the email…", pending: true };
-      await mutate((map) => { map[id] = rec; });
+      if (rec.email?.pending) sendingNow.add(`${id}|${rec.at}`);
+      await mutate((map) => { map[id] = rec; }).catch((err) => { sendingNow.delete(`${id}|${rec.at}`); throw err; });
       return { rec, already: !!prev } as const;
     });
     if ("skip" in decision) return res.json({ published: decision.skip });
@@ -222,7 +241,7 @@ export function registerPublishRoutes(app: Express) {
       await finish(null);
       return res.json({ published: rec });
     }
-    const sending = notify(row, siteId, byName).then(finish);
+    const sending = notify(row, siteId, byName).then(finish).finally(() => { sendingNow.delete(`${id}|${rec.at}`); });
     const quick = await Promise.race([sending, new Promise<null>((r) => setTimeout(() => r(null), EMAIL_WAIT_MS))]);
     if (quick) rec.email = quick;
     res.json({ published: rec });
