@@ -33,6 +33,9 @@ ANDROID_CERT_SHA256=, ANDROID_APP_PACKAGE= (optional; `payroll android`)
 
 App interfaces:
 - GET http://127.0.0.1:$PORT/api/health -> 200 {"ok":true,...}
+- The build writes dist/SHA256SUMS (every dist file and its sha256). An update is only switched to when
+  dist/index.cjs, dist/public/index.html (and dist/faceWorker.cjs where the version has one) are there and every
+  listed file matches; then it must answer /api/health for UPDATE_STABLE_SECONDS (15) in a row, or it's rolled back.
 - First admin: preferred `node dist/index.cjs admin create --username X --password-stdin` (DATA_DIR env); fallback
   POST /api/auth/setup {password(min 8), setupCode} with code from $DATA_DIR/setup-code.txt or SETUP_CODE env.
 - Kiosk: /kiosk on the same port; host KIOSK_HOST redirects / -> /kiosk.

@@ -235,7 +235,7 @@ update_run() {
   ok "$snap"
 
   step "Building the new version (the app keeps running meanwhile)"
-  if ! new_dir="$(build_release "$target" | tail -n1)" || [[ ! -f "$new_dir/dist/index.cjs" ]]; then
+  if ! new_dir="$(build_release "$target" | tail -n1)" || [[ ! -f "$new_dir/dist/index.cjs" ]] || [[ -n "$(release_problem "$new_dir")" ]]; then
     set_status failed "$old_sha" "$target" "The new version could not be built. Still running the current version."
     echo "$target" >"$SKIP_FILE"
     echo "The build failed; you are still on the current version. See $PAYROLL_LOGS/build-*.log" >&2
@@ -247,7 +247,8 @@ update_run() {
   step "Switching to the new version"
   activate_release "$new_dir"
   restart_app || true
-  if wait_healthy 90; then
+  # Kept only if it stays healthy for a while, not just answers once.
+  if wait_healthy 120 "$UPDATE_STABLE_SECONDS"; then
     set_status ok "$old_sha" "$new_sha" "Updated to $(sha7 "$new_sha")"
     rm -f "$SKIP_FILE"
     prune_releases || true
