@@ -411,8 +411,9 @@ function TopBar({ state, online, pending, onInfo, onExitFullscreen }: { state: K
   return (
     <header className="flex items-center gap-3 px-5 pt-2 sm:px-8 sm:pt-4">
       <Mark className="h-[22px] w-auto shrink-0" aria-hidden />
-      <span className="text-lg text-stone-600" aria-hidden>·</span>
-      <span className="truncate text-lg font-semibold text-stone-800" data-testid="kiosk-location">{state.site.name}</span>
+      <span className="hidden text-lg text-stone-600 sm:inline" aria-hidden>·</span>
+      {/* Phones: up to two lines so a long location name is still readable; wider screens: one line. */}
+      <span className="min-w-0 text-base font-semibold leading-tight text-stone-800 [overflow-wrap:anywhere] line-clamp-2 sm:truncate sm:text-lg" data-testid="kiosk-location">{state.site.name}</span>
       <div className="-mr-4 ml-auto flex items-center gap-1">
         {apk && !fs.active && <AndroidAppButton url={apk} className="mr-1" />}
         {(!online || pending > 0) && (

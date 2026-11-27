@@ -13,6 +13,11 @@ few short bullets written for the people who use the app, not for developers.
 - Finalizing a timesheet twice at the same moment is logged once. A tab left open on a timesheet that was finalized elsewhere stops trying to save it.
 - Viewers no longer see the Trash button, Home shows no change figure without an earlier pay period, "Leave out of totals" can be clicked, and the page shows "Loading your data…" while it retries.
 
+## 2026-11-27 · Easier-to-read sign-in button and time clock location name (#55)
+- A main button that can't be pressed yet (like Sign in before you type a password) is now solid grey with readable text instead of faded orange.
+- On a phone, the time clock shows a long location name on up to two lines instead of cutting it off.
+- The colour choices for a location no longer include orange, so a location dot is never mistaken for the new orange highlight. Locations that already use orange keep it.
+
 ## 2026-11-27 · Small fixes to face data, backups and sign-in (#53)
 - The face consent notice now says what is protected: face templates are encrypted, photos are stored on your server with restricted file access, and none of it is in backups.
 - Recording consent or adding reference photos for someone whose face data can't be read is now refused until you delete their face data, instead of overwriting it.
