@@ -31,6 +31,46 @@ let worker: Promise<Worker | null> | null = null;
 /** Set when the worker can't start: checks then run in this thread. */
 let inProcess = process.env.FACE_WORKER === "off";
 let crashes = 0;
+/**
+ * A worker that starts but keeps stopping (crash, out of memory, or ended
+ * because a check hung) would otherwise be restarted forever. After
+ * `maxStops` stops within `windowMs`, checks run in this thread for
+ * `fallbackMs` (as before the worker existed), the owner is told in Activity,
+ * and then the worker is tried again.
+ */
+export const workerFailLimits = { maxStops: 3, windowMs: 10 * 60_000, fallbackMs: 30 * 60_000 };
+let recentStops: number[] = [];
+let fallbackUntil = 0;
+/** Told about a worker that keeps stopping (Activity entry); set by the server at start-up. */
+let onWorkerFailing: ((detail: string) => void) | null = null;
+export function setFaceWorkerAlert(fn: ((detail: string) => void) | null) { onWorkerFailing = fn; }
+/** For tests and the About page: is the face check running in the main thread for now? */
+export function faceWorkerState() {
+  return { inProcess: inProcess || Date.now() < fallbackUntil, fallbackUntil: fallbackUntil > Date.now() ? new Date(fallbackUntil).toISOString() : null, recentStops: recentStops.length };
+}
+/** Tests: forget past stops and any fallback. */
+export function resetFaceWorkerState() { recentStops = []; fallbackUntil = 0; }
+/** Tests: stop the running worker the way a crash would. */
+export async function stopFaceWorkerForTest(): Promise<boolean> {
+  const w = await (worker ?? Promise.resolve(null));
+  if (!w) return false;
+  await w.terminate();
+  await new Promise((r) => setTimeout(r, 20));
+  return true;
+}
+
+function workerStopped(why: string) {
+  const now = Date.now();
+  recentStops = [...recentStops.filter((t) => now - t < workerFailLimits.windowMs), now];
+  if (recentStops.length >= workerFailLimits.maxStops && now >= fallbackUntil) {
+    fallbackUntil = now + workerFailLimits.fallbackMs;
+    recentStops = [];
+    const mins = Math.round(workerFailLimits.fallbackMs / 60_000);
+    const detail = `The face check stopped ${workerFailLimits.maxStops} times in ${Math.round(workerFailLimits.windowMs / 60_000)} minutes (last: ${why}). It runs in the main server for the next ${mins} minutes, which can slow the app while many people punch. If this keeps happening, restart the app or check the server's memory.`;
+    console.error(`[face] ${detail}`);
+    try { onWorkerFailing?.(detail); } catch { /* an alert must never break a punch */ }
+  }
+}
 let nextId = 1;
 const pending = new Map<number, (v: FaceVerdict) => void>();
 
@@ -53,11 +93,12 @@ function failPending() {
 }
 
 function getWorker(): Promise<Worker | null> {
-  if (inProcess) return Promise.resolve(null);
+  if (inProcess || Date.now() < fallbackUntil) return Promise.resolve(null);
   if (worker) return worker;
   const p: Promise<Worker | null> = new Promise((resolve) => {
     let w: Worker;
     let started = false;
+    let gone = false;
     const giveUp = (why: string) => {
       if (worker === p) worker = null;
       if (!started) {
@@ -65,8 +106,11 @@ function getWorker(): Promise<Worker | null> {
         if (++crashes >= 3) inProcess = true;
         console.error(`[face] face worker could not start (${why}); ${inProcess ? "checking in the main thread instead" : "will try again"}`);
         resolve(null);
-      } else {
+      } else if (!gone) {
+        // "error" and "exit" both arrive for one crash: count it once.
+        gone = true;
         console.error(`[face] face worker stopped (${why})`);
+        workerStopped(why);
       }
       failPending();
     };
@@ -142,9 +186,10 @@ export function checkFaceJpeg(bytes: Buffer, opts: FaceCheckOptions = {}, starte
   const deadline = startedAt + faceLimits.timeoutMs;
   const left = deadline - Date.now();
   // Refuse at once when the photos ahead of this one (at the recent pace) would
-  // use up its time: "busy" comes back in a moment and the kiosk sends it again,
+  // use up its time (with room to spare, as checks slow down under load): "busy"
+  // comes back in a moment and the kiosk sends it again,
   // instead of the punch waiting out the limit and failing as "unavailable".
-  if (left <= 0 || (waiting + 1) * checkMs > left) return Promise.resolve({ ok: false, reason: "busy" });
+  if (left <= 0 || (waiting + 1) * checkMs * 1.5 > left) return Promise.resolve({ ok: false, reason: "busy" });
   waiting++;
   let started = false;
   // Skip a check whose request has already timed out.
