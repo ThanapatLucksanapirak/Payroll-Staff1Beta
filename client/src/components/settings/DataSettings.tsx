@@ -14,10 +14,15 @@ import { OffsiteBackupSettings } from "@/components/settings/OffsiteBackupSettin
 import { LoadError } from "@/components/LoadError";
 import { Field, NumberInput, Section } from "@/components/workspace/fields";
 
-interface RestoreResult { settings: number; timesheets: number; punches: number | null; punchesKept?: boolean }
+interface RestoreResult { settings: number; timesheets: number; punches: number | null; punchesKept?: boolean; pinsCleared?: string[] }
+
+const pinsClearedNote = (names: string[]) => {
+  const shown = names.slice(0, 5).join(", ") + (names.length > 5 ? ` and ${names.length - 5} more` : "");
+  return ` ${names.length === 1 ? "1 person has" : `${names.length} people have`} no time clock PIN now, because this file was downloaded without PINs and theirs couldn't be kept: ${shown}. Give them a new PIN on the Employees page.`;
+};
 
 const restoredSummary = (r: RestoreResult) =>
-  `${r.timesheets} timesheets, ${r.punches === null ? "time clock punches kept as they were (not in this file)" : `${r.punches} time clock punches`}, ${r.settings} settings.`;
+  `${r.timesheets} timesheets, ${r.punches === null ? "time clock punches kept as they were (not in this file)" : `${r.punches} time clock punches`}, ${r.settings} settings.${r.pinsCleared?.length ? pinsClearedNote(r.pinsCleared) : ""}`;
 
 /**
  * Run a restore. When the backup has an empty timesheet or punch list (which would
@@ -63,7 +68,7 @@ export function DataSettings() {
       const r = await restoreConfirmingEmpty(confirm, (allowEmpty) => api<RestoreResult>("POST", `/api/backup/restore${allowEmpty ? "?allowEmpty=1" : ""}`, data, { timeoutMs: 180_000 }));
       if (!r) return;
       await queryClient.invalidateQueries();
-      toast({ title: "Backup restored", description: restoredSummary(r) });
+      toast({ title: r.pinsCleared?.length ? "Backup restored, but some PINs were cleared" : "Backup restored", description: restoredSummary(r), ...(r.pinsCleared?.length ? { variant: "destructive" as const } : {}) });
     } catch (e) { toast({ title: "Restore failed", description: errorMessage(e), variant: "destructive" }); }
     finally { setBusy(null); }
   };
@@ -135,7 +140,7 @@ function ServerBackups() {
       const r = await restoreConfirmingEmpty(confirm, (allowEmpty) => api<RestoreResult>("POST", `/api/backups/${encodeURIComponent(b.name)}/restore${allowEmpty ? "?allowEmpty=1" : ""}`, undefined, { timeoutMs: 180_000 }));
       if (!r) return;
       await queryClient.invalidateQueries();
-      toast({ title: "Backup restored", description: restoredSummary(r) });
+      toast({ title: r.pinsCleared?.length ? "Backup restored, but some PINs were cleared" : "Backup restored", description: restoredSummary(r), ...(r.pinsCleared?.length ? { variant: "destructive" as const } : {}) });
     } catch (e) { toast({ title: "Restore failed", description: errorMessage(e), variant: "destructive" }); }
     finally { setBusy(null); }
   };
