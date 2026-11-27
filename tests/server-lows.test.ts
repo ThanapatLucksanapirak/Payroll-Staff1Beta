@@ -125,8 +125,30 @@ test("switching to a path that can't be opened says so", async () => {
   fs.writeFileSync(path.join(dir, "afile"), "not a folder");
   const bad = await call("POST", "/api/database/switch", { config: { kind: "sqlite", path: "afile/inside.db" }, copyData: false });
   assert.equal(bad.status, 400);
-  assert.match(bad.body.error, /^Couldn't open a database at that path: /);
+  assert.match(bad.body.error, /isn't a folder/);
   assert.doesNotMatch(bad.body.error, /prepare/);
+  const { loadConfig } = await import("../server/config");
+  const cfgBefore = JSON.stringify(loadConfig().database ?? null);
+  const status = async () => (await call("GET", "/api/database")).body.status;
+  const statusBefore = JSON.stringify(await status());
+  // A folder that doesn't exist: refused, nothing created, nothing switched
+  const missing = path.join(dir, "no-such-folder", "x.db");
+  const m = await call("POST", "/api/database/switch", { config: { kind: "sqlite", path: missing }, copyData: true });
+  assert.equal(m.status, 400, JSON.stringify(m.body));
+  assert.match(m.body.error, /^Nothing was switched: The folder .*no-such-folder doesn't exist/);
+  assert.equal(fs.existsSync(path.dirname(missing)), false, "folder not created");
+  // A path that is a folder
+  fs.mkdirSync(path.join(dir, "adir"));
+  const d = await call("POST", "/api/database/switch", { config: { kind: "sqlite", path: "adir" }, copyData: false });
+  assert.equal(d.status, 400);
+  assert.match(d.body.error, /is a folder, not a database file/);
+  // The Test button says the same and creates nothing
+  const t = await call("POST", "/api/database/test", { config: { kind: "sqlite", path: missing } });
+  assert.equal(t.body.ok, false);
+  assert.match(t.body.error, /doesn't exist/);
+  assert.equal(fs.existsSync(path.dirname(missing)), false);
+  assert.equal(JSON.stringify(loadConfig().database ?? null), cfgBefore, "saved config unchanged");
+  assert.equal(JSON.stringify(await status()), statusBefore, "still on the same database");
   fs.writeFileSync(path.join(dir, "zero.db"), "");
   const e = await call("POST", "/api/database/switch", { config: { kind: "sqlite", path: "zero.db" }, copyData: false });
   assert.equal(e.status, 400);

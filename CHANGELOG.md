@@ -13,7 +13,7 @@ few short bullets written for the people who use the app, not for developers.
 - Older backups and the activity log files are made private (owner-only) when the app starts.
 - Safety copies made before a restore are now kept separately (the 10 newest), so many restores can't push out your daily and manual backups.
 - An empty database file now stops the app with a clear message instead of starting a blank database. A database made by a newer version of the app logs a warning.
-- Switching to a database path that can't be opened now says why instead of showing a technical error.
+- Switching to a database file in a folder that doesn't exist, or to a folder, is now refused with a clear message (so a typo can't quietly start an empty database), and any other path that can't be opened says why. Nothing is switched or created, and the Test button checks the same.
 - Owners (and admins, for accounts other than the owner) can clear someone's sign-in lock from Settings → Users.
 - Downloading a backup uses less memory on big databases.
 

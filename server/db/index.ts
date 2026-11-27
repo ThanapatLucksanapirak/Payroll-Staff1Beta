@@ -1,4 +1,5 @@
 // Holds the active data store and lets Settings switch databases at runtime.
+import fs from "node:fs";
 import path from "node:path";
 import type { DatabaseConfig, DatabaseHealth } from "@shared/schema";
 import { DATA_DIR, effectiveDatabaseConfig, managedSupabase, saveConfig } from "../config";
@@ -68,6 +69,8 @@ export function dbStatus() {
 
 export async function testDatabase(cfg: DatabaseConfig): Promise<DatabaseHealth> {
   let store: DataStore | null = null;
+  const pathProblem = sqlitePathProblem(cfg);
+  if (pathProblem) return { ok: false, kind: cfg.kind, label: cfg.kind, latencyMs: null, error: pathProblem, missingTables: [], missingColumns: [], timesheetCount: null };
   try {
     store = createStore(cfg);
     await store.init().catch(() => undefined); // health() reports the specifics
@@ -81,7 +84,29 @@ export async function testDatabase(cfg: DatabaseConfig): Promise<DatabaseHealth>
 
 export interface SwitchResult { health: DatabaseHealth; copied: { settings: number; timesheets: number; punches: number } | null }
 
+/**
+ * Why a SQLite path can't be used for a switch, or null. The folder must
+ * already exist and be writable (a typo shouldn't quietly make a new, empty
+ * database somewhere), and the path must not be a folder itself.
+ */
+export function sqlitePathProblem(cfg: DatabaseConfig): string | null {
+  if (cfg.kind !== "sqlite" || !cfg.path) return null;
+  const file = path.resolve(DATA_DIR, cfg.path);
+  const dir = path.dirname(file);
+  let st: fs.Stats | null = null;
+  try { st = fs.statSync(file); } catch { /* a new file */ }
+  if (st?.isDirectory()) return `${file} is a folder, not a database file. Add a file name, for example ${path.join(file, "payroll.db")}.`;
+  let dst: fs.Stats;
+  try { dst = fs.statSync(dir); } catch { return `The folder ${dir} doesn't exist. Create it first, or pick a file in an existing folder.`; }
+  if (!dst.isDirectory()) return `${dir} isn't a folder.`;
+  try { fs.accessSync(dir, fs.constants.W_OK); } catch { return `The app can't write to the folder ${dir}. Check its permissions.`; }
+  if (st) { try { fs.accessSync(file, fs.constants.R_OK | fs.constants.W_OK); } catch { return `The app can't read and write ${file}. Check its permissions.`; } }
+  return null;
+}
+
 export async function switchDatabase(cfg: DatabaseConfig, opts: { copyData: boolean }): Promise<SwitchResult> {
+  const pathProblem = sqlitePathProblem(cfg);
+  if (pathProblem) throw new StoreError(`Nothing was switched: ${pathProblem}`, 400);
   const next = createStore(cfg);
   let openError: string | null = null;
   await next.init().catch((err) => { openError = err?.message ?? String(err); });
