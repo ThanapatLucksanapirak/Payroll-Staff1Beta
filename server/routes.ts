@@ -10,6 +10,7 @@ import { docToMeta, rowToDoc, shiftsToCsv } from "@shared/legacy";
 import { parseScheduleItems } from "@shared/importers/schedule";
 import { configIsPersistent, managedSupabase, loadConfig } from "./config";
 import { db, dbStatus, retryInit, switchDatabase, testDatabase } from "./db";
+import { maintenanceGate, withMaintenance } from "./maintenance";
 import { SETUP_SQL, type TimesheetRow } from "./db/types";
 import * as settings from "./settings";
 import { currentUser, requireAuth, resetTagCache } from "./auth";
@@ -166,6 +167,11 @@ async function restoreFrom(raw: unknown, opts: { allowEmpty?: boolean } = {}) {
   if (badPunches) {
     throw Object.assign(new Error(`Nothing was restored: ${badPunches} of ${body.punches.length} time clock punches in that file can't be read${firstProblem ? ` (first problem: ${firstProblem})` : ""}. Your current data is unchanged.`), { status: 400 });
   }
+  return withMaintenance("restore", () => restoreChecked(body, punches, hasPunches, opts));
+}
+
+/** The rest of a restore, with other changes paused (see maintenance.ts). */
+async function restoreChecked(body: z.infer<typeof restoreSchema>, punches: Punch[], hasPunches: boolean, opts: { allowEmpty?: boolean }) {
   // An empty list replaces everything with nothing. A real backup of a store with
   // data never has one, so ask first (the app shows what would be deleted).
   if (!opts.allowEmpty) {
@@ -180,7 +186,7 @@ async function restoreFrom(raw: unknown, opts: { allowEmpty?: boolean } = {}) {
       });
     }
   }
-  await runBackup("pre-restore").catch((err) => {
+  const pre = await runBackup("pre-restore").catch((err) => {
     throw Object.assign(new Error(`Restore cancelled: could not back up the current data first (${err.message}).`), { status: 500 });
   });
   const store = await db();
@@ -189,12 +195,30 @@ async function restoreFrom(raw: unknown, opts: { allowEmpty?: boolean } = {}) {
   const fileHasSquare = body.settings.some((x) => isSquareToken(x.key));
   // Paired kiosk devices always stay as they are now, so a restore can't bring back a removed device.
   const keepSetting = (k: string) => k === "password_hash" || k === USERS_KEY || k === "revoked_sessions" || k === "kiosk_devices" || k.startsWith(AUDIT_PREFIX) || k.startsWith("kiosk_manager_pin:") || k.startsWith("email:") || (isSquareToken(k) && !fileHasSquare) || NEVER_BACKED_UP(k);
-  const result = await store.importAll({
-    settings: body.settings.filter((x) => !NEVER_BACKED_UP(x.key)),
-    timesheets: body.timesheets.map(({ updated_at: _u, ...rest }: any) => rest),
-    // Backups from before the time clock have no punches: leave today's alone.
-    punches: hasPunches ? punches : undefined,
-  }, { replace: true, keepSetting });
+  let result: Awaited<ReturnType<typeof store.importAll>>;
+  try {
+    result = await store.importAll({
+      settings: body.settings.filter((x) => !NEVER_BACKED_UP(x.key)),
+      timesheets: body.timesheets.map(({ updated_at: _u, ...rest }: any) => rest),
+      // Backups from before the time clock have no punches: leave today's alone.
+      punches: hasPunches ? punches : undefined,
+    }, { replace: true, keepSetting });
+  } catch (err: any) {
+    settings.invalidateSettingsCache();
+    invalidatePublishedCache();
+    invalidateEmployeeCache();
+    invalidateDeviceCache();
+    resetTagCache();
+    const preName = (pre?.find((f) => f.kind === "export") ?? pre?.[0])?.name;
+    // SQLite restores in one transaction, so a failure changes nothing. Supabase
+    // writes in several requests: everything in the file is written before
+    // anything is deleted, so a failure part-way leaves extra rows, never missing ones.
+    const partial = store.kind === "supabase";
+    console.error(`[restore] ${partial ? "stopped part-way" : "failed"}:`, err?.message ?? err);
+    throw Object.assign(new Error(partial
+      ? `The restore stopped part-way (${err?.message ?? "database error"}), so some of your data may be from the backup and some from before. Run the same restore again to finish it.${preName ? ` Your data from just before is saved as ${preName}.` : ""}`
+      : `Nothing was restored: the database refused the change (${err?.message ?? "database error"}). Your current data is unchanged.`), { status: partial ? 502 : 500, code: partial ? "partial_restore" : undefined });
+  }
   settings.invalidateSettingsCache();
   invalidatePublishedCache();
   invalidateEmployeeCache();
@@ -240,10 +264,15 @@ async function streamJson(res: Response, head: Record<string, unknown>, lists: R
   }
 }
 
+/** The restore and switch routes themselves, and a read-only connection test, aren't paused. */
+const MAINTENANCE_ROUTES = [/^\/backup\/restore\/?$/, /^\/backups\/[^/]+\/restore\/?$/, /^\/database\/(switch|test)\/?$/];
+
 export function registerRoutes(app: Express) {
   // /live checks its own short-lived ticket (EventSource cannot send headers).
   const PUBLIC = new Set(["/health", "/auth/status", "/auth/login", "/auth/setup", "/auth/logout", "/live", "/email/google/callback", ...TWO_FACTOR_PUBLIC]);
   app.use(kioskHostGuard()); // KIOSK_HOST: serve only the kiosk on that hostname
+  // While a restore or database switch runs, other changes (punches included) get a short 503 "try again"
+  app.use("/api", maintenanceGate((p) => MAINTENANCE_ROUTES.some((r) => r.test(p))));
   registerAndroidRoutes(app); // /.well-known/assetlinks.json for the Android Time Clock app
   // Never cache API responses (payroll data) in browsers or at the Cloudflare edge.
   app.use("/api", (_req, res, next) => { res.setHeader("Cache-Control", "no-store"); next(); });
@@ -530,7 +559,7 @@ export function registerRoutes(app: Express) {
   }));
   app.post("/api/database/switch", h(async (req, res) => {
     const { config, copyData } = z.object({ config: databaseConfigSchema, copyData: z.boolean().default(false) }).parse(req.body);
-    const result = await switchDatabase(config, { copyData });
+    const result = await withMaintenance("switch", () => switchDatabase(config, { copyData }));
     settings.invalidateSettingsCache();
     invalidatePublishedCache();
     invalidateEmployeeCache();
@@ -613,6 +642,7 @@ export function registerRoutes(app: Express) {
     }
     const status = Number(err?.status) || 500;
     if (status >= 500) console.error("[api]", err);
-    res.status(status).json({ error: err?.message || "Something went wrong." });
+    const code = err?.code === "partial_restore" || err?.code === "maintenance" ? err.code : undefined;
+    res.status(status).json({ error: err?.message || "Something went wrong.", ...(code ? { code } : {}) });
   });
 }
