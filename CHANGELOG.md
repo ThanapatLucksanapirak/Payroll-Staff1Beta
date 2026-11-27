@@ -9,6 +9,11 @@ few short bullets written for the people who use the app, not for developers.
 ## 2026-11-27 · Finalizing from the app shows as "Finalized" in Activity (#65)
 - Finalizing a timesheet from its page now appears in Settings → Activity as "Finalized" with the timesheet's name, the same as from the list. Before, it showed as an ordinary save.
 
+## 2026-11-27 · A slow Supabase can't freeze the app (#60)
+- When Supabase starts answering and then stops part-way, the app now gives up after 15 seconds and says the database took too long, instead of waiting forever.
+- A reply from Supabase that is cut off or garbled now shows a database error. Before, a setting could read as empty or a list (like a backup) could come back short without a word.
+- Restoring a big backup to Supabase now sends it in smaller parts, so a slow connection doesn't make it time out half-way.
+
 ## 2026-11-27 · "Give everyone a PIN" pressed twice hands out PINs that work (#62)
 - Pressing "Give everyone a PIN" twice, or two admins pressing it at the same moment, now makes one set of PINs. Before, the first set shown could already be replaced and fail at the time clock.
 - If someone else has just given everyone a PIN, the app says "Everyone already has a PIN" instead of showing an empty list.
