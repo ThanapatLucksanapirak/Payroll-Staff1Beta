@@ -6,6 +6,9 @@ Settings → About, next to the matching update.
 Add an entry with every pull request: a `## YYYY-MM-DD · Title (#PR)` heading and a
 few short bullets written for the people who use the app, not for developers.
 
+## 2026-11-27 · Finalizing from the app shows as "Finalized" in Activity (#65)
+- Finalizing a timesheet from its page now appears in Settings → Activity as "Finalized" with the timesheet's name, the same as from the list. Before, it showed as an ordinary save.
+
 ## 2026-11-27 · Settings say when they couldn't load (#63)
 - If the server has a problem, Pay extras, Advances, the list of server backups, time clock devices, the manager PIN and time clock extras now say they couldn't load, with a Try again button. Before, they could show default values or "No server backups yet", and saving would have put the defaults over your real settings.
 
