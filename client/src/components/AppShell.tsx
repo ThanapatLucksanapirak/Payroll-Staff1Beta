@@ -4,7 +4,7 @@ import { AlertTriangle, Menu, PanelLeftClose, PanelLeftOpen, Search } from "luci
 import { useApp } from "@/context/AppData";
 import { AccountMenu } from "@/components/AccountMenu";
 import { safeStorage } from "@/lib/storage";
-import { ProductWordmark } from "@/components/Logo";
+import { Wordmark } from "@/components/Logo";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -117,14 +117,10 @@ function Shell({ children }: { children: ReactNode }) {
   );
 }
 
-/** Brand row: the "Payroll" wordmark from the logo, with "by Shijiri" as a quiet label. */
+/** Brand row: the full "Payroll by SHIJIRI Group" logo. "By SHIJIRI GROUP" follows the
+ *  text colour, so it is black on the light chrome and white in dark mode. */
 function Brand({ compact = false }: { compact?: boolean }) {
-  return (
-    <>
-      <ProductWordmark className="h-[22px] w-auto shrink-0" />
-      {!compact && <span className="truncate pt-1.5 text-[12px] text-muted-foreground">by Shijiri</span>}
-    </>
-  );
+  return <Wordmark className={cn("w-auto shrink-0 text-black dark:text-white", compact ? "h-9" : "h-10")} />;
 }
 
 /** `touch` is the phone slide-over: taller rows (40px+ targets), no keyboard hint. */

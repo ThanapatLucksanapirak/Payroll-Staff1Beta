@@ -24,8 +24,9 @@ precision everywhere else.
   then two blocks (gold square, orange bar), "By SHIJIRI GROUP" and a red
   (#e33a3a) dot. The "By SHIJIRI GROUP" line is ink on light and white on dark;
   the colours never change. `components/Logo.tsx` exports `Wordmark` (full
-  lockup, text in currentColor), `ProductWordmark` ("Payroll" + dot, for app
-  chrome), `Mark` (the blocks + dot, for small sizes) and `Logo` (app icon:
+  lockup, text in currentColor; used on the sign-in panel and as the sidebar and
+  phone top-bar brand, black text on light and white in dark), `ProductWordmark`
+  ("Payroll" + dot, for tight spots), `Mark` (the blocks + dot, for small sizes) and `Logo` (app icon:
   the mark on warm ink). Path data is in `components/logo-art.ts`, traced from
   the supplied artwork.
 - **Mark / favicon**: the gold square, the orange bar and the red dot.
