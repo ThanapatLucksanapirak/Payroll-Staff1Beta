@@ -198,8 +198,14 @@ async function restoreChecked(body: z.infer<typeof restoreSchema>, punches: Punc
   // Paired kiosk devices always stay as they are now, so a restore can't bring back a removed device.
   const keepSetting = (k: string) => k === "password_hash" || k === USERS_KEY || k === "revoked_sessions" || k === "kiosk_devices" || k.startsWith(AUDIT_PREFIX) || k.startsWith("kiosk_manager_pin:") || k.startsWith("email:") || (isSquareToken(k) && !fileHasSquare) || NEVER_BACKED_UP(k);
   // A file downloaded by an admin has its employee PINs withheld: keep today's.
-  const restoredSettings = await Promise.all(body.settings.filter((x) => !NEVER_BACKED_UP(x.key)).map(async (x) =>
-    isEmployeeDirectoryKey(x.key) && x.value.includes('"pinWithheld"') ? { ...x, value: restoreWithheldPins(x.value, await store.getSetting(x.key)) } : x));
+  // Anyone whose PIN can't be kept (gone since, or the location's PIN salt changed) is named in the reply.
+  const pinsCleared: string[] = [];
+  const restoredSettings = await Promise.all(body.settings.filter((x) => !NEVER_BACKED_UP(x.key)).map(async (x) => {
+    if (!isEmployeeDirectoryKey(x.key) || !x.value.includes('"pinWithheld"')) return x;
+    const r = restoreWithheldPins(x.value, await store.getSetting(x.key));
+    pinsCleared.push(...r.lost);
+    return { ...x, value: r.value };
+  }));
   let result: Awaited<ReturnType<typeof store.importAll>>;
   try {
     result = await store.importAll({
@@ -236,6 +242,7 @@ async function restoreChecked(body: z.infer<typeof restoreSchema>, punches: Punc
     timesheets: result.timesheets,
     punches: hasPunches ? result.punches : null,
     punchesKept: !hasPunches,
+    ...(pinsCleared.length ? { pinsCleared } : {}),
   };
 }
 

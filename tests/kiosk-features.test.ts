@@ -158,6 +158,18 @@ async function call(method: string, url: string, body?: unknown, headers: Record
 }
 const as = (cookie: string) => (method: string, url: string, body?: unknown) => call(method, url, body, { Cookie: cookie, "X-Requested-With": "payroll" });
 const A = (method: string, url: string, body?: unknown) => as(admin)(method, url, body);
+/**
+ * Punches from today and yesterday (site time). The tests punch "N minutes ago",
+ * which is yesterday in the site's time zone just after its midnight, and Live's
+ * day list only holds today's punches.
+ */
+async function recentPunches(): Promise<any[]> {
+  const { todayISO, addDays } = await import("../shared/dates");
+  const tz = (await A("GET", "/api/bootstrap")).body.sites.find((s: any) => s.id === siteId).rules.timezone;
+  const today = todayISO(tz);
+  const days = await Promise.all([today, addDays(today, -1)].map((d) => A("GET", `/api/sites/${siteId}/timeclock?date=${d}`)));
+  return days.flatMap((d) => d.body.punches);
+}
 const K = (method: string, url: string, body?: unknown, t = token) => call(method, url, body, { "X-Kiosk-Token": t });
 
 /** A tiny but valid-looking JPEG (magic bytes plus padding). */
@@ -311,7 +323,7 @@ test("punch with station and photo; photo served only to editors; not in backups
   assert.equal(queued.body.punch.photo, "none");
   const offline = await K("POST", "/api/kiosk/punch", { id: randomUUID(), type: "break_end", pin: "1234", photo: photoOf("no-face.jpg"), at: new Date(Date.now() - 6 * 60_000).toISOString() });
   assert.equal(offline.status, 200, JSON.stringify(offline.body));
-  const stored = (await A("GET", `/api/sites/${siteId}/timeclock`)).body.punches;
+  const stored = (await recentPunches());
   assert.deepEqual(stored.find((x: any) => x.id === queued.body.punch.id).meta, { photo: "none", face: "missing" }, "queued without a photo");
   assert.deepEqual(stored.find((x: any) => x.id === offline.body.punch.id).meta, { photo: "saved", face: "missing" }, "queued without a face");
   // Queued while the server's face check can't run: kept, flagged "unchecked" (not "No face")
@@ -324,7 +336,7 @@ test("punch with station and photo; photo served only to editors; not in backups
     assert.equal(live503.body.reason, "unavailable");
     const late = await K("POST", "/api/kiosk/punch", { id: randomUUID(), type: "break_start", pin: "1234", photo: JPEG, at: new Date(Date.now() - 4 * 60_000).toISOString() });
     assert.equal(late.status, 200, JSON.stringify(late.body));
-    const lateMeta = (await A("GET", `/api/sites/${siteId}/timeclock`)).body.punches.find((x: any) => x.id === late.body.punch.id).meta;
+    const lateMeta = (await recentPunches()).find((x: any) => x.id === late.body.punch.id).meta;
     assert.deepEqual(lateMeta, { photo: "saved", face: "unchecked" });
   } finally {
     faceLimits.timeoutMs = keepLimit;

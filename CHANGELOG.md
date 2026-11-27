@@ -11,6 +11,11 @@ few short bullets written for the people who use the app, not for developers.
 - A reply from Supabase that is cut off or garbled now shows a database error. Before, a setting could read as empty or a list (like a backup) could come back short without a word.
 - Restoring a big backup to Supabase now sends it in smaller parts, so a slow connection doesn't make it time out half-way.
 
+## 2026-11-27 · "Give everyone a PIN" pressed twice hands out PINs that work (#62)
+- Pressing "Give everyone a PIN" twice, or two admins pressing it at the same moment, now makes one set of PINs. Before, the first set shown could already be replaced and fail at the time clock.
+- If someone else has just given everyone a PIN, the app says "Everyone already has a PIN" instead of showing an empty list.
+- Restoring a backup that was downloaded without PINs now names anyone whose PIN couldn't be kept, so you know who needs a new one.
+
 ## 2026-11-27 · Saved backups stay with the owner (#59)
 - Only an owner can download the backups the server saves each day, because they include sign-in details. Admins can still see the list, back up now and restore.
 - A backup downloaded by an admin leaves out employee PINs. Restoring it keeps everyone's current PIN instead of removing it.
