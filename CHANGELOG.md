@@ -6,7 +6,7 @@ Settings → About, next to the matching update.
 Add an entry with every pull request: a `## YYYY-MM-DD · Title (#PR)` heading and a
 few short bullets written for the people who use the app, not for developers.
 
-## 2026-11-27 · A slow Supabase can't freeze the app (#PRNUM)
+## 2026-11-27 · A slow Supabase can't freeze the app (#60)
 - When Supabase starts answering and then stops part-way, the app now gives up after 15 seconds and says the database took too long, instead of waiting forever.
 - A reply from Supabase that is cut off or garbled now shows a database error. Before, a setting could read as empty or a list (like a backup) could come back short without a word.
 
