@@ -11,6 +11,10 @@ few short bullets written for the people who use the app, not for developers.
 - If the time clock is still told the face check is busy, it sends the same punch again by itself a couple of times, so nobody has to tap again.
 - A face check that gets stuck is stopped after 10 seconds instead of 20, so the next punches work sooner.
 
+## 2026-11-27 · Saved backups stay with the owner (#59)
+- Only an owner can download the backups the server saves each day, because they include sign-in details. Admins can still see the list, back up now and restore.
+- A backup downloaded by an admin leaves out employee PINs. Restoring it keeps everyone's current PIN instead of removing it.
+
 ## 2026-11-27 · Clearer activity log for finalize and reopen (#58)
 - Finalizing, reopening, renaming or moving a timesheet now names the timesheet in the activity log, a rename shows the old name, and a move names the new location.
 
