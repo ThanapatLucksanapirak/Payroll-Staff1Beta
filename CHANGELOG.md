@@ -11,6 +11,9 @@ few short bullets written for the people who use the app, not for developers.
 - A punch that can't work anyway (like clocking out when not clocked in) is refused right away, without checking the face.
 - Someone standing a bit far from the time clock is no longer told "Face not detected". When no face is found, the time clock now says to move closer and look straight at the camera.
 
+## 2026-11-27 · Full logo in the app header (#56)
+- The sidebar and the phone top bar now show the whole "Payroll by SHIJIRI Group" logo, with "By SHIJIRI GROUP" in black (white in dark mode), instead of just "Payroll".
+
 ## 2026-11-27 · Easier-to-read sign-in button and time clock location name (#55)
 - A main button that can't be pressed yet (like Sign in before you type a password) is now solid grey with readable text instead of faded orange.
 - On a phone, the time clock shows a long location name on up to two lines instead of cutting it off.
