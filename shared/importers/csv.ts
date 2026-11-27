@@ -74,6 +74,8 @@ export function newShiftId(prefix = "s"): string {
   return `${prefix}_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 7)}${counter.toString(36)}`;
 }
 
+const hours = (min: number) => String(Math.round((min / 60) * 10) / 10);
+
 export function parseCsvText(text: string, opts: { mapping?: CsvMapping; source?: ShiftSource; defaultYear?: number; dayFirst?: boolean; today?: string } = {}): CsvParseResult {
   const parsed = Papa.parse<Record<string, string>>(text.replace(/^\uFEFF/, ""), { header: true, skipEmptyLines: "greedy", transformHeader: (h) => h.trim() });
   const headers = (parsed.meta.fields ?? []).filter(Boolean);
@@ -131,13 +133,16 @@ export function parseCsvText(text: string, opts: { mapping?: CsvMapping; source?
     let end = endT + Math.max(0, dayDiff(date, endDate)) * 1440;
     if (end <= start) end += 1440; // overnight without an explicit out-date
     if (!inRange(date)) { if (outOfRange.length < 3) outOfRange.push(`${name} ${date}`); outOfRangeCount++; continue; }
-    const dupKey = `${name.toLowerCase()}|${date}|${start}|${end}`;
-    if (seen.has(dupKey)) { duplicates++; continue; }
-    seen.add(dupKey);
-    if (end > 4320) clamped.push(`${name} ${date}`);
     let brk = 0;
     if (mapping.breakMinutes) brk = Math.round(Number(get("breakMinutes")) || 0);
     else if (mapping.breakHours) brk = Math.round((Number(get("breakHours")) || 0) * 60);
+    // Identical rows only: same person, clock-in, clock-out and break.
+    const dupKey = `${name.toLowerCase()}|${date}|${start}|${end}|${brk}`;
+    if (seen.has(dupKey)) { duplicates++; continue; }
+    seen.add(dupKey);
+    // A shift is stored within its start day and the two days after (it must end by
+    // midnight at the end of the third day). Anything past that is cut: say by how much.
+    if (end > 4320) clamped.push(`${name} ${date} (${hours(end - start)} h, saved as ${hours(4320 - start)} h)`);
 
     shifts.push({
       id: unneutralize(row["Shift ID"]?.trim() ?? "") || newShiftId(), employee: name, date, start, end: Math.min(end, 4320),
@@ -147,8 +152,8 @@ export function parseCsvText(text: string, opts: { mapping?: CsvMapping; source?
   if (zeroLength) base.warnings.push(`${zeroLength} row${zeroLength === 1 ? "" : "s"} skipped: clock-in and clock-out are the same time.`);
   if (skipped) base.warnings.push(`${skipped} row${skipped === 1 ? "" : "s"} skipped (missing name, date, or clock times).`);
   if (outOfRangeCount) base.warnings.push(`${outOfRangeCount} row${outOfRangeCount === 1 ? "" : "s"} skipped: the date is more than 3 years ago or more than a year ahead (${outOfRange.join(", ")}${outOfRangeCount > outOfRange.length ? ", ..." : ""}). Check for a typo in the year.`);
-  if (duplicates) base.warnings.push(`${duplicates} duplicate row${duplicates === 1 ? "" : "s"} skipped (same employee, start and end).`);
-  if (clamped.length) base.warnings.push(`${clamped.length === 1 ? "A shift was" : `${clamped.length} shifts were`} longer than 72 hours and cut to 72 hours: ${clamped.slice(0, 3).join(", ")}${clamped.length > 3 ? ", ..." : ""}. Check the clock-out date.`);
+  if (duplicates) base.warnings.push(`${duplicates} duplicate row${duplicates === 1 ? "" : "s"} skipped (same employee, clock-in, clock-out and break).`);
+  if (clamped.length) base.warnings.push(`${clamped.length === 1 ? "A shift runs" : `${clamped.length} shifts run`} past midnight at the end of the third day, so ${clamped.length === 1 ? "it was" : "they were"} cut there: ${clamped.slice(0, 3).join(", ")}${clamped.length > 3 ? ", ..." : ""}. Check the clock-out date.`);
   if (!shifts.length) base.warnings.push("No complete shifts were found. Check the column mapping.");
   return { ...base, shifts, skipped, needsMapping: shifts.length === 0 };
 }
