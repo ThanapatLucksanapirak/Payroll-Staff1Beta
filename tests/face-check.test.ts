@@ -31,7 +31,8 @@ test("face check: too many waiting answers busy, a slow check answers unavailabl
     faceLimits.timeoutMs = Math.round((Date.now() - t0) * 1.5);
     const slow = await Promise.all(Array.from({ length: 4 }, () => checkFaceJpeg(fixture("face.jpg"))));
     assert.equal(slow[0].ok, true);
-    assert.deepEqual(slow.slice(2), [{ ok: false, reason: "unavailable" }, { ok: false, reason: "unavailable" }]);
+    // The ones that never got their turn answer "busy" (the kiosk may try again); none hang past the limit.
+    assert.deepEqual(slow.slice(2), [{ ok: false, reason: "busy" }, { ok: false, reason: "busy" }]);
     Object.assign(faceLimits, saved);
     // The queue recovers: the next check works normally
     assert.equal((await checkFaceJpeg(fixture("face.jpg"))).ok, true);
@@ -46,6 +47,25 @@ test("face check: 20 photo punches at the same moment all get checked", async ()
   const all = await Promise.all(Array.from({ length: 20 }, () => checkFaceJpeg(fixture("face.jpg"))));
   assert.equal(all.filter((v) => !v.ok && v.reason === "busy").length, 0);
   assert.equal(all.filter((v) => v.ok).length, 20);
+});
+
+test("face check: the time limit counts from when the punch arrived, queue wait included", async () => {
+  await loadFaceModel();
+  const saved = { ...faceLimits };
+  try {
+    faceLimits.timeoutMs = 1500;
+    const arrived = Date.now();
+    const all = await Promise.all(Array.from({ length: 30 }, async () => { await checkFaceJpeg(fixture("face.jpg"), {}, arrived); return Date.now() - arrived; }));
+    assert.ok(Math.max(...all) < 2200, `slowest answered after ${Math.max(...all)} ms`);
+    // A punch that already spent its time elsewhere (e.g. the PIN check) answers at once.
+    const t = Date.now();
+    assert.deepEqual(await checkFaceJpeg(fixture("face.jpg"), {}, Date.now() - 1600), { ok: false, reason: "busy" });
+    assert.ok(Date.now() - t < 100);
+  } finally {
+    Object.assign(faceLimits, saved);
+  }
+  // Drain whatever is still queued before the next test.
+  assert.equal((await checkFaceJpeg(fixture("face.jpg"))).ok, true);
 });
 
 /** A fixture face of `face` px square, centred in a blank `w` x `h` frame (like a kiosk photo of someone far from the camera). */

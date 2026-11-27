@@ -10,6 +10,7 @@ few short bullets written for the people who use the app, not for developers.
 - When many people punch with a photo at the same moment, the server now checks up to 40 photos in turn instead of turning away everyone after the first 10.
 - If the time clock is still told the face check is busy, it sends the same punch again by itself a couple of times, so nobody has to tap again.
 - A face check that gets stuck is stopped after 10 seconds instead of 20, so the next punches work sooner.
+- A photo punch now always gets an answer within about 10 seconds of arriving, even in a big rush, so the time clock never gives up and saves it for later.
 
 ## 2026-11-27 · Saved backups stay with the owner (#59)
 - Only an owner can download the backups the server saves each day, because they include sign-in details. Admins can still see the list, back up now and restore.

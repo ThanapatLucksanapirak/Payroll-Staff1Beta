@@ -202,11 +202,13 @@ export function KioskApp() {
       // looks at the photo (nothing is saved). Send the same punch again a couple
       // of times on its own, so nobody has to tap again.
       let r: PunchResult;
+      const firstSent = Date.now();
       for (let attempt = 0; ; attempt++) {
         try { r = await request<PunchResult>("POST", "/api/kiosk/punch", body, photo ? 15_000 : 8000); break; }
         catch (err) {
           const e = err as KioskError;
-          if (e.code !== "photo" || e.body?.reason !== "busy" || attempt >= FACE_BUSY_RETRIES) throw err;
+          // Only while the person has waited a few seconds at most: past that, show the message.
+          if (e.code !== "photo" || e.body?.reason !== "busy" || attempt >= FACE_BUSY_RETRIES || Date.now() - firstSent > 6000) throw err;
           await new Promise((res) => setTimeout(res, 1500 + Math.random() * 1500));
         }
       }
