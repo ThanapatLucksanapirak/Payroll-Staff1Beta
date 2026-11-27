@@ -21,11 +21,13 @@ async function buildAll() {
   const externals = allDeps.filter((dep) => !allowlist.includes(dep));
 
   await esbuild({
-    entryPoints: ["server/index.ts"],
+    // The face check runs in a worker thread (server/faceCheck.ts), which needs its own file: dist/faceWorker.cjs
+    entryPoints: { index: "server/index.ts", faceWorker: "server/faceWorker.ts" },
     platform: "node",
     bundle: true,
     format: "cjs",
-    outfile: "dist/index.cjs",
+    outdir: "dist",
+    outExtension: { ".js": ".cjs" },
     define: {
       "process.env.NODE_ENV": '"production"',
     },

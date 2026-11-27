@@ -11,6 +11,11 @@ few short bullets written for the people who use the app, not for developers.
 - CSV imports now skip exact duplicate rows, skip dates more than a year from today (like 1926 or 2099), and say so in the review warnings. A shift cut to 72 hours is named in a warning too.
 - A Square pull whose reply is cut off or stalls now shows an error instead of "0 shifts", and "1 timecard is still open" reads correctly.
 
+## 2026-11-27 · Faster photo punches, and small faces are found (#50)
+- The face check now runs in the background, so the rest of the app stays quick while time clocks send photos. Large photos are shrunk first.
+- A punch that can't work anyway (like clocking out when not clocked in) is refused right away, without checking the face.
+- Someone standing a bit far from the time clock is no longer told "Face not detected". When no face is found, the time clock now says to move closer and look straight at the camera.
+
 ## 2026-11-27 · Full logo in the app header (#56)
 - The sidebar and the phone top bar now show the whole "Payroll by SHIJIRI Group" logo, with "By SHIJIRI GROUP" in black (white in dark mode), instead of just "Payroll".
 

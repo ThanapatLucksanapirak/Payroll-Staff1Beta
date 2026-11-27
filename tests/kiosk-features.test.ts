@@ -292,7 +292,8 @@ test("punch with station and photo; photo served only to editors; not in backups
   }
   // A fresh `at` (within 2 minutes) counts as live: sending one can't skip the photo or the face check
   for (const photo of [null, undefined, photoOf("no-face.jpg")]) {
-    const fresh = await K("POST", "/api/kiosk/punch", { id: randomUUID(), type: "break_start", pin: "1234", photo, at: new Date(Date.now() - 60_000).toISOString() });
+    // (just now, not a minute ago: a break before the clock-in would be refused 409 before the face is looked at)
+    const fresh = await K("POST", "/api/kiosk/punch", { id: randomUUID(), type: "break_start", pin: "1234", photo, at: new Date(Date.now() - (photo ? 1 : 60_000)).toISOString() });
     assert.equal(fresh.status, 422, JSON.stringify(fresh.body));
     assert.equal(fresh.body.code, "photo");
   }
