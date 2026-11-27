@@ -6,12 +6,6 @@ Settings → About, next to the matching update.
 Add an entry with every pull request: a `## YYYY-MM-DD · Title (#PR)` heading and a
 few short bullets written for the people who use the app, not for developers.
 
-## 2026-11-27 · No punches lost during a restore or database switch (#48)
-- While a backup restore or a database switch runs, the time clock's punches (and other changes) wait a few seconds instead of being saved into data that's about to be replaced. The tablet keeps each punch and sends it again on its own, so it's never lost.
-- A restore or switch first waits for anything already being saved to finish, and a second one can't start while one is running.
-- Automatic clock-out skips a run while a restore or switch is under way.
-- If a restore to a Supabase database stops part-way, it now says so and asks you to run the same restore again, instead of a general database error.
-
 ## 2026-11-27 · Small fixes to face data, backups and sign-in (#53)
 - The face consent notice now says what is protected: face templates are encrypted, photos are stored on your server with restricted file access, and none of it is in backups.
 - Recording consent or adding reference photos for someone whose face data can't be read is now refused until you delete their face data, instead of overwriting it.
@@ -22,6 +16,12 @@ few short bullets written for the people who use the app, not for developers.
 - Switching to a database path that can't be opened now says why instead of showing a technical error.
 - Owners (and admins, for accounts other than the owner) can clear someone's sign-in lock from Settings → Users.
 - Downloading a backup uses less memory on big databases.
+
+## 2026-11-27 · No punches lost during a restore or database switch (#48)
+- While a backup restore or a database switch runs, the time clock's punches (and other changes) wait a few seconds instead of being saved into data that's about to be replaced. The tablet keeps each punch and sends it again on its own, so it's never lost.
+- A restore or switch first waits for anything already being saved to finish, and a second one can't start while one is running.
+- Automatic clock-out skips a run while a restore or switch is under way.
+- If a restore to a Supabase database stops part-way, it now says so and asks you to run the same restore again, instead of a general database error.
 
 ## 2026-11-27 · Face data is kept through a database switch or restore (#47)
 - Switching to another database, or restoring an older backup, no longer lets the daily clean-up delete saved face data. Face data isn't in backups, so before this it couldn't be got back after switching back.
