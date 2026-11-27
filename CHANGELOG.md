@@ -6,6 +6,9 @@ Settings → About, next to the matching update.
 Add an entry with every pull request: a `## YYYY-MM-DD · Title (#PR)` heading and a
 few short bullets written for the people who use the app, not for developers.
 
+## 2026-11-27 · Bigger logo in the desktop sidebar (#PRNUM)
+- The logo at the top of the desktop sidebar is about half as big again, so "By SHIJIRI GROUP" is easier to read, with more room before the collapse button.
+
 ## 2026-11-27 · Faster photo punches, and small faces are found (#50)
 - The face check now runs in the background, so the rest of the app stays quick while time clocks send photos. Large photos are shrunk first.
 - A punch that can't work anyway (like clocking out when not clocked in) is refused right away, without checking the face.
