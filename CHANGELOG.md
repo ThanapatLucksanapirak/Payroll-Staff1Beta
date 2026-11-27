@@ -6,7 +6,7 @@ Settings → About, next to the matching update.
 Add an entry with every pull request: a `## YYYY-MM-DD · Title (#PR)` heading and a
 few short bullets written for the people who use the app, not for developers.
 
-## 2026-11-27 · Settings say when they couldn't load (#PRNUM)
+## 2026-11-27 · Settings say when they couldn't load (#63)
 - If the server has a problem, Pay extras, Advances, the list of server backups, time clock devices, the manager PIN and time clock extras now say they couldn't load, with a Try again button. Before, they could show default values or "No server backups yet", and saving would have put the defaults over your real settings.
 
 ## 2026-11-27 · Saved backups stay with the owner (#59)
