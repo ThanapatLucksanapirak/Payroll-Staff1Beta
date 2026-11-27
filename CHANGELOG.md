@@ -6,6 +6,10 @@ Settings → About, next to the matching update.
 Add an entry with every pull request: a `## YYYY-MM-DD · Title (#PR)` heading and a
 few short bullets written for the people who use the app, not for developers.
 
+## 2026-11-27 · Saved backups stay with the owner (#PRNUM)
+- Only an owner can download the backups the server saves each day, because they include sign-in details. Admins can still see the list, back up now and restore.
+- A backup downloaded by an admin leaves out employee PINs. Restoring it keeps everyone's current PIN instead of removing it.
+
 ## 2026-11-27 · Clearer activity log for finalize and reopen (#58)
 - Finalizing, reopening, renaming or moving a timesheet now names the timesheet in the activity log, a rename shows the old name, and a move names the new location.
 
