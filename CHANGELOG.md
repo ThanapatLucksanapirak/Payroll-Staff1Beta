@@ -9,6 +9,9 @@ few short bullets written for the people who use the app, not for developers.
 ## 2026-11-27 · Clearer activity log for finalize and reopen (#58)
 - Finalizing, reopening, renaming or moving a timesheet now names the timesheet in the activity log, and a rename shows the old name.
 
+## 2026-11-27 · Bigger logo in the desktop sidebar (#57)
+- The logo at the top of the desktop sidebar is about half as big again, so "By SHIJIRI GROUP" is easier to read, with more room before the collapse button.
+
 ## 2026-11-27 · Portal sign-out, publishing and small screen fixes (#54)
 - Turning the staff portal off now signs everyone out for good: turning it back on doesn't bring old sign-ins back.
 - Publishing a timesheet no longer waits on a slow email server, and pressing Publish several times sends one email, not several. If the email fails, the result is shown on the timesheet and in the activity log. If the server restarts while the email is sending, the timesheet says so and Publish sends it again.
