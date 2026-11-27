@@ -17,6 +17,7 @@ few short bullets written for the people who use the app, not for developers.
 - Owners (and admins, for accounts other than the owner) can clear someone's sign-in lock from Settings → Users.
 - Downloading a backup uses less memory on big databases.
 
+- A backup too big for the server's free memory is now refused with a clear message (how much memory it needs and how much is free) before anything changes, instead of the app stopping part-way.
 ## 2026-11-27 · New look around the Payroll by Shijiri Group logo (#49)
 - The new logo is on the sign-in screen, the sidebar, the time clock and the staff portal.
 - New browser tab icon and home-screen and Android app icons: the logo's gold and orange blocks with the red dot. Installed apps may take a restart to show the new icon.
