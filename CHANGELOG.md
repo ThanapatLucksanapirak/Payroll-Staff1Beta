@@ -6,6 +6,9 @@ Settings → About, next to the matching update.
 Add an entry with every pull request: a `## YYYY-MM-DD · Title (#PR)` heading and a
 few short bullets written for the people who use the app, not for developers.
 
+## 2026-11-27 · Deleting a location deletes its face data (#PRNUM)
+- When you delete a location, its face recognition data (consents and reference photos) and its face match alerts are deleted with it, and Activity says so. Before, they stayed on the server.
+
 ## 2026-11-27 · Fewer "face check is busy" at the start of a shift (#61)
 - When many people punch with a photo at the same moment, the server now checks up to 40 photos in turn instead of turning away everyone after the first 10.
 - If the time clock is still told the face check is busy, it sends the same punch again by itself a couple of times, so nobody has to tap again.

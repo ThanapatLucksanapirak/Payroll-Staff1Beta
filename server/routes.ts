@@ -16,7 +16,7 @@ import { SETUP_SQL, type TimesheetRow } from "./db/types";
 import * as settings from "./settings";
 import { currentUser, requireAuth, resetTagCache } from "./auth";
 import { authorize, csrfGuard } from "./access";
-import { AUDIT_PREFIX, auditTrail } from "./audit";
+import { AUDIT_PREFIX, actorOf, audit as auditEntry, auditTrail } from "./audit";
 import { registerAuthRoutes } from "./authRoutes";
 import { registerUpdateRoutes } from "./updates";
 import { registerAboutRoutes } from "./about";
@@ -31,7 +31,7 @@ import { invalidateDeviceCache, kioskHostGuard, registerKioskRoutes, registerTim
 import { registerScheduleRoutes } from "./schedule";
 import { registerTimeclockRoutes } from "./timeclock";
 import { registerKioskFeatureAdminRoutes } from "./kioskFeatures";
-import { registerFaceRoutes } from "./faceData";
+import { deleteSiteFaceData, registerFaceRoutes } from "./faceData";
 import { registerAndroidRoutes } from "./android";
 import { registerPayRoutes } from "./pay";
 import { registerPermissionRoutes } from "./permissions";
@@ -357,7 +357,13 @@ export function registerRoutes(app: Express) {
     res.json(site);
   }));
   app.delete("/api/sites/:id", h(async (req, res) => {
-    await settings.deleteSite(String(req.params.id));
+    const id = String(req.params.id);
+    await settings.deleteSite(id);
+    // Its face data goes with it (the daily clean-up keeps data for locations it can't see).
+    const face = await deleteSiteFaceData(id).catch((err) => { console.error(`[face] could not delete face data for location ${id}:`, err?.message ?? err); return null; });
+    if (face && (face.people || face.alerts)) {
+      auditEntry({ ...actorOf(req, res), action: "face.delete", target: `site:${id}`, detail: `location deleted: face data of ${face.people} ${face.people === 1 ? "person" : "people"}${face.alerts ? `, ${face.alerts} face alert(s)` : ""}` });
+    }
     res.json({ ok: true });
   }));
 

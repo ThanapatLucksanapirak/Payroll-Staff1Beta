@@ -368,3 +368,27 @@ test("database switch or older backup: face data isn't purged", async () => {
   fs.rmSync(path.join(dir, "face-data", "not-in-this-db"), { recursive: true, force: true });
   fs.rmSync(faceDir(site2, dee), { recursive: true, force: true });
 });
+
+test("deleting a location deletes its face data and face alerts, not other locations'", async () => {
+  const fd = await import("../server/faceData");
+  const site3 = (await A("POST", "/api/sites", { name: "Pop-up" })).body.id;
+  const cy = (await A("POST", `/api/sites/${site3}/employees`, { name: "Cy Moss" })).body.id;
+  await fd.recordConsent(site3, cy, "owner");
+  await fd.recordFaceAlert(site3, { employeeId: cy, employeeName: "Cy Moss", type: "in", at: new Date().toISOString(), distance: 0.7, reason: "mismatch", deviceName: "Door" }, fs.readFileSync(path.join(import.meta.dirname, "fixtures", "face.jpg")));
+  const dir3 = path.join(fd.faceRoot(), site3);
+  assert.ok(fs.existsSync(dir3));
+  assert.equal((await fd.listFaceAlerts(site3)).length, 1);
+  const before = fd.faceSummaries(siteId).length;
+
+  assert.equal((await A("DELETE", `/api/sites/${site3}`)).status, 200);
+  assert.ok(!fs.existsSync(dir3), "the location's face folder is gone");
+  assert.equal((await fd.listFaceAlerts(site3)).length, 0);
+  const { db } = await import("../server/db");
+  assert.equal(await (await db()).getSetting(fd.ALERTS_PREFIX + site3), null);
+  assert.equal(fd.faceSummaries(siteId).length, before, "other locations keep theirs");
+  const { flushAudit } = await import("../server/audit");
+  await flushAudit();
+  const log = (await A("GET", "/api/audit?limit=200")).body;
+  const entries: any[] = Array.isArray(log) ? log : log.entries ?? [];
+  assert.ok(entries.some((e) => e.action === "face.delete" && e.target === `site:${site3}` && /location deleted/.test(e.detail)));
+});
