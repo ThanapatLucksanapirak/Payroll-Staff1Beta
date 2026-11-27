@@ -101,7 +101,7 @@ export function GuardScreen({ name, message, question, suggest, also, busy, erro
     <div className="kiosk-guard flex flex-1 flex-col items-center justify-center px-6 pb-10 text-center kiosk-fade-up" data-testid="kiosk-guard">
       <span className="kiosk-guard-icon flex h-20 w-20 items-center justify-center rounded-full bg-amber-100 text-amber-700"><AlertTriangle className="h-10 w-10" /></span>
       <p className="kiosk-guard-name mt-5 max-w-full text-2xl font-medium text-stone-700 [overflow-wrap:anywhere]">{name}</p>
-      <h1 className="kiosk-guard-title mt-2 text-4xl font-display font-normal tracking-[-0.01em] text-stone-950 sm:text-5xl" data-testid="kiosk-guard-message">{message}</h1>
+      <h1 className="kiosk-guard-title mt-2 text-4xl font-display font-semibold tracking-[-0.02em] text-stone-950 sm:text-5xl" data-testid="kiosk-guard-message">{message}</h1>
       {question && <p className="kiosk-guard-q mt-3 text-3xl font-semibold text-stone-800">{question}</p>}
       <div className="kiosk-guard-actions mt-10 grid w-full max-w-xl gap-4">
         {suggest && st && (
@@ -126,7 +126,7 @@ export function StationScreen({ name, stations, idleMs, onPick, onCancel }: { na
   useIdle(idleMs, onCancel);
   return (
     <div className="flex min-h-0 flex-1 flex-col items-center px-6 pb-8 pt-4 text-center kiosk-fade-up" data-testid="kiosk-stations">
-      <h1 className="text-4xl font-display font-normal tracking-[-0.01em] text-stone-950 sm:text-5xl">Where are you working, {firstName(name)}?</h1>
+      <h1 className="text-4xl font-display font-semibold tracking-[-0.02em] text-stone-950 sm:text-5xl">Where are you working, {firstName(name)}?</h1>
       <p className="mt-2 text-xl text-stone-700">Tap your station to clock in</p>
       <div className="mt-8 grid w-full max-w-4xl min-h-0 flex-1 auto-rows-min grid-cols-2 gap-4 overflow-y-auto pb-2 sm:grid-cols-3">
         {stations.map((s) => (
@@ -186,7 +186,7 @@ export function FixRequestScreen({ tz, name, online, busy, error, idleMs, onSubm
 
   return (
     <div className="flex min-h-0 flex-1 flex-col items-center overflow-y-auto px-5 pb-6 pt-2 kiosk-fade-up" data-testid="kiosk-fix">
-      <h1 className="text-center text-4xl font-display font-normal tracking-[-0.01em] text-stone-950">Fix a missed punch</h1>
+      <h1 className="text-center text-4xl font-display font-semibold tracking-[-0.02em] text-stone-950">Fix a missed punch</h1>
       <p className="mt-1 text-center text-xl text-stone-700">{name} · a manager will check it</p>
 
       <div className="mt-5 w-full max-w-4xl space-y-5">
@@ -262,7 +262,7 @@ export function MessageScreen({ title, line, onDone }: { title: string; line: st
   return (
     <button type="button" className="flex flex-1 flex-col items-center justify-center px-6 pb-10 text-center" onClick={onDone} data-testid="kiosk-message">
       <span className="kiosk-pop flex h-24 w-24 items-center justify-center rounded-full bg-stone-900 text-white"><Check className="h-14 w-14" strokeWidth={3} /></span>
-      <h1 className="mt-8 text-5xl font-display font-normal tracking-[-0.01em] text-stone-950">{title}</h1>
+      <h1 className="mt-8 text-5xl font-display font-semibold tracking-[-0.02em] text-stone-950">{title}</h1>
       <p className="mt-3 max-w-xl text-2xl text-stone-700">{line}</p>
     </button>
   );
