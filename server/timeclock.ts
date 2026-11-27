@@ -12,7 +12,7 @@ import { createHash } from "node:crypto";
 import type { Express, NextFunction, Request, Response } from "express";
 import { z } from "zod";
 import type { Site } from "@shared/schema";
-import { addDays, daysBetween, todayISO } from "@shared/dates";
+import { addDays, daysBetween, isISODate, todayISO } from "@shared/dates";
 import { employeeKey, resolveRates } from "@shared/engine";
 import { type Punch, localRange } from "@shared/punches";
 import {
@@ -206,7 +206,7 @@ const h = (fn: Handler) => (req: Request, res: Response, next: NextFunction) => 
     next(err);
   });
 };
-const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
+const isoDate = z.string().refine(isISODate, "Use a real date (YYYY-MM-DD).");
 
 async function siteOr404(req: Request, res: Response) {
   const site = await settings.getSite(String(req.params.siteId));

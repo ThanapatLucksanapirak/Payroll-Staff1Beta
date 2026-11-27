@@ -4,7 +4,7 @@ import { randomUUID } from "node:crypto";
 import type { Express, NextFunction, Request, Response } from "express";
 import { z } from "zod";
 import type { Site } from "@shared/schema";
-import { addDays, todayISO } from "@shared/dates";
+import { addDays, isISODate, todayISO } from "@shared/dates";
 import {
   type Punch, type PunchEdit, type PunchMeta, type PunchSource, type PunchType, PUNCH_TYPES, STALE_SHIFT_HOURS, byTime, clockState, localRange,
   punchesToShifts, validateChange, workedMinutes,
@@ -220,7 +220,7 @@ const h = (fn: Handler) => (req: Request, res: Response, next: NextFunction) => 
     next(err);
   });
 };
-const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
+const isoDate = z.string().refine(isISODate, "Use a real date (YYYY-MM-DD).");
 const instant = z.string().refine((s) => Number.isFinite(Date.parse(s)), "Enter a valid date and time.");
 
 async function siteOr404(req: Request, res: Response) {

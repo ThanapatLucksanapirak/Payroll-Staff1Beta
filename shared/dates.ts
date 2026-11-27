@@ -14,8 +14,11 @@ export const WEEKDAYS_SHORT = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] 
 
 const pad = (n: number) => String(n).padStart(2, "0");
 
+/** A YYYY-MM-DD string that is a real calendar day (2026-02-30 and 2026-13-45 are not). */
 export function isISODate(s: unknown): s is string {
-  return typeof s === "string" && /^\d{4}-\d{2}-\d{2}$/.test(s);
+  if (typeof s !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(s)) return false;
+  const dt = new Date(`${s}T00:00:00Z`);
+  return Number.isFinite(dt.getTime()) && dt.toISOString().slice(0, 10) === s;
 }
 
 export function toISO(y: number, m: number, d: number): string | null {
