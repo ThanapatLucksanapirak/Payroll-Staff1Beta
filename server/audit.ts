@@ -274,7 +274,7 @@ export function auditTrail() {
       try {
         audit({
           ...actorOf(req, res),
-          action: typeof hook.action === "function" ? hook.action(req, body) : hook.action,
+          action: typeof res.locals.auditAction === "string" ? res.locals.auditAction : typeof hook.action === "function" ? hook.action(req, body) : hook.action,
           target: hook.target?.(req, body, m) ?? "",
           detail: hook.detail?.(req, body) ?? "",
         });

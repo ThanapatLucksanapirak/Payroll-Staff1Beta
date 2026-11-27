@@ -500,8 +500,15 @@ export function registerRoutes(app: Express) {
     if (cur.meta_json?.deletedAt) return res.status(410).json({ error: "This timesheet is in the Trash. Restore it to make changes." });
     const update: Partial<TimesheetRow> = {};
     if (patch.label !== undefined) update.custom_label = patch.label.trim() || null;
-    // Setting the status it already has changes nothing, so it isn't logged again.
-    if (patch.status !== undefined && patch.label === undefined && patch.siteId === undefined && (cur.meta_json?.status ?? "draft") === patch.status) res.locals.skipAudit = true;
+    // Log what actually changed: setting the status, name or location it already
+    // has changes nothing, so it isn't logged (two finalizes at once log one entry,
+    // since these run one at a time). A request that carries the whole doc only logs
+    // the field that changed.
+    const statusChanged = patch.status !== undefined && patch.status !== (cur.meta_json?.status ?? "draft");
+    const labelChanged = patch.label !== undefined && (patch.label.trim() || null) !== (cur.custom_label ?? null);
+    const siteChanged = patch.siteId !== undefined && patch.siteId !== cur.site_id;
+    if (!statusChanged && !labelChanged && !siteChanged) res.locals.skipAudit = true;
+    else res.locals.auditAction = statusChanged ? (patch.status === "final" ? "timesheet.finalize" : "timesheet.reopen") : siteChanged ? "timesheet.move" : "timesheet.rename";
     if (patch.siteId !== undefined || patch.status !== undefined) {
       const sites = await settings.getSites();
       if (patch.siteId && !sites.some((s) => s.id === patch.siteId)) return res.status(400).json({ error: "Unknown location." });
