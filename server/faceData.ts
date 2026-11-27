@@ -178,9 +178,15 @@ export function faceSummaries(siteId: string): FaceSummary[] {
   }).filter((s) => s.consentAt || s.refs || s.unreadable);
 }
 
+/** Writing over a profile we can't read would silently turn Require off and orphan its photos. */
+function refuseUnreadable(siteId: string, employeeId: string) {
+  if (readProfileState(siteId, employeeId).unreadable) throw new FaceError("This person's face data can't be read. Delete their face data first, then set it up again.", 409, "unreadable");
+}
+
 // ── Changes ──────────────────────────────────────────────────────────────────
 export function recordConsent(siteId: string, employeeId: string, by: string): Promise<FaceProfile> {
   return withPerson(siteId, employeeId, async () => {
+    refuseUnreadable(siteId, employeeId);
     const p = readProfile(siteId, employeeId);
     if (!p.consentAt) { p.consentAt = new Date().toISOString(); p.consentBy = by; }
     writeProfile(siteId, employeeId, p);
@@ -191,6 +197,7 @@ export function recordConsent(siteId: string, employeeId: string, by: string): P
 /** Approve a punch photo as one of the person's reference photos. */
 export function addReference(siteId: string, employeeId: string, punchId: string, by: string): Promise<{ profile: FaceProfile; ref: FaceRef; dropped: number }> {
   return withPerson(siteId, employeeId, async () => {
+    refuseUnreadable(siteId, employeeId);
     const p = readProfile(siteId, employeeId);
     if (!p.consentAt) throw new FaceError("Record their consent before adding reference photos.", 409, "consent");
     const punch = await (await db()).getPunch(punchId);
@@ -279,6 +286,9 @@ export function deleteFaceData(siteId: string, employeeId: string, opts: { punch
       for (const p of await punchesWithPhotos(siteId, employeeId)) {
         const file = photoPath(siteId, p.id);
         if (file && fs.existsSync(file)) { deletePhoto(siteId, p.id); removed++; }
+        // The photo is gone, so the punch must stop saying it has one (Live would ask for it and get a 404).
+        const { photo: _photo, ...meta } = p.meta ?? {};
+        await (await db()).updatePunch(p.id, { edits: p.edits, flags: p.flags, meta });
       }
       await deleteAlertsFor(siteId, employeeId);
     }
@@ -331,6 +341,8 @@ export async function galleryPage(siteId: string, opts: { employeeId?: string; b
     for (const p of withPhoto) {
       const file = photoPath(siteId, p.id);
       if (!file || !fs.existsSync(file)) continue;
+      // Page is full and there is more: continue just before the last photo shown (`to` is exclusive).
+      if (photos.length >= limit) return { photos, nextBefore: photos[photos.length - 1].at };
       photos.push({ punchId: p.id, employeeId: p.employeeId, employeeName: p.employeeName, type: p.type, at: p.at, face: p.meta?.face ?? null, reference: refPunches(p.employeeId).has(p.id), ...(current.has(p.employeeId) ? {} : { removed: true }) });
     }
     end = start;

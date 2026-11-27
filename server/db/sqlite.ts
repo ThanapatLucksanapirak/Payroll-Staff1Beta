@@ -4,7 +4,7 @@ import path from "node:path";
 import { randomUUID } from "node:crypto";
 import type { DatabaseHealth } from "@shared/schema";
 import type { Punch } from "@shared/punches";
-import { MAX_PUNCH_QUERY, type DataStore, type ImportData, type ImportOptions, type PunchPatch, type PunchQuery, type TimesheetRow, type TimesheetWrite, patchToRow, punchToRow, rowToPunch, toSummary } from "./types";
+import { MAX_PUNCH_QUERY, type DataStore, type ImportData, type ImportOptions, type PunchPatch, type PunchQuery, type TimesheetRow, type TimesheetWrite, StoreError, patchToRow, punchToRow, rowToPunch, toSummary } from "./types";
 
 const JSON_COLS = ["result_json", "wages_json", "manual_employees_json", "meta_json"] as const;
 const ROW_COLS = [
@@ -69,6 +69,10 @@ export class SqliteStore implements DataStore {
 
   async init() {
     fs.mkdirSync(path.dirname(this.file), { recursive: true });
+    // A zero-byte file isn't one the app made (it writes a header at once): don't treat it as a fresh database and set up over it.
+    if (fs.existsSync(this.file) && fs.statSync(this.file).size === 0) {
+      throw new StoreError(`The database file is empty. It may have been damaged or truncated. Restore it from a backup, or delete the empty file to start fresh.`, 503);
+    }
     const existed = fs.existsSync(this.file) && fs.statSync(this.file).size > 0;
     this.db = new Database(this.file);
     this.db.pragma("journal_mode = WAL");
@@ -87,6 +91,7 @@ export class SqliteStore implements DataStore {
   /** Bring the schema up to date, taking a copy of the file first. */
   private async migrate(existed: boolean) {
     const current = Number(this.db.pragma("user_version", { simple: true })) || 0;
+    if (current > SCHEMA_VERSION) console.warn(`[db] this database is from a newer version of the app (schema ${current}, this app knows ${SCHEMA_VERSION}). Update the app; saving data may not work correctly until you do.`);
     const pending = MIGRATIONS.filter((m) => m.version > current);
     if (!pending.length) return;
     const hasData = existed && !!this.db.prepare("select 1 from sqlite_master where type = 'table' and name = 'recent_uploads'").get();
@@ -246,6 +251,19 @@ export class SqliteStore implements DataStore {
   }
   async allPunches() {
     return (this.db.prepare("select * from punches order by at, id").all() as any[]).map(rowToPunch);
+  }
+
+  async *punchPages() {
+    // Keyset paging, so no statement stays open between pages.
+    const stmt = this.db.prepare("select * from punches where at > @at or (at = @at and id > @id) order by at, id limit 2000");
+    let cur = { at: "", id: "" };
+    for (;;) {
+      const rows = stmt.all(cur) as any[];
+      if (!rows.length) return;
+      yield rows.map(rowToPunch);
+      cur = { at: rows[rows.length - 1].at, id: rows[rows.length - 1].id };
+      if (rows.length < 2000) return;
+    }
   }
 
   async snapshotTo(file: string) {

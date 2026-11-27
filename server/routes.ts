@@ -1,6 +1,7 @@
 import express, { type Express, type NextFunction, type Request, type Response } from "express";
 import { parsePatch } from "@shared/patch";
 import { z } from "zod";
+import { isISODate } from "@shared/dates";
 import {
   type TimesheetDoc, categorySchema, databaseConfigSchema, employeeConfigSchema, prefsSchema, siteInputSchema, siteRulesSchema, timesheetDocSchema,
 } from "@shared/schema";
@@ -21,6 +22,7 @@ import { registerUpdateRoutes } from "./updates";
 import { registerAboutRoutes } from "./about";
 import { USERS_KEY, canAccessSite, toPublic } from "./users";
 import { NEVER_BACKED_UP, backupPath, listBackups, readBackup, runBackup } from "./backup";
+import { gzipSize, restoreMemoryProblem } from "./memoryGuard";
 import { listLocations, pullTimecards } from "./square";
 import { extractPdfText } from "./pdf";
 import { invalidateEmployeeCache } from "./employees";
@@ -43,7 +45,7 @@ import { getPublishedMap, invalidatePublishedCache, publishedRecord, registerPub
 
 type Handler = (req: Request, res: Response) => Promise<unknown>;
 const h = (fn: Handler) => (req: Request, res: Response, next: NextFunction) => { fn(req, res).catch(next); };
-const iso = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
+const iso = z.string().refine(isISODate, "Use a real date (YYYY-MM-DD).");
 
 function ctxFor(sites: Awaited<ReturnType<typeof settings.getSites>>, siteId: string | null | undefined) {
   const site = sites.find((s) => s.id === siteId) ?? sites.find((s) => s.id === settings.LEGACY_SITE_ID) ?? sites[0];
@@ -236,10 +238,10 @@ async function restoreChecked(body: z.infer<typeof restoreSchema>, punches: Punc
 
 /**
  * Send `{...head, list1: [...], list2: [...]}` as JSON, one item at a time,
- * waiting for the socket to drain, so no full-size JSON string is built. The rows
- * themselves are still in memory (the store loads them first).
+ * waiting for the socket to drain, so no full-size JSON string is built. A list may be a page-by-page async iterable; the other rows
+ * are still in memory (the store loads them first).
  */
-async function streamJson(res: Response, head: Record<string, unknown>, lists: Record<string, unknown[]>) {
+async function streamJson(res: Response, head: Record<string, unknown>, lists: Record<string, unknown[] | AsyncIterable<unknown[]>>) {
   res.status(200).setHeader("Content-Type", "application/json; charset=utf-8");
   const write = (chunk: string) => new Promise<void>((resolve, reject) => {
     if (res.destroyed) return reject(new Error("client went away"));
@@ -255,7 +257,9 @@ async function streamJson(res: Response, head: Record<string, unknown>, lists: R
     await add(JSON.stringify(head).slice(0, -1));
     for (const [name, items] of Object.entries(lists)) {
       await add(`,${JSON.stringify(name)}:[`);
-      for (let i = 0; i < items.length; i++) await add((i ? "," : "") + JSON.stringify(items[i]));
+      let n = 0;
+      const pages: AsyncIterable<unknown[]> = Array.isArray(items) ? (async function* () { yield items; })() : items;
+      for await (const page of pages) for (const item of page) await add((n++ ? "," : "") + JSON.stringify(item));
       await add("]");
     }
     res.end(buf + "}");
@@ -455,6 +459,7 @@ export function registerRoutes(app: Express) {
 
   app.post("/api/timesheets", h(async (req, res) => {
     const doc = { ...timesheetDocSchema.parse(req.body.doc), paidResult: undefined };
+    if (!(await settings.getSites()).some((s) => s.id === doc.siteId)) return res.status(400).json({ error: "That location doesn't exist. Pick a location from the list." });
     const store = await db();
     const summary = await store.insertTimesheet(await rowFromDoc(doc));
     const removed = await applyRetention(doc.siteId, summary.id);
@@ -576,11 +581,13 @@ export function registerRoutes(app: Express) {
   // ── Backups ─────────────────────────────────────────────────────────────────
   app.get("/api/backup", h(async (req, res) => {
     const includeSecrets = req.query.secrets === "1";
+    if (includeSecrets && currentUser(res)?.role !== "owner") return res.status(403).json({ error: "Only an owner can include sign-in details (password hashes and two-factor secrets) in a backup." });
     const store = await db();
     const secret = (k: string) => k === "password_hash" || k === USERS_KEY || k.startsWith("square_token:") || k.startsWith("kiosk_manager_pin:") || k === "square_access_token" || k.startsWith("email:");
     const all = await store.allSettings();
     const timesheets = await store.allTimesheets();
-    const punches = await store.allPunches();
+    // Punches are read a page at a time where the store can (the biggest list).
+    const punches = store.punchPages ? store.punchPages() : await store.allPunches();
     // Serialized row by row: one JSON.stringify of the whole database added a
     // full-size string (and its copies) on top of the loaded rows.
     await streamJson(res, { app: "payroll-admin", version: 2, exportedAt: new Date().toISOString() }, {
@@ -589,7 +596,13 @@ export function registerRoutes(app: Express) {
       punches,
     });
   }));
-  app.post("/api/backup/restore", express.json({ limit: "100mb" }), h(async (req, res) => {
+  // Refuse a restore that won't fit in memory before reading it (a big one could otherwise get the app stopped).
+  const restoreFits = (req: Request, res: Response, next: NextFunction) => {
+    const problem = restoreMemoryProblem(Number(req.headers["content-length"]));
+    if (problem) { res.setHeader("Connection", "close"); return res.status(413).json({ error: problem, code: "memory" }); }
+    next();
+  };
+  app.post("/api/backup/restore", restoreFits, express.json({ limit: "100mb" }), h(async (req, res) => {
     res.json(await restoreFrom(req.body, { allowEmpty: req.query.allowEmpty === "1" }));
   }));
 
@@ -606,6 +619,9 @@ export function registerRoutes(app: Express) {
     res.download(p);
   }));
   app.post("/api/backups/:name/restore", h(async (req, res) => {
+    const file = backupPath(String(req.params.name));
+    const problem = file && file.endsWith(".json.gz") ? restoreMemoryProblem(gzipSize(file)) : null;
+    if (problem) return res.status(413).json({ error: problem, code: "memory" });
     res.json(await restoreFrom(readBackup(String(req.params.name)), { allowEmpty: req.query.allowEmpty === "1" }));
   }));
 

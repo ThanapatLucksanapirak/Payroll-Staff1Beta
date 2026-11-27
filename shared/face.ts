@@ -132,7 +132,7 @@ export function faceConsentNotice(business: string, retentionDays: number): stri
     ``,
     `Why: only to confirm it's you clocking in and out. It is not used for anything else, and it is never sold, leased, traded or shared with anyone outside ${who}, except where the law requires it.`,
     ``,
-    `Where it is kept: on ${who}'s own payroll server, protected and encrypted. No outside face recognition service is used.`,
+    `Where it is kept: on ${who}'s own payroll server. Face templates are encrypted, and photos are stored with restricted file access. None of it is included in backups. No outside face recognition service is used.`,
     ``,
     `How long: your face data is deleted when you no longer need it for the time clock, and at the latest ${years} after your last punch. You can ask for it to be deleted at any time; you'll then clock in with your PIN only.`,
     ``,
