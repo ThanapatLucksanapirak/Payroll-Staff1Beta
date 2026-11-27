@@ -6,7 +6,7 @@ Settings → About, next to the matching update.
 Add an entry with every pull request: a `## YYYY-MM-DD · Title (#PR)` heading and a
 few short bullets written for the people who use the app, not for developers.
 
-## 2026-11-27 · "Give everyone a PIN" pressed twice hands out PINs that work (#PRNUM)
+## 2026-11-27 · "Give everyone a PIN" pressed twice hands out PINs that work (#62)
 - Pressing "Give everyone a PIN" twice, or two admins pressing it at the same moment, now makes one set of PINs. Before, the first set shown could already be replaced and fail at the time clock.
 - If someone else has just given everyone a PIN, the app says "Everyone already has a PIN" instead of showing an empty list.
 - Restoring a backup that was downloaded without PINs now names anyone whose PIN couldn't be kept, so you know who needs a new one.
