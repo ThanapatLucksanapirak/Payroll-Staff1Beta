@@ -6,6 +6,19 @@ Settings → About, next to the matching update.
 Add an entry with every pull request: a `## YYYY-MM-DD · Title (#PR)` heading and a
 few short bullets written for the people who use the app, not for developers.
 
+## 2026-11-27 · Small fixes to face data, backups and sign-in (#53)
+- The face consent notice now says what is protected: face templates are encrypted, photos are stored on your server with restricted file access, and none of it is in backups.
+- Recording consent or adding reference photos for someone whose face data can't be read is now refused until you delete their face data, instead of overwriting it.
+- Deleting face data together with punch photos now clears the photo marker on those punches, so Live no longer asks for photos that are gone. The photo gallery now shows at most the number of photos asked for per page.
+- Older backups and the activity log files are made private (owner-only) when the app starts.
+- Safety copies made before a restore are now kept separately (the 10 newest), so many restores can't push out your daily and manual backups.
+- An empty database file now stops the app with a clear message instead of starting a blank database. A database made by a newer version of the app logs a warning.
+- Switching to a database file in a folder that doesn't exist, or to a folder, is now refused with a clear message (so a typo can't quietly start an empty database), and any other path that can't be opened says why. Nothing is switched or created, and the Test button checks the same.
+- Owners (and admins, for accounts other than the owner) can clear someone's sign-in lock from Settings → Users.
+- Downloading a backup uses less memory on big databases.
+
+- A backup too big for the server's free memory is now refused with a clear message (how much memory it needs and how much is free) before anything changes, instead of the app stopping part-way.
+
 ## 2026-11-27 · Safer backups, real dates only (#52)
 - Only an owner can include sign-in details (password hashes and two-factor secrets) in a downloaded backup. Administrators can still download a backup without them, and the option is hidden for them.
 - Dates that don't exist, like 2026-13-45 or 30 February, are now refused with a clear message on pay rates, advances, time off, sales, the schedule and timesheets, instead of being saved or causing an error.
