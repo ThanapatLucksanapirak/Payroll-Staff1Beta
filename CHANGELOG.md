@@ -6,7 +6,7 @@ Settings → About, next to the matching update.
 Add an entry with every pull request: a `## YYYY-MM-DD · Title (#PR)` heading and a
 few short bullets written for the people who use the app, not for developers.
 
-## 2026-11-27 · Safer software updates (#PRNUM)
+## 2026-11-27 · Safer software updates (#68)
 - An update is only switched to when every file of the new version is there and unchanged since it was built. A build that was cut short is never started.
 - After switching, the new version must keep working for 15 seconds before it's kept. One that starts and then crashes is rolled back to the previous version, as before.
 
