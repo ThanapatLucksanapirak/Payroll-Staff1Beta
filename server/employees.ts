@@ -104,6 +104,47 @@ function withLock<T>(siteId: string, fn: () => Promise<T>): Promise<T> {
 
 export function invalidateEmployeeCache() { cache = null; }
 
+// ── PIN hashes in backups ─────────────────────────────────────────────────────
+// A 4–6 digit PIN hash can be cracked in minutes, so only an owner's backup
+// carries them. Anyone else's copy marks each PIN as withheld; restoring that
+// file keeps today's PIN for the same employee instead of removing it.
+export const isEmployeeDirectoryKey = (k: string) => k.startsWith("employees:");
+
+/** The directory JSON with every PIN hash (and its encrypted copy) taken out. */
+export function withholdPins(value: string): string {
+  let dir: any;
+  try { dir = JSON.parse(value); } catch { return value; }
+  if (!dir || !Array.isArray(dir.employees)) return value;
+  return JSON.stringify({
+    ...dir,
+    employees: dir.employees.map((e: any) => (e && e.pinHash ? { ...e, pinHash: null, pinEnc: null, pinWithheld: true } : e)),
+  });
+}
+
+/**
+ * The directory from a backup, with each withheld PIN filled back in from
+ * `current` (the directory as it is now) when the same employee is there under
+ * the same salt. Otherwise that employee comes back without a PIN.
+ */
+export function restoreWithheldPins(value: string, current: string | null): string {
+  let dir: any;
+  try { dir = JSON.parse(value); } catch { return value; }
+  if (!dir || !Array.isArray(dir.employees) || !dir.employees.some((e: any) => e?.pinWithheld)) return value;
+  let now: any = null;
+  try { now = current ? JSON.parse(current) : null; } catch { now = null; }
+  const sameSalt = !!now && typeof now.salt === "string" && now.salt === dir.salt && Array.isArray(now.employees);
+  const byId = new Map<string, any>(sameSalt ? now.employees.filter((e: any) => e && typeof e.id === "string").map((e: any) => [e.id, e]) : []);
+  return JSON.stringify({
+    ...dir,
+    employees: dir.employees.map((e: any) => {
+      if (!e?.pinWithheld) return e;
+      const { pinWithheld: _w, ...rest } = e;
+      const was = byId.get(e.id);
+      return { ...rest, pinHash: was?.pinHash ?? null, pinEnc: was?.pinHash ? was.pinEnc ?? null : null };
+    }),
+  });
+}
+
 /** PINs are hashed with scrypt and a per-location salt, so a PIN can be looked up (PIN-only sign-in) and kept unique. */
 async function hashPin(pin: string, salt: string): Promise<string> {
   return (await scrypt(pin, `kiosk-pin:${salt}`, 32)).toString("base64url");
