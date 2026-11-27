@@ -6,16 +6,16 @@ Settings → About, next to the matching update.
 Add an entry with every pull request: a `## YYYY-MM-DD · Title (#PR)` heading and a
 few short bullets written for the people who use the app, not for developers.
 
+## 2026-11-27 · Safer imports and Square pulls (#51)
+- Tapping Create timesheet twice (New timesheet, Start blank, or the CSV review) no longer makes two sheets.
+- CSV imports now skip exact duplicate rows, skip dates more than a year from today (like 1926 or 2099), and say so in the review warnings. A shift cut to 72 hours is named in a warning too.
+- A Square pull whose reply is cut off or stalls now shows an error instead of "0 shifts", and "1 timecard is still open" reads correctly.
+
 ## 2026-11-27 · No punches lost during a restore or database switch (#48)
 - While a backup restore or a database switch runs, the time clock's punches (and other changes) wait a few seconds instead of being saved into data that's about to be replaced. The tablet keeps each punch and sends it again on its own, so it's never lost.
 - A restore or switch first waits for anything already being saved to finish, and a second one can't start while one is running.
 - Automatic clock-out skips a run while a restore or switch is under way.
 - If a restore to a Supabase database stops part-way, it now says so and asks you to run the same restore again, instead of a general database error.
-
-## 2026-11-27 · Safer imports and Square pulls (#51)
-- Tapping Create timesheet twice (New timesheet, Start blank, or the CSV review) no longer makes two sheets.
-- CSV imports now skip exact duplicate rows, skip dates more than a year from today (like 1926 or 2099), and say so in the review warnings. A shift cut to 72 hours is named in a warning too.
-- A Square pull whose reply is cut off or stalls now shows an error instead of "0 shifts", and "1 timecard is still open" reads correctly.
 
 ## 2026-11-27 · Face data is kept through a database switch or restore (#47)
 - Switching to another database, or restoring an older backup, no longer lets the daily clean-up delete saved face data. Face data isn't in backups, so before this it couldn't be got back after switching back.
