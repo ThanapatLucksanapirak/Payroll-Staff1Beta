@@ -290,16 +290,15 @@ export function brandedHtml(e: BrandedEmail): string {
   // Every colour the email uses, in one place (light only). Text colours are
   // at least 4.5:1 on the surfaces they sit on (C.card, C.page, C.panel).
   const C = {
-    // Shijiri: warm rice-paper page, plum accent (DESIGN.md → Emails).
+    // Payroll by Shijiri Group: warm page, logo blocks in the header, deep orange button (DESIGN.md → Emails).
     page: "#f4f1ee", card: "#ffffff", border: "#e6e2de",
-    text: "#201d1f", body: "#3d3639", muted: "#6a6266",
+    text: "#1f1b18", body: "#3b3632", muted: "#6b6561",
     panel: "#f7f5f3", divider: "#ebe7e3",
-    accent: "#7a295e", accentText: "#ffffff",
-    tile: "#7a295e", tileText: "#f7f1e9",
-    codeBg: "#f8eff4", codeBorder: "#ecdbe5", codeText: "#5c1f47",
+    accent: "#c2410c", accentText: "#ffffff",
+    gold: "#e6b422", orange: "#fe5721", red: "#e33a3a",
+    codeBg: "#fdf0e8", codeBorder: "#f6d8c4", codeText: "#8a3010",
   };
   const font = "-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif";
-  const initial = x((e.brand.trim()[0] || "P").toUpperCase());
   const para = (t: string) => `<p style="margin:0 0 14px;font-size:15px;line-height:23px;color:${C.body}">${x(t)}</p>`;
   const code = e.code
     ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:8px 0 16px"><tr><td align="center" style="background:${C.codeBg};border:1px solid ${C.codeBorder};border-radius:14px;padding:18px 12px">
@@ -320,8 +319,9 @@ ${e.preheader ? `<div style="display:none;max-height:0;overflow:hidden;opacity:0
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:${C.page}"><tr><td align="center" style="padding:32px 16px">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:520px">
 <tr><td style="padding:0 4px 18px"><table role="presentation" cellpadding="0" cellspacing="0"><tr>
-<td width="36" height="36" style="width:36px;height:36px;border-radius:10px;background:${C.tile};color:${C.tileText};font-family:Georgia,'Times New Roman',serif;font-size:20px;line-height:36px;font-weight:400;text-align:center;vertical-align:middle">${initial}</td>
-<td style="padding-left:10px;font-size:15px;font-weight:600;color:${C.text}">${x(e.brand)}</td></tr></table></td></tr>
+<td style="vertical-align:bottom;padding-bottom:3px"><table role="presentation" cellpadding="0" cellspacing="0"><tr><td colspan="3" align="right" style="height:8px;line-height:8px;font-size:0"><div style="display:inline-block;width:8px;height:8px;border-radius:4px;background:${C.red}"></div></td></tr><tr>
+<td width="15" height="16" style="width:15px;height:16px;background:${C.gold};font-size:0;line-height:0">&nbsp;</td><td width="3" style="width:3px;font-size:0;line-height:0">&nbsp;</td><td width="9" height="16" style="width:9px;height:16px;background:${C.orange};font-size:0;line-height:0">&nbsp;</td></tr></table></td>
+<td style="padding-left:10px;font-size:15px;font-weight:600;color:${C.text};vertical-align:bottom">${x(e.brand)}</td></tr></table></td></tr>
 <tr><td style="background:${C.card};border-radius:18px;padding:32px 28px;border:1px solid ${C.border}">
 <h1 style="margin:0 0 14px;font-size:22px;line-height:28px;font-weight:700;color:${C.text}">${x(e.heading)}</h1>
 ${e.paragraphs.map(para).join("\n")}${code}${details}${button}

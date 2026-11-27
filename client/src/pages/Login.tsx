@@ -45,7 +45,7 @@ export function LoginPage({ appName, setupRequired, dbError, onDone }: { appName
   const lede = setupRequired ? "Create the owner account to get started."
     : second?.kind === "setup" ? "Set up two-factor sign-in to continue."
     : second ? (second.method === "email" ? (second.sentTo ? `Enter the code we emailed to ${second.sentTo}.` : "Enter the code we emailed you.") : "Enter the code from your authenticator app.")
-    : "Sign in to Shijiri Payroll.";
+    : "Sign in to Payroll by Shijiri Group.";
   const heading = setupRequired ? "Welcome" : second ? "One more step" : "Welcome back";
   const fieldCls = "h-12 rounded-[10px] px-[14px] text-[15px] md:text-[15px]";
   const labelCls = "mb-[7px] block text-[13px] font-semibold text-foreground";
@@ -58,7 +58,7 @@ export function LoginPage({ appName, setupRequired, dbError, onDone }: { appName
       {/* Form side */}
       <main className="flex flex-col px-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] pt-7 min-[861px]:px-12 min-[861px]:py-8">
         <div className="mx-auto w-full max-w-[380px] min-[861px]:my-auto">
-          <h1 className="font-display text-[30px] font-normal leading-[1.1] tracking-[-0.012em] min-[861px]:text-[36px]">{heading}</h1>
+          <h1 className="font-display text-[30px] font-semibold leading-[1.1] tracking-[-0.02em] min-[861px]:text-[36px]">{heading}</h1>
           <p className="mb-6 mt-2.5 text-[15px] leading-[22px] text-muted-foreground min-[861px]:mb-8">{lede}</p>
           {second ? (
             <TwoFactorStep {...second} appName={appName} onBack={(msg) => { setSecond(null); setError(msg ?? ""); }} onDone={() => { session.set(); onDone(); }} />

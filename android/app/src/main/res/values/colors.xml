@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Shijiri brand (brand/BRAND.md): splash and system bars match the kiosk page background -->
+    <!-- Payroll by Shijiri Group brand (brand/BRAND.md): splash and system bars match the kiosk page background -->
     <color name="background">#FAFAF9</color>
-    <!-- Plum, behind the adaptive launcher icon -->
-    <color name="launcher_background">#7A295E</color>
+    <!-- Warm ink, behind the adaptive launcher icon (brand/BRAND.md) -->
+    <color name="launcher_background">#1B1714</color>
 </resources>

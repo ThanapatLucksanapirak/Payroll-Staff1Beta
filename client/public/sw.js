@@ -2,7 +2,7 @@
 // (the HTML pages, hashed scripts/styles, icons and manifests) so the app
 // opens quickly and shows "can't reach the server" when offline. It never
 // touches /api/ (so payroll data and sign-in are never cached) or other sites.
-const VERSION = "2";
+const VERSION = "3";
 const SHELL = `payroll-shell-v${VERSION}`;
 const ASSETS = `payroll-assets-v${VERSION}`;
 const MAX_ASSETS = 80;

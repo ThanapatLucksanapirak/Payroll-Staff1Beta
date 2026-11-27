@@ -81,13 +81,13 @@ input { -webkit-user-select: text; user-select: text; -webkit-touch-callout: def
    Every blue in the kiosk reads these, so a brand colour is a one-place swap.
    (Action colours stay fixed in ACTION_STYLE in ui.tsx.) */
 :root {
-  /* Shijiri brand face for greetings and names only (never digits). */
-  --font-display: "Young Serif", ui-serif, Georgia, serif;
-  --kiosk-accent: #7a295e;        /* fill for the primary action; white text on it is 9.1:1 */
-  --kiosk-accent-press: #661e4d;  /* pressed */
-  --kiosk-accent-soft: #f8eff4;   /* tint: "not ready yet" primary key */
-  --kiosk-accent-ink: #5c1f47;    /* accent text/icons on white or on the tint */
-  --kiosk-focus: #99346f;         /* keyboard focus ring */
+  /* Brand face (Poppins SemiBold) for greetings and names. */
+  --font-display: "Poppins", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, Roboto, sans-serif;
+  --kiosk-accent: #c2410c;        /* Payroll orange (deepened from the logo #fe5721); white text on it is 5.2:1 */
+  --kiosk-accent-press: #9a3412;  /* pressed */
+  --kiosk-accent-soft: #fdf0e8;   /* tint: "not ready yet" primary key */
+  --kiosk-accent-ink: #8a3010;    /* accent text/icons on white or on the tint */
+  --kiosk-focus: #ea580c;         /* keyboard focus ring */
 }
 .kiosk-primary { background-color: var(--kiosk-accent); color: #fff; }
 .kiosk-primary:active:not(:disabled) { background-color: var(--kiosk-accent-press); }
