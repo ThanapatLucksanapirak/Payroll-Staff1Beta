@@ -10,6 +10,10 @@ few short bullets written for the people who use the app, not for developers.
 - An update is only switched to when every file of the new version is there and unchanged since it was built. A build that was cut short is never started.
 - After switching, the new version must keep working for 15 seconds before it's kept. One that starts and then crashes is rolled back to the previous version, as before.
 
+## 2026-11-27 · The face check recovers by itself if it keeps failing (#67)
+- If the face check stops working 3 times in 10 minutes, the server checks faces itself for the next 30 minutes instead of restarting it over and over. Settings → Activity says so, with what to do if it keeps happening.
+- In a rush, the time clock says "busy" a little sooner, so fewer punches wait until they time out.
+
 ## 2026-11-27 · Deleting a location deletes its face data (#66)
 - When you delete a location, its face recognition data (consents and reference photos) and its face match alerts are deleted with it, and Activity says so. Before, they stayed on the server.
 

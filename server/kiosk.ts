@@ -15,7 +15,7 @@ import { PUNCH_TYPES, type Punch, type PunchMeta, allowedActions, clockState, lo
 import { type KioskDeviceOptions, DEVICE_LOGIN_MODES, IDLE_MAX, IDLE_MIN, breakDue, checkAction, daySummary, matchStation, normalizeDeviceOptions, notesFor, weakPinReason } from "@shared/kiosk";
 import { getSiteConfig, listNotes } from "./kioskConfig";
 import { decodePhoto, deletePhoto, savePhoto } from "./kioskPhotos";
-import { checkFaceJpeg, loadFaceModel } from "./faceCheck";
+import { checkFaceJpeg, loadFaceModel, setFaceWorkerAlert } from "./faceCheck";
 import { matchFace, recordFaceAlert, requiredTemplates } from "./faceData";
 import { registerKioskDeviceFeatureRoutes } from "./kioskFeatures";
 import { getAuthSecret } from "./config";
@@ -26,6 +26,7 @@ import { type StoredEmployee, PIN_RE, findByPin, getEmployee, listEmployees, pin
 import { PUNCH_ID_RE, PunchError, punchStateProblem, recordPunch, registerPunchRoutes } from "./punches";
 import { registerLiveRoutes } from "./live";
 import { hashPassword, verifyHash } from "./passwords";
+import { audit } from "./audit";
 
 // ── Devices ───────────────────────────────────────────────────────────────────
 export interface KioskDevice {
@@ -346,6 +347,8 @@ async function withPinAttempt<T>(lockKey: string, fn: () => Promise<T>): Promise
 export function registerKioskRoutes(app: Express) {
   // Load the face detector in the background so the first photo punch isn't slow.
   if (process.env.NODE_ENV === "production") void loadFaceModel().catch(() => undefined);
+  // A face check that keeps stopping is shown in Settings → Activity, not only in the server log.
+  setFaceWorkerAlert((detail) => audit({ userId: null, userName: "System", ip: "", action: "face.check-failing", target: "face check", detail }));
   // Pairing with a short code: the only kiosk call without a device token.
   app.post("/api/kiosk/pair", h(async (req, res) => {
     const ip = req.ip ?? "unknown";
