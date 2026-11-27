@@ -19,7 +19,9 @@ import type { WorkerMessage, WorkerReply } from "./faceWorker";
 export { FACE_MIN_SCORE, type FaceCheckOptions, type FaceVerdict } from "./faceDetect";
 
 /** A check that takes longer than this (waiting included) answers "unavailable"; more than this many waiting answer "busy". */
-export const faceLimits = { timeoutMs: 10_000, maxWaiting: 10 };
+// About 0.3 s per photo, so 40 waiting clears in well under the 10 s limit;
+// with 10, a crowd of 20 at the start of a shift had half told "busy".
+export const faceLimits = { timeoutMs: 10_000, maxWaiting: 40 };
 
 const req = createRequire(typeof __filename !== "undefined" ? __filename : path.join(process.cwd(), "index.js"));
 const UNAVAILABLE: FaceVerdict = { ok: false, reason: "unavailable" };
@@ -93,8 +95,9 @@ function getWorker(): Promise<Worker | null> {
 function callWorker(w: Worker, msg: WorkerMessage, transfer: ArrayBuffer[] = []): Promise<FaceVerdict> {
   return new Promise((resolve) => {
     const id = nextId++;
-    // A check stuck far past its limit: stop the worker (a new one starts on the next check).
-    const stuck = setTimeout(() => { if (pending.delete(id)) { resolve(UNAVAILABLE); void w.terminate(); } }, faceLimits.timeoutMs * 2);
+    // A check stuck past its limit: stop the worker at once (a new one starts on the
+    // next check), so a hang costs one check, not 20 s of failed punches.
+    const stuck = setTimeout(() => { if (pending.delete(id)) { resolve(UNAVAILABLE); void w.terminate(); } }, faceLimits.timeoutMs);
     pending.set(id, (v) => { clearTimeout(stuck); resolve(v); });
     w.postMessage({ ...msg, id }, transfer);
   });

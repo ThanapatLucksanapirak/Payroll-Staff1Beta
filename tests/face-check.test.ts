@@ -40,6 +40,14 @@ test("face check: too many waiting answers busy, a slow check answers unavailabl
   }
 });
 
+test("face check: 20 photo punches at the same moment all get checked", async () => {
+  await loadFaceModel();
+  assert.ok(faceLimits.maxWaiting >= 30, "room for a crowd at the start of a shift");
+  const all = await Promise.all(Array.from({ length: 20 }, () => checkFaceJpeg(fixture("face.jpg"))));
+  assert.equal(all.filter((v) => !v.ok && v.reason === "busy").length, 0);
+  assert.equal(all.filter((v) => v.ok).length, 20);
+});
+
 /** A fixture face of `face` px square, centred in a blank `w` x `h` frame (like a kiosk photo of someone far from the camera). */
 function framed(file: string, face: number, w = 320, h = 240): Buffer {
   const src = jpeg.decode(fixture(file), { useTArray: true });

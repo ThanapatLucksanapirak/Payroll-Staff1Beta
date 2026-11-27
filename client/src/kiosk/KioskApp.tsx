@@ -15,6 +15,8 @@ import { type Confirm, type FixInput, BreakNudge, ConfirmScreen, FixRequestScree
 const STATUS_TEXT: Record<ClockStatus, string> = { in: "Working", break: "On break", out: "Not clocked in" };
 const STATUS_DOT: Record<ClockStatus, string> = { in: "bg-emerald-600", break: "bg-amber-400", out: "bg-stone-400" };
 const DEFAULT_OPTIONS: KioskOptions = { photo: false, idleSeconds: 10, stations: [], breakReminderHours: null };
+/** Times a punch is sent again, on its own, when the face check answers "busy". */
+const FACE_BUSY_RETRIES = 2;
 
 /** Who is at the kiosk right now, and how they signed in. */
 /** Milliseconds on a clock that never jumps when the device's time is changed. */
@@ -192,10 +194,22 @@ export function KioskApp() {
     if (sess.offline) return queueIt(type, sess, photo, station);
     setBusy(true);
     try {
-      const r = await request<PunchResult>("POST", "/api/kiosk/punch", {
+      const body = {
         id: uuid(), type, ticket: sess.who.ticket, pin: sess.pin, employeeId: sess.who.employee.id,
         ...(station ? { station } : {}), ...(photo !== undefined ? { photo } : {}),
-      }, photo ? 15_000 : 8000);
+      };
+      // When many people punch at once the face check may answer "busy" before it
+      // looks at the photo (nothing is saved). Send the same punch again a couple
+      // of times on its own, so nobody has to tap again.
+      let r: PunchResult;
+      for (let attempt = 0; ; attempt++) {
+        try { r = await request<PunchResult>("POST", "/api/kiosk/punch", body, photo ? 15_000 : 8000); break; }
+        catch (err) {
+          const e = err as KioskError;
+          if (e.code !== "photo" || e.body?.reason !== "busy" || attempt >= FACE_BUSY_RETRIES) throw err;
+          await new Promise((res) => setTimeout(res, 1500 + Math.random() * 1500));
+        }
+      }
       setOnline(true);
       setBusy(false);
       setRoster(r.employee.id, r.status, r.since);
