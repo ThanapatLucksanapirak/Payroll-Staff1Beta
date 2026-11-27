@@ -11,6 +11,11 @@ few short bullets written for the people who use the app, not for developers.
 - CSV imports now skip exact duplicate rows, skip dates more than a year from today (like 1926 or 2099), and say so in the review warnings. A shift cut to 72 hours is named in a warning too.
 - A Square pull whose reply is cut off or stalls now shows an error instead of "0 shifts", and "1 timecard is still open" reads correctly.
 
+## 2026-11-27 · Easier-to-read sign-in button and time clock location name (#55)
+- A main button that can't be pressed yet (like Sign in before you type a password) is now solid grey with readable text instead of faded orange.
+- On a phone, the time clock shows a long location name on up to two lines instead of cutting it off.
+- The colour choices for a location no longer include orange, so a location dot is never mistaken for the new orange highlight. Locations that already use orange keep it.
+
 ## 2026-11-27 · Small fixes to face data, backups and sign-in (#53)
 - The face consent notice now says what is protected: face templates are encrypted, photos are stored on your server with restricted file access, and none of it is in backups.
 - Recording consent or adding reference photos for someone whose face data can't be read is now refused until you delete their face data, instead of overwriting it.
