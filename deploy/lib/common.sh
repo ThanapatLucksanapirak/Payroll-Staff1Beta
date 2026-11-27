@@ -185,7 +185,9 @@ build_release() {
   fi
   # Trim dev dependencies to keep the release small; ignore failures (build is done).
   (cd "$dir" && as_payroll npm prune --omit=dev --no-audit --no-fund --loglevel=error) >>"$log" 2>&1 || true
-  [[ -f "$dir/dist/index.cjs" ]] || { rm -rf "$dir"; die "Build produced no dist/index.cjs. Full log: $log"; }
+  local problem
+  problem="$(release_problem "$dir")"
+  [[ -z "$problem" ]] || { rm -rf "$dir"; die "The build is incomplete: $problem. Full log: $log"; }
   chown -R root:root "$dir"
   chmod -R a+rX,go-w "$dir"
   echo "$dir"
@@ -246,14 +248,43 @@ health_ok() {
   curl -fsS --max-time 4 "http://127.0.0.1:$(app_port)/api/health" 2>/dev/null | grep -q '"ok":true'
 }
 
-# wait_healthy [seconds]
+# wait_healthy [seconds] [stable-seconds]
+# With stable-seconds, the app must keep answering for that long after its first
+# OK (any failed check starts the count again): a build that answers once and
+# then crashes doesn't count as healthy.
 wait_healthy() {
-  local t="${1:-60}" i
+  local t="${1:-60}" stable="${2:-0}" i first=-1
   for ((i = 0; i < t; i++)); do
-    health_ok && return 0
+    if health_ok; then
+      (( first < 0 )) && first=$i
+      (( i - first >= stable )) && return 0
+    else
+      first=-1
+    fi
     sleep 1
   done
   return 1
+}
+
+# Seconds a new version must stay healthy after an update before it's kept.
+UPDATE_STABLE_SECONDS="${UPDATE_STABLE_SECONDS:-15}"
+
+# release_problem <dir>: prints why a built release can't be used, or nothing.
+# Every file listed in dist/SHA256SUMS (written by the build) must be there and
+# match, so a build that was cut short or changed afterwards is never started.
+release_problem() {
+  local dir="$1" f
+  for f in dist/index.cjs dist/public/index.html; do
+    [[ -s "$dir/$f" ]] || { echo "$f is missing"; return 0; }
+  done
+  # The face check's worker file, for versions that have one.
+  if [[ -f "$dir/server/faceWorker.ts" && ! -s "$dir/dist/faceWorker.cjs" ]]; then echo "dist/faceWorker.cjs is missing"; return 0; fi
+  if [[ -f "$dir/dist/SHA256SUMS" ]]; then
+    (cd "$dir" && sha256sum -c --quiet --strict dist/SHA256SUMS >/dev/null 2>&1) || { echo "some files don't match the build's checksums (dist/SHA256SUMS)"; return 0; }
+  elif [[ -f "$dir/script/build.ts" ]] && grep -q SHA256SUMS "$dir/script/build.ts"; then
+    echo "dist/SHA256SUMS is missing"; return 0
+  fi
+  return 0
 }
 
 # Short, readable reason the app didn't start. Reads only what the app itself
