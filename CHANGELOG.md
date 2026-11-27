@@ -6,7 +6,7 @@ Settings → About, next to the matching update.
 Add an entry with every pull request: a `## YYYY-MM-DD · Title (#PR)` heading and a
 few short bullets written for the people who use the app, not for developers.
 
-## 2026-11-27 · The face check recovers by itself if it keeps failing (#PRNUM)
+## 2026-11-27 · The face check recovers by itself if it keeps failing (#67)
 - If the face check stops working 3 times in 10 minutes, the server checks faces itself for the next 30 minutes instead of restarting it over and over. Settings → Activity says so, with what to do if it keeps happening.
 - In a rush, the time clock says "busy" a little sooner, so fewer punches wait until they time out.
 
