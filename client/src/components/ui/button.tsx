@@ -10,7 +10,8 @@ const buttonVariants = cva(
   {
     variants: {
       variant: {
-        default: "bg-primary text-primary-foreground shadow-sm hover:bg-primary/90",
+        // Disabled primary: a solid neutral fill with readable text, not a faded orange (text 5.8:1 light, 7:1 dark).
+        default: "bg-primary text-primary-foreground shadow-sm hover:bg-primary/90 disabled:bg-muted disabled:text-muted-foreground disabled:opacity-100 disabled:shadow-none",
         destructive: "bg-destructive text-destructive-foreground shadow-sm hover:bg-destructive/90",
         outline: "border border-input/80 bg-card text-foreground shadow-card hover:bg-accent dark:border-input",
         secondary: "bg-secondary text-secondary-foreground hover:bg-secondary/70 dark:hover:bg-accent",

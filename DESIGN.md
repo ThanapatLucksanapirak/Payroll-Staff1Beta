@@ -127,7 +127,7 @@ sizes sm / default / lg / icon), `Badge`, `Input`, `Select`, `Switch`,
 - Icons: lucide only, 16px in controls (`[&_svg]:size-4`), 1.5–2 stroke. No emoji
   or Unicode glyphs as icons.
 - Every interactive element: hover, `focus-visible` ring (`ring-ring/35`, 3px),
-  active, disabled (`opacity-45`), and loading where it can be slow.
+  active, disabled (`opacity-45`; a disabled primary button is a solid `muted` fill with `muted-foreground` text instead, so it stays readable), and loading where it can be slow.
 - Loading: `Skeleton` shaped like the content, not a centred spinner.
 - Empty: `EmptyState` that says what will appear and how to make it appear.
 - Errors: say what went wrong and what to do, next to the thing that failed.
