@@ -6,6 +6,9 @@ Settings → About, next to the matching update.
 Add an entry with every pull request: a `## YYYY-MM-DD · Title (#PR)` heading and a
 few short bullets written for the people who use the app, not for developers.
 
+## 2026-11-27 · Full logo in the app header (#PRNUM)
+- The sidebar and the phone top bar now show the whole "Payroll by SHIJIRI Group" logo, with "By SHIJIRI GROUP" in black (white in dark mode), instead of just "Payroll".
+
 ## 2026-11-27 · Easier-to-read sign-in button and time clock location name (#55)
 - A main button that can't be pressed yet (like Sign in before you type a password) is now solid grey with readable text instead of faded orange.
 - On a phone, the time clock shows a long location name on up to two lines instead of cutting it off.
