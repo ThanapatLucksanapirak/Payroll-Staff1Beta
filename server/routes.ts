@@ -512,7 +512,7 @@ export function registerRoutes(app: Express) {
       res.locals.auditAction = statusChanged ? (patch.status === "final" ? "timesheet.finalize" : "timesheet.reopen") : siteChanged ? "timesheet.move" : "timesheet.rename";
       // Name the timesheet, and say what else changed with it.
       const name = (labelChanged ? patch.label!.trim() : "") || cur.custom_label || cur.filename || "Timesheet";
-      res.locals.auditDetail = [name, labelChanged && !statusChanged && !siteChanged ? `was "${cur.custom_label || cur.filename || ""}"` : labelChanged ? "renamed" : "", siteChanged ? `location ${patch.siteId}` : ""].filter(Boolean).join(" · ");
+      res.locals.auditDetail = [name, labelChanged && !statusChanged && !siteChanged ? `was "${cur.custom_label || cur.filename || ""}"` : labelChanged ? "renamed" : "", siteChanged ? `moved to ${(await settings.getSites()).find((x) => x.id === patch.siteId)?.name || patch.siteId}` : ""].filter(Boolean).join(" · ");
     }
     if (patch.siteId !== undefined || patch.status !== undefined) {
       const sites = await settings.getSites();
