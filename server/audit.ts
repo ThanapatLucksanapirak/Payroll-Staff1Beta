@@ -270,11 +270,11 @@ export function auditTrail() {
     const json = res.json.bind(res);
     res.json = (b: unknown) => { body = b; return json(b); };
     res.on("finish", () => {
-      if (res.statusCode >= 400) return;
+      if (res.statusCode >= 400 || res.locals.skipAudit) return;
       try {
         audit({
           ...actorOf(req, res),
-          action: typeof hook.action === "function" ? hook.action(req, body) : hook.action,
+          action: typeof res.locals.auditAction === "string" ? res.locals.auditAction : typeof hook.action === "function" ? hook.action(req, body) : hook.action,
           target: hook.target?.(req, body, m) ?? "",
           detail: hook.detail?.(req, body) ?? "",
         });

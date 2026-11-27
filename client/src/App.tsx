@@ -88,7 +88,12 @@ function Gate() {
                 <Button variant="ghost" onClick={() => void signOut()}>Sign out</Button>
               </div>
             </div>
-          ) : <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />}
+          ) : (
+            <div className="flex flex-col items-center gap-3" role="status">
+              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+              <p className="text-sm text-muted-foreground">Loading your data…</p>
+            </div>
+          )}
         </FullScreen>
       )}
     >

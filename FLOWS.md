@@ -44,9 +44,9 @@
 - Stats (employees, total pay, full days, flags), per-employee cards with day table
 - Adjust a day: override status, cancel pay, dock amount, day bonuses, note
 - Add day to employee
-- Period deductions and general bonuses (save & re-analyze)
+- Period deductions and general bonuses (saved and recalculated automatically)
 - Exclude / include employee
-- Save progress, CSV export, PDF export, Re-analyze, Edit wages, Home
+- Save progress, CSV export, PDF export, Edit wages, Home
 
 ## Reports (`/reports`)
 - Totals and charts across saved timesheets for the current location

@@ -481,7 +481,17 @@ export function registerRoutes(app: Express) {
     res.json(summary);
   }));
 
-  app.patch("/api/timesheets/:id", h(async (req, res) => {
+  // One change to a timesheet at a time, so two simultaneous finalizes are one change (and one log entry).
+  const patchChains = new Map<string, Promise<unknown>>();
+  app.patch("/api/timesheets/:id", (req, res, next) => {
+    const id = String(req.params.id);
+    const run = (patchChains.get(id) ?? Promise.resolve()).then(() => timesheetPatch(req, res));
+    const tail = run.catch(() => undefined);
+    patchChains.set(id, tail);
+    void tail.then(() => { if (patchChains.get(id) === tail) patchChains.delete(id); });
+    run.catch(next);
+  });
+  const timesheetPatch = async (req: Request, res: Response) => {
     const patch = z.object({ label: z.string().max(120).optional(), siteId: z.string().optional(), status: z.enum(["draft", "final"]).optional() }).parse(req.body);
     const store = await db();
     const id = String(req.params.id);
@@ -490,6 +500,15 @@ export function registerRoutes(app: Express) {
     if (cur.meta_json?.deletedAt) return res.status(410).json({ error: "This timesheet is in the Trash. Restore it to make changes." });
     const update: Partial<TimesheetRow> = {};
     if (patch.label !== undefined) update.custom_label = patch.label.trim() || null;
+    // Log what actually changed: setting the status, name or location it already
+    // has changes nothing, so it isn't logged (two finalizes at once log one entry,
+    // since these run one at a time). A request that carries the whole doc only logs
+    // the field that changed.
+    const statusChanged = patch.status !== undefined && patch.status !== (cur.meta_json?.status ?? "draft");
+    const labelChanged = patch.label !== undefined && (patch.label.trim() || null) !== (cur.custom_label ?? null);
+    const siteChanged = patch.siteId !== undefined && patch.siteId !== cur.site_id;
+    if (!statusChanged && !labelChanged && !siteChanged) res.locals.skipAudit = true;
+    else res.locals.auditAction = statusChanged ? (patch.status === "final" ? "timesheet.finalize" : "timesheet.reopen") : siteChanged ? "timesheet.move" : "timesheet.rename";
     if (patch.siteId !== undefined || patch.status !== undefined) {
       const sites = await settings.getSites();
       if (patch.siteId && !sites.some((s) => s.id === patch.siteId)) return res.status(400).json({ error: "Unknown location." });
@@ -499,7 +518,7 @@ export function registerRoutes(app: Express) {
       Object.assign(update, { site_id: doc.siteId, meta_json: docToMeta(doc) });
     }
     res.json(await store.updateTimesheet(id, update));
-  }));
+  };
 
   app.post("/api/timesheets/:id/duplicate", h(async (req, res) => {
     const store = await db();

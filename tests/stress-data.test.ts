@@ -170,7 +170,8 @@ test("csv: D/M/Y European date 13/11/2026 is not misread", () => {
 });
 test("csv: export -> import round trip preserves shifts including overnight & 3-day", () => {
   const shifts = [sh("Ann, B", "2026-12-31", 1320, 1440 + 360, { breakMinutes: 15 }), sh("Zed", "2028-02-28", 600, 1440 + 600), sh("Q \"quoted\"", "2026-11-01", 0, 4320)];
-  const back = parseCsvText(shiftsToCsv(shifts)).shifts;
+  // A fixed "today" so the far-from-today check (3 years back, 1 year ahead) keeps all three
+  const back = parseCsvText(shiftsToCsv(shifts), { today: "2027-06-01" }).shifts;
   for (const s of shifts) {
     const b = back.find((x) => x.id === s.id)!;
     assert.ok(b, `missing ${s.id}`);
@@ -179,9 +180,10 @@ test("csv: export -> import round trip preserves shifts including overnight & 3-
 });
 test("csv: 50k rows parse in reasonable time", () => {
   const rows = ["Employee,Date,Start,End"];
-  for (let i = 0; i < 50000; i++) rows.push(`E${i % 300},11/${(i % 28) + 1}/26,9:00 AM,5:00 PM`);
+  // Each row unique (identical rows are now skipped as duplicates)
+  for (let i = 0; i < 50000; i++) rows.push(`E${Math.floor(i / 28)},11/${(i % 28) + 1}/26,9:00 AM,5:00 PM`);
   const t = Date.now();
-  const r = parseCsvText(rows.join("\n"));
+  const r = parseCsvText(rows.join("\n"), { today: "2026-11-15" });
   assert.equal(r.shifts.length, 50000);
   const t2 = Date.now();
   const res = run(r.shifts, []);

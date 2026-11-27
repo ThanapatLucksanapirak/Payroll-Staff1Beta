@@ -69,6 +69,8 @@ export function useTimesheet(id: string, opts: { autosave: boolean; /** Edits, u
   const inflight = useRef<Promise<boolean> | null>(null);
   const retryTimer = useRef<number | null>(null);
   const retryDelay = useRef(3000);
+  /** The server said this timesheet is finalized and locked: stop autosaving until it is reloaded. */
+  const lockedOut = useRef(false);
   const mounted = useRef(true);
   const stateRef = useRef(state);
   stateRef.current = state;
@@ -79,6 +81,7 @@ export function useTimesheet(id: string, opts: { autosave: boolean; /** Edits, u
       const r = await api<{ doc: TimesheetDoc; updatedAt: string | null; legacy: boolean }>("GET", `/api/timesheets/${id}`);
       updatedAt.current = r.updatedAt;
       savedVersion.current = 0;
+      lockedOut.current = false;
       setLegacy(r.legacy);
       setLastSavedAt(r.updatedAt);
       setSaveState("saved");
@@ -121,7 +124,7 @@ export function useTimesheet(id: string, opts: { autosave: boolean; /** Edits, u
         queryClient.setQueryData<TimesheetSummary[]>(["/api/timesheets"], (old) => old?.map((t) => (t.id === id ? { ...t, ...r } : t)));
         return true;
       } catch (e) {
-        if (e instanceof ApiError && e.status === 409 && e.body?.locked) { setSaveState("error"); setSaveError(e.message); return false; }
+        if (e instanceof ApiError && e.status === 409 && e.body?.locked) { lockedOut.current = true; setSaveState("error"); setSaveError(e.message); return false; }
         if (e instanceof ApiError && e.status === 409) { setSaveState("conflict"); setSaveError(e.message); return false; }
         setSaveState("error");
         setSaveError(errorMessage(e));
@@ -145,7 +148,7 @@ export function useTimesheet(id: string, opts: { autosave: boolean; /** Edits, u
   useEffect(() => {
     if (!state.doc || state.version === savedVersion.current) return;
     if (saveState === "saved") setSaveState("dirty");
-    if (!opts.autosave || saveState === "conflict") return;
+    if (!opts.autosave || saveState === "conflict" || lockedOut.current) return;
     const t = window.setTimeout(() => { void save(); }, 1200);
     return () => window.clearTimeout(t);
   }, [state.version, state.doc, opts.autosave, save, saveState]);

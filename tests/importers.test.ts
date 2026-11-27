@@ -134,3 +134,49 @@ test("legacy v1 rows convert, including lost Add Day entries", () => {
   assert.ok(doc.shifts.some((s) => s.date === "2026-11-01" && s.source === "manual"));
   assert.equal(doc.manualEmployees[0].lumpSum, 90);
 });
+
+const HDR = "Team Member,Clockin date,Clockin time,Clockout time,Clockout date\n";
+const T = { today: "2026-11-26" };
+
+test("exact duplicate rows are dropped with a warning (hourly staff are not paid twice)", () => {
+  const csv = HDR + "Ana Ruiz,11/2/26,9:00 AM,5:00 PM,11/2/26\nAna Ruiz,11/2/26,9:00 AM,5:00 PM,11/2/26\nAna Ruiz,11/3/26,9:00 AM,5:00 PM,11/3/26\n";
+  const r = parseCsvText(csv, T);
+  assert.equal(r.shifts.length, 2);
+  assert.ok(r.warnings.some((w) => /1 duplicate row skipped/.test(w)), r.warnings.join("|"));
+});
+
+test("dates far from today are skipped with a warning", () => {
+  const csv = HDR + "Ana Ruiz,11/1/1926,9:00 AM,5:00 PM,11/1/1926\nBo Lee,3/4/2099,9:00 AM,5:00 PM,3/4/2099\nAna Ruiz,11/2/26,9:00 AM,5:00 PM,11/2/26\n";
+  const r = parseCsvText(csv, T);
+  assert.equal(r.shifts.length, 1);
+  assert.ok(r.warnings.some((w) => /2 rows skipped: the date is more than 3 years ago or more than a year ahead/.test(w)), r.warnings.join("|"));
+});
+
+test("a shift past the end of the third day is cut there, and the warning gives real and saved hours", () => {
+  // 58 h: 10 PM Nov 2 to 8 AM Nov 5. Stored days are Nov 2-4, so it is saved as 50 h.
+  const r = parseCsvText(HDR + "Ana Ruiz,11/2/26,10:00 PM,8:00 AM,11/5/26\n", T);
+  assert.equal(r.shifts[0].end, 4320);
+  assert.ok(r.warnings.some((w) => /end of the third day/.test(w) && /Ana Ruiz 2026-11-02 \(58 h, saved as 50 h\)/.test(w)), r.warnings.join("|"));
+  // 73 h from midnight: cut by an hour
+  const r73 = parseCsvText(HDR + "Ana Ruiz,11/2/26,12:00 AM,1:00 AM,11/5/26\n", T);
+  assert.equal(r73.shifts[0].end, 4320);
+  assert.ok(r73.warnings.some((w) => /73 h, saved as 72 h/.test(w)), r73.warnings.join("|"));
+});
+
+test("shifts that fit are not cut and give no warning", () => {
+  // Exactly 72 h from midnight, and a 34 h overnight
+  const r = parseCsvText(HDR + "Ana Ruiz,11/2/26,12:00 AM,12:00 AM,11/5/26\nBo Lee,11/2/26,10:00 PM,8:00 AM,11/4/26\n", T);
+  assert.deepEqual(r.shifts.map((s) => s.end - s.start), [4320, 34 * 60]);
+  assert.ok(!r.warnings.some((w) => /third day/.test(w)), r.warnings.join("|"));
+});
+
+test("same times with a different break are both kept", () => {
+  const csv = [
+    "Location,Employee Id,Employee,Job Title,In Date,Out Date,Auto Clock-out,Total Hours,Unpaid Break Time,Paid Break Time,Payable Hours",
+    "Main,1,Jane Doe,Server,11/3/26 10:00 AM,11/3/26 6:00 PM,No,8,0.5,0,7.5",
+    "Main,1,Jane Doe,Server,11/3/26 10:00 AM,11/3/26 6:00 PM,No,8,0,0,8",
+  ].join("\n");
+  const r = parseCsvText(csv, T);
+  assert.equal(r.shifts.length, 2);
+  assert.ok(!r.warnings.some((w) => /duplicate/.test(w)), r.warnings.join("|"));
+});

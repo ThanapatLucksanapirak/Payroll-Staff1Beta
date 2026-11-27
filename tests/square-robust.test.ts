@@ -2,7 +2,8 @@
 // duplicate timecards across pages count once, and unreadable times are skipped with a warning.
 import { test, afterEach } from "node:test";
 import assert from "node:assert/strict";
-import { pullTimecards, pullDailySales, SquareError } from "../server/square";
+import http from "node:http";
+import { pullTimecards, pullDailySales, SquareError, squareTimeout } from "../server/square";
 
 const realFetch = globalThis.fetch;
 afterEach(() => { globalThis.fetch = realFetch; });
@@ -69,4 +70,42 @@ test("daily sales count a duplicated order once", async () => {
   const order = { id: "o1", closed_at: "2026-01-05T18:00:00Z", net_amounts: { total_money: { amount: 1000, currency: "USD" } } };
   stub((_p, body) => (!body.cursor ? { body: JSON.stringify({ orders: [order], cursor: "x" }) } : { body: JSON.stringify({ orders: [order, { id: "o2", closed_at: "garbage" }] }) }));
   assert.deepEqual(await pullDailySales("tok", opts), { "2026-01-05": 10 });
+});
+
+// Real local server that sends headers and then drops or stalls the body.
+async function withBrokenServer(mode: "drop" | "stall", run: () => Promise<void>) {
+  const server = http.createServer((req, res) => {
+    req.resume();
+    res.writeHead(200, { "Content-Type": "application/json", "Content-Length": "1000" });
+    res.write('{"timecards": [');
+    if (mode === "drop") setTimeout(() => res.destroy(), 20);
+  });
+  await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
+  const port = (server.address() as any).port;
+  globalThis.fetch = ((input: any, init?: RequestInit) => realFetch(`http://127.0.0.1:${port}${new URL(String(input)).pathname}`, init)) as typeof fetch;
+  const old = squareTimeout.ms;
+  squareTimeout.ms = 300;
+  try { await run(); } finally { squareTimeout.ms = old; server.closeAllConnections(); server.close(); }
+}
+
+test("a 200 whose body is cut off is an error, not zero shifts", async () => {
+  await withBrokenServer("drop", async () => {
+    await assert.rejects(pullTimecards("tok", opts), (e: any) => e instanceof SquareError && /couldn't be read/.test(e.message));
+  });
+});
+
+test("a body that stalls after the headers times out instead of hanging", async () => {
+  await withBrokenServer("stall", async () => {
+    const t = Date.now();
+    await assert.rejects(pullTimecards("tok", opts), (e: any) => e instanceof SquareError && /couldn't be read/.test(e.message));
+    assert.ok(Date.now() - t < 3000, "gave up quickly");
+  });
+});
+
+test("open-timecard warning agrees in number", async () => {
+  for (const [n, want] of [[1, /1 timecard is still open .* and was skipped/], [2, /2 timecards are still open .* and were skipped/]] as const) {
+    stub((path) => path.startsWith("/team-members") ? team : { body: JSON.stringify({ timecards: Array.from({ length: n }, (_, i) => tc("o" + i, "2026-01-05T14:00:00Z", null)) }) });
+    const r = await pullTimecards("tok", opts);
+    assert.match(r.warnings.join(" "), want);
+  }
 });

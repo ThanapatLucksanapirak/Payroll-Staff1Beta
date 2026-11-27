@@ -118,7 +118,7 @@ export function Dashboard() {
         subtitle={<span className="inline-flex items-center gap-1.5"><SiteDot color={site.color} />{site.name}{siteTotal.length ? ` · ${siteTotal.length} saved${drafts ? `, ${drafts} draft${drafts === 1 ? "" : "s"}` : ""}` : ""}</span>}
         actions={
           <>
-            {!isAccountant(app.user) && <Button variant="ghost" onClick={() => setTrashOpen(true)} data-testid="button-open-trash"><Trash2 />Trash</Button>}
+            {!isAccountant(app.user) && editable && <Button variant="ghost" onClick={() => setTrashOpen(true)} data-testid="button-open-trash"><Trash2 />Trash</Button>}
             {editable && <Button onClick={() => newTimesheet()} data-testid="button-new-timesheet"><Plus /> New timesheet</Button>}
           </>
         }
