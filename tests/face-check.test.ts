@@ -25,14 +25,14 @@ test("face check: too many waiting answers busy, a slow check answers unavailabl
     assert.equal(all.filter((v) => v.ok).length, 3);
     assert.equal(all.filter((v) => !v.ok && v.reason === "busy").length, 3);
     Object.assign(faceLimits, saved);
-    // Each check takes about 0.3 s: with a limit of 1.5 checks the first passes and the ones waiting behind it time out
+    // Each check takes about 0.3 s: with a limit of 2.5 checks the first passes, and the ones that
+    // would wait behind it (with room to spare) are told "busy" at once instead of timing out.
     const t0 = Date.now();
     await checkFaceJpeg(fixture("face.jpg"));
-    faceLimits.timeoutMs = Math.round((Date.now() - t0) * 1.5);
+    faceLimits.timeoutMs = Math.round((Date.now() - t0) * 2.5);
     const slow = await Promise.all(Array.from({ length: 4 }, () => checkFaceJpeg(fixture("face.jpg"))));
     assert.equal(slow[0].ok, true);
-    // The ones that never got their turn answer "busy" (the kiosk may try again); none hang past the limit.
-    assert.deepEqual(slow.slice(2), [{ ok: false, reason: "busy" }, { ok: false, reason: "busy" }]);
+    assert.deepEqual(slow.slice(1), [{ ok: false, reason: "busy" }, { ok: false, reason: "busy" }, { ok: false, reason: "busy" }]);
     Object.assign(faceLimits, saved);
     // The queue recovers: the next check works normally
     assert.equal((await checkFaceJpeg(fixture("face.jpg"))).ok, true);
@@ -125,4 +125,31 @@ test("face check: detection doesn't block the server's event loop", async () => 
     clearInterval(timer);
   }
   assert.ok(worst < 150, `the event loop stalled for ${worst} ms`);
+});
+
+test("face check: a worker that keeps stopping falls back to the main thread and says so", async () => {
+  const fc = await import("../server/faceCheck");
+  const alerts: string[] = [];
+  fc.setFaceWorkerAlert((d) => alerts.push(d));
+  fc.resetFaceWorkerState();
+  try {
+    for (let i = 0; i < fc.workerFailLimits.maxStops; i++) {
+      // Start a worker with a check, then stop it like a crash.
+      assert.equal((await checkFaceJpeg(fixture("face.jpg"))).ok, true, `check ${i} works`);
+      assert.equal(await fc.stopFaceWorkerForTest(), true);
+    }
+    assert.equal(alerts.length, 1, "told once");
+    assert.match(alerts[0]!, /stopped 3 times in 10 minutes .* main server for the next 30 minutes/);
+    assert.equal(fc.faceWorkerState().inProcess, true);
+    // Checks still work meanwhile, in this thread.
+    assert.equal((await checkFaceJpeg(fixture("face.jpg"))).ok, true);
+    assert.equal(await fc.stopFaceWorkerForTest(), false, "no worker is started during the fallback");
+  } finally {
+    fc.resetFaceWorkerState();
+    fc.setFaceWorkerAlert(null);
+  }
+  // Afterwards the worker is used again.
+  assert.equal((await checkFaceJpeg(fixture("face.jpg"))).ok, true);
+  assert.equal(fc.faceWorkerState().inProcess, false);
+  assert.equal(await fc.stopFaceWorkerForTest(), true, "a worker is running again");
 });
