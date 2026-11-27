@@ -251,6 +251,11 @@ export function loginThrottle(ip: string, res?: { once(event: "finish", fn: () =
   }
   return null;
 }
+/** Forget an account's failed sign-in and two-step code counts, so it can be used again now. */
+export function clearAccountLock(userId: string) {
+  attempts.delete(passwordKey({ userId }));
+  attempts.delete(twoFactorKey(userId));
+}
 export function recordLogin(ip: string, ok: boolean) {
   if (ok) {
     if (ip.startsWith(ACCOUNT_PREFIX)) attempts.delete(ip);

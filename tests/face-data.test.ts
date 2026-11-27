@@ -119,6 +119,7 @@ test("shared rules: distances, retention bounds, consent notice", () => {
   assert.match(notice, /Sushi Bar/);
   assert.match(notice, /1 year after your last punch/);
   assert.match(notice, /never sold/);
+  assert.match(notice, /Face templates are encrypted, and photos are stored with restricted file access/);
   assert.match(faceConsentNotice("", 730), /2 years/);
   assert.ok(FACE_MATCH_MAX_DISTANCE > 0.3 && FACE_MATCH_MAX_DISTANCE < 0.6);
 });
@@ -137,13 +138,18 @@ test("photo gallery: newest first, per employee or the whole location, editors o
   assert.ok(mine.body.photos.every((p: any) => p.employeeId === ana && p.employeeName === "Ana Ruiz"));
 
   // Paging: a small page continues where it left off (pages end at a window boundary)
-  const page = await A("GET", `/api/sites/${siteId}/photos?limit=2`);
-  assert.equal(page.status, 200);
-  assert.ok(page.body.photos.length >= 2);
-  assert.ok(page.body.nextBefore, "more to look through, back to the retention period");
-  const rest = await A("GET", `/api/sites/${siteId}/photos?before=${encodeURIComponent(page.body.nextBefore)}`);
-  assert.equal(rest.body.photos.length, 0, "everything was in the newest window");
-  assert.equal(rest.body.nextBefore, null);
+  const seen: string[] = [];
+  let before = "";
+  for (let i = 0; i < 10; i++) {
+    const page = await A("GET", `/api/sites/${siteId}/photos?limit=2${before ? `&before=${encodeURIComponent(before)}` : ""}`);
+    assert.equal(page.status, 200);
+    assert.ok(page.body.photos.length <= 2, "limit is a maximum");
+    seen.push(...page.body.photos.map((p: any) => p.punchId));
+    if (!page.body.nextBefore) break;
+    before = page.body.nextBefore;
+  }
+  assert.equal(seen.length, 7, "every photo exactly once");
+  assert.equal(new Set(seen).size, 7);
 
   assert.equal((await as(manager)("GET", `/api/sites/${siteId}/photos`)).status, 200, "managers (editors) see photos");
   assert.equal((await as(viewer)("GET", `/api/sites/${siteId}/photos`)).status, 403, "viewers don't");
@@ -249,7 +255,9 @@ test("deleting face data, and the punch photos with it", async () => {
   assert.equal((await A("GET", `/api/sites/${siteId}/photos?employeeId=${ana}`)).body.photos.length, 0);
   assert.equal(fs.existsSync(path.join(dir, "face-data", siteId, ana)), false);
   const { db } = await import("../server/db");
-  assert.ok(await (await db()).getPunch(shots["face.jpg"]!), "the punch itself is kept");
+  const kept = await (await db()).getPunch(shots["face.jpg"]!);
+  assert.ok(kept, "the punch itself is kept");
+  assert.equal(kept?.meta?.photo, undefined, "and no longer claims to have a photo");
   assert.deepEqual((await A("GET", `/api/sites/${siteId}/face`)).body, []);
 });
 

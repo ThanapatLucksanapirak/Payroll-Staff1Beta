@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { KeyRound, Loader2, ShieldOff, MoreHorizontal, MonitorSmartphone, Pencil, Plus, Trash2, UserX, UserCheck } from "lucide-react";
+import { KeyRound, LockOpen, Loader2, ShieldOff, MoreHorizontal, MonitorSmartphone, Pencil, Plus, Trash2, UserX, UserCheck } from "lucide-react";
 import { useApp } from "@/context/AppData";
 import { api, errorMessage, queryClient } from "@/lib/api";
 import { type Role, type SessionUser, ROLE_HELP, ROLE_LABELS } from "@/lib/roles";
@@ -58,6 +58,7 @@ export function UsersSettings() {
     const ok = await confirm({ title: `Reset two-factor for ${u.displayName || u.username}?`, description: "Use this if they lost their phone. They'll sign in with just their password and can set up two-factor again.", confirmLabel: "Reset two-factor" });
     if (ok) await run("Two-factor reset", () => api("POST", `/api/users/${u.id}/2fa/reset`));
   };
+  const clearLock = async (u: SessionUser) => run("Sign-in lock cleared", () => api("POST", `/api/users/${u.id}/clear-lock`));
   const signOutUser = async (u: SessionUser) => run("Signed out everywhere", () => api("POST", `/api/users/${u.id}/logout-all`));
 
   const siteNames = (u: SessionUser) => {
@@ -116,6 +117,7 @@ export function UsersSettings() {
                               <DropdownMenuItem onClick={() => setEditing(u)}><Pencil className="h-4 w-4 mr-2" />Edit</DropdownMenuItem>
                               <DropdownMenuItem onClick={() => setResetting(u)}><KeyRound className="h-4 w-4 mr-2" />{self ? "Set a new password" : "Reset password"}</DropdownMenuItem>
                               {!self && me.role === "owner" && u.twoFactorEnabled && <DropdownMenuItem onClick={() => void resetTwoFactor(u)}><ShieldOff className="h-4 w-4 mr-2" />Reset two-factor</DropdownMenuItem>}
+                              {!self && (me.role === "owner" || u.role !== "owner") && <DropdownMenuItem onClick={() => void clearLock(u)}><LockOpen className="h-4 w-4 mr-2" />Clear sign-in lock</DropdownMenuItem>}
                               {!self && <DropdownMenuItem onClick={() => void signOutUser(u)}><MonitorSmartphone className="h-4 w-4 mr-2" />Sign out everywhere</DropdownMenuItem>}
                               {!self && (
                                 <DropdownMenuItem disabled={u.active && isLastOwner(u)} onClick={() => void toggleActive(u)}>
