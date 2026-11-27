@@ -7,28 +7,38 @@ components in `client/src/components/ui/` are the vocabulary.
 
 ## Direction
 
-**Shijiri: two halves, one service. A calm tool with one warm, confident brand.**
+**Payroll by Shijiri Group: a calm tool under a bright, confident logo.**
 
 Owners and managers of Shijiri's restaurants run payroll here between shifts,
 often on a phone. Staff clock in on a wall tablet with wet hands. The product
 should feel like a well-made native utility: quiet warm-neutral surfaces, one
-plum accent, real numbers in tabular figures, and status colour only where
-something needs attention. Familiar beats clever. The brand speaks loudly in
-exactly three places (sign-in, kiosk idle/greeting, the app icon and email
-header) and through precision everywhere else.
+deep-orange accent, real numbers in tabular figures, and status colour only where
+something needs attention. Familiar beats clever. The logo's gold, orange and red
+appear in full only in the logo itself and at brand moments (sign-in, kiosk
+header, app icon, email header); the product carries one orange accent and
+precision everywhere else.
 
 ### Brand
 
-- **Mark**: a lid lifted off a bowl, set apart so the two halves read as an S
-  (kitchen and floor, clock in and clock out, hours and pay). Single colour only:
-  plum on light, rice or white on ink or plum. `components/Logo.tsx` exports
-  `Logo` (app icon), `Mark` and `Wordmark`; `public/favicon.svg` has a wider gap
-  for 16px. Never rotate it, outline it, or put rays or circles behind it.
-- **Names**: Shijiri Payroll (admin), Shijiri Time Clock (kiosk, Android app),
-  Shijiri for staff (portal, "My shifts"). Never "SHIJIRI" in caps.
-- **Brand colours**: Plum `#7a295e` (primary), Plum deep `#661e4d` (hover),
-  Plum light `#d09fc0` (dark-mode primary, with ink text), Ink `#2e1525` (brand
-  panels), Rice `#f7f1e9` (type on ink). Plum is never an action-status colour:
+- **Logo**: "Payroll" in gold (#e6b422, "Pay") and orange (#fe5721, "roll"),
+  then two blocks (gold square, orange bar), "By SHIJIRI GROUP" and a red
+  (#e33a3a) dot. The "By SHIJIRI GROUP" line is ink on light and white on dark;
+  the colours never change. `components/Logo.tsx` exports `Wordmark` (full
+  lockup, text in currentColor), `ProductWordmark` ("Payroll" + dot, for app
+  chrome), `Mark` (the blocks + dot, for small sizes) and `Logo` (app icon:
+  the mark on warm ink). Path data is in `components/logo-art.ts`, traced from
+  the supplied artwork.
+- **Mark / favicon**: the gold square, the orange bar and the red dot.
+  `public/favicon.svg` (transparent, reads on light and dark tabs) and
+  `public/icons/*` (mark on ink #1b1714). Never redraw, recolour or rotate it.
+- **Names**: the product is "Payroll by Shijiri Group" (short: Payroll);
+  installed apps keep Shijiri Payroll, Shijiri Time Clock and Shijiri for staff.
+  In running text write "Shijiri"; "SHIJIRI" in caps lives only inside the logo.
+- **Brand colours**: Gold `#e6b422`, Orange `#fe5721`, Red `#e33a3a` (logo
+  only). UI accent is Payroll orange deepened for contrast: `#c2410c` (white
+  text 5.2:1), hover `#9a3412`; dark mode uses `#fe5721` itself with ink text
+  (5.6:1). Ink `#1b1714` for brand panels. The logo red is never used in UI,
+  so it can't be mistaken for an error. Orange is never a status colour:
   "Clock in" stays green, errors stay red, info stays blue.
 - **Voice**: talk like the shift manager: warm, brief, on your side. Name the
   thing (hours, pay, shift, tips). Confirm with facts (the time and the name).
@@ -48,10 +58,10 @@ current selection and focus, nothing else.
 |---|---|---|
 | Canvas | `--background` (#fbfaf9, warm) | page behind cards |
 | Surface | `--card` (white) + `--card-border` | cards, lists, dialogs (`.surface`) |
-| Chrome | `--sidebar` (#f6f5f3) | sidebar, toolbars; active row `--sidebar-accent` plum tint |
+| Chrome | `--sidebar` (#f6f5f3) | sidebar, toolbars; active row `--sidebar-accent` orange tint |
 | Text | `--foreground` (#201d1f) | body, figures |
 | Secondary text | `--muted-foreground` (#6a6266, 5.9:1 on white) | captions, meta |
-| Accent | `--primary` (Shijiri plum; plum-light with ink text in dark) | primary button, active nav, links, focus ring |
+| Accent | `--primary` (deep Payroll orange #c2410c; logo orange #fe5721 with ink text in dark) | primary button, active nav, links, focus ring |
 | Status | `success` / `warning` / `danger` / `info` / `neutral`, each with `-soft` | badges, notices, flags |
 
 Rules:
@@ -60,7 +70,7 @@ Rules:
   emails are the deliberate exceptions (see below).
 - Icon tiles (Settings list, Home quick actions, import sources) are neutral
   (`bg-foreground/[0.06] text-foreground/70`), never a rainbow of hues.
-- Charts: `chart-1` is slate for single-series data; plum is never a data colour.
+- Charts: `chart-1` is slate for single-series data; the brand orange is never a data colour.
 - Brand-moment colours are tokens too: `brand-ink`, `brand-rice`, `brand-tonal`,
   `brand-muted` (Tailwind `bg-brand-ink` etc.). Use them only on brand panels.
 - Status colour means status. A green number is "good / paid", amber is "needs a
@@ -72,11 +82,12 @@ Rules:
 
 ## Type
 
-Product text uses the system UI font (`--font-sans`). One brand face, **Young
-Serif** (`font-display`, OFL, self-hosted in `client/src/assets/fonts`), sets the
-wordmark, the sign-in heading and voice line, and the kiosk greeting and
-employee names: 22px or larger, weight 400 only, **never numbers** (its figures
-are old-style). Everything else, including the kiosk clock, money and tables,
+Product text uses the system UI font (`--font-sans`). One brand face, **Poppins
+SemiBold 600** (`font-display font-semibold`, OFL, self-hosted in
+`client/src/assets/fonts`), matches the geometric "Payroll" in the logo. It sets
+the sign-in heading and voice line, the kiosk greeting and employee names, and
+the portal greeting: 22px or larger, tracking -0.02em, weight 600 only (the only
+weight shipped). Everything else, including the kiosk clock, money and tables,
 stays in the system font.
 
 | Step | Size / weight | Use |
@@ -111,7 +122,7 @@ sizes sm / default / lg / icon), `Badge`, `Input`, `Select`, `Switch`,
 (`ConfirmDialog`), `Sheet`, `Tooltip`, `EmptyState`, `Skeleton`, `Page`,
 `PageHeader`, `SectionLabel`, `grouped.tsx` (iOS grouped list rows), `toast`.
 
-- One primary (filled blue) button per view region. Everything else outline,
+- One primary (filled orange) button per view region. Everything else outline,
   secondary, tinted or ghost.
 - Icons: lucide only, 16px in controls (`[&_svg]:size-4`), 1.5–2 stroke. No emoji
   or Unicode glyphs as icons.
@@ -141,8 +152,9 @@ state change (press, open, appear) and nothing else. No page-load choreography.
 
 **Kiosk** (`client/src/kiosk/`): light, no theme variables on purpose (it must
 look the same on any tablet). Warm `stone-*` greys (text stone-950, body
-stone-700, secondary no lighter than stone-600), the Shijiri mark top-left, plum
-`#7a295e` for the primary key, filled PIN dots and focus. Greetings and names in
+stone-700, secondary no lighter than stone-600), the full-colour mark top-left,
+deep orange `#c2410c` (`--kiosk-accent` in `kiosk.css`) for the primary key, filled
+PIN dots and focus. Greetings and names in
 `font-display`; the clock in the system font, light, tabular. Action colours are
 fixed in `ACTION_STYLE` (clock in emerald-700, break amber-400, back sky-700,
 out stone-900), each AA on its fill. Minimum target 64px; PIN keys ≥ 80px. One
@@ -150,17 +162,18 @@ idea per screen, words at 20px+.
 
 **Emails** (`server/email.ts`, `brandedHtml`, colours in its `C` map): table
 layout, inline styles, light only, system font. Page #f4f1ee, card white with
-#e6e2de border, radius 18. Text #201d1f, body #3d3639, secondary #6a6266
-(≥5.2:1 on page and card). Button plum #7a295e with white text (9.1:1). Brand
-tile: plum with a rice serif initial. One button per email.
+#e6e2de border, radius 18. Text #1f1b18, body #3b3632, secondary #6b6561
+(≥5.2:1 on page and card). Button deep orange #c2410c with white text (5.2:1).
+Header: the logo's gold and orange blocks and red dot built from table cells (no
+images, so it shows in every mail app), then the brand name. One button per email.
 
 **Portal** (`client/src/portal/`): same tokens and components as the admin app
 (`portal.css` imports `index.css`), phone-first.
 
 **Sign-in** (`pages/Login.tsx`): split screen. Ink brand panel on the left with
-the reversed lockup, one oversized tonal mark bleeding off the edge, and the
-voice line in Young Serif; the form on the right, 380px column, 48px fields and
-a full-width plum button. On phones the panel becomes a header band. No photos,
+the full logo (white "By SHIJIRI GROUP") and the voice line in Poppins, its
+second half in gold; the form on the right, 380px column, 48px fields and a
+full-width orange button. On phones the panel becomes a header band. No photos,
 gradients or carousels.
 
 ## Copy
