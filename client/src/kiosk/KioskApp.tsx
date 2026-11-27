@@ -410,7 +410,7 @@ function TopBar({ state, online, pending, onInfo, onExitFullscreen }: { state: K
   const apk = useAndroidAppDownload();
   return (
     <header className="flex items-center gap-3 px-5 pt-2 sm:px-8 sm:pt-4">
-      <Mark className="h-[22px] w-auto shrink-0 text-[#7a295e]" aria-hidden />
+      <Mark className="h-[22px] w-auto shrink-0" aria-hidden />
       <span className="text-lg text-stone-600" aria-hidden>·</span>
       <span className="truncate text-lg font-semibold text-stone-800" data-testid="kiosk-location">{state.site.name}</span>
       <div className="-mr-4 ml-auto flex items-center gap-1">
@@ -524,13 +524,13 @@ function PinScreen({ tz, employee, heading, error, shake, lockedUntil, maxLength
       <div className="text-center lg:text-left">
         {heading ? (
           <div className="kiosk-fade-up">
-            <p className="text-4xl font-display font-normal tracking-[-0.01em] text-stone-950">{heading.title}</p>
+            <p className="text-4xl font-display font-semibold tracking-[-0.02em] text-stone-950">{heading.title}</p>
             <p className="mt-1 text-xl text-stone-700">{heading.sub}</p>
           </div>
         ) : employee ? (
           <div className="kiosk-pin-who kiosk-fade-up">
             <Avatar name={employee.name} big />
-            <p className="mt-4 text-4xl font-display font-normal tracking-[-0.01em] text-stone-950">Hi, {firstName(employee.name)}</p>
+            <p className="mt-4 text-4xl font-display font-semibold tracking-[-0.02em] text-stone-950">Hi, {firstName(employee.name)}</p>
             <p className="mt-1 text-xl text-stone-700">Enter your PIN, then tap <Check className="inline h-5 w-5 align-[-0.15em]" strokeWidth={2.75} aria-label="the check mark" /></p>
           </div>
         ) : (
@@ -543,7 +543,7 @@ function PinScreen({ tz, employee, heading, error, shake, lockedUntil, maxLength
       <div className="flex flex-col items-center">
         <div key={shake} className={`flex h-10 items-center gap-4 ${shake ? "kiosk-shake" : ""}`} aria-label={`${pin.length} digits entered`} data-testid="kiosk-pin-dots">
           {Array.from({ length: Math.max(4, pin.length) }).map((_, i) => (
-            <span key={i} className={`h-5 w-5 rounded-full transition-all duration-150 ${i < pin.length ? "scale-110 bg-[#7a295e]" : "bg-stone-300"}`} />
+            <span key={i} className={`h-5 w-5 rounded-full transition-all duration-150 ${i < pin.length ? "scale-110 bg-[var(--kiosk-accent)]" : "bg-stone-300"}`} />
           ))}
         </div>
         {/* Once a PIN could be complete, say what to do next: PINs are 4 to 6 digits, so it can't send itself. */}
@@ -638,7 +638,7 @@ function ActionsScreen({ tz, who, offline, error, busy, idleMs, camera, onPunch,
   return (
     <div className="kiosk-actions kiosk-safe-center flex flex-1 flex-col items-center px-6 pb-10 pt-2 text-center kiosk-fade-up" data-error={error ? "" : undefined} data-count={who.actions.length}>
       {camera ? <CameraMirror {...camera} /> : <Avatar name={who.employee.name} big status={who.status} />}
-      <h1 className="mt-5 max-w-full text-4xl font-display font-normal tracking-[-0.01em] text-stone-950 [overflow-wrap:anywhere] sm:text-5xl" data-testid="kiosk-employee-name">{who.employee.name}</h1>
+      <h1 className="mt-5 max-w-full text-4xl font-display font-semibold tracking-[-0.02em] text-stone-950 [overflow-wrap:anywhere] sm:text-5xl" data-testid="kiosk-employee-name">{who.employee.name}</h1>
       <p className="mt-2 text-2xl text-stone-700">
         {statusLine}{!offline && who.todayMinutes > 0 ? ` · ${duration(who.todayMinutes)} today` : ""}{!offline && who.station && who.status !== "out" ? ` · ${who.station}` : ""}
       </p>
@@ -681,7 +681,7 @@ function PairScreen({ notice, onPaired }: { notice: string | null; onPaired: () 
     <Centered>
       {apk && <div className="fixed right-[calc(1rem+env(safe-area-inset-right))] top-[calc(0.75rem+env(safe-area-inset-top))] z-10"><AndroidAppButton url={apk} /></div>}
       <div className="w-full max-w-md kiosk-fade-up">
-        <h1 className="text-4xl font-display font-normal tracking-[-0.01em] text-stone-950">Set up this time clock</h1>
+        <h1 className="text-4xl font-display font-semibold tracking-[-0.02em] text-stone-950">Set up this time clock</h1>
         <p className="mt-3 text-lg text-stone-700">In the admin app, open <b className="font-semibold text-stone-900">Settings → Locations &amp; rules → Time clock</b>, add a device, then open its pairing link here or type its code.</p>
         {notice && <p className="mt-4 rounded-2xl bg-amber-50 px-4 py-3 text-amber-950 ring-2 ring-amber-200">{notice}</p>}
         <form className="mt-8 space-y-4" onSubmit={(e) => { e.preventDefault(); if (code.trim().length >= 8) void submit(); }}>
@@ -708,7 +708,7 @@ function PairScreen({ notice, onPaired }: { notice: string | null; onPaired: () 
 function Splash({ online, onRetry }: { online: boolean; onRetry: () => void }) {
   return (
     <Centered>
-      {online ? <span className="h-10 w-10 animate-spin rounded-full border-2 border-stone-200 border-t-[#7a295e]" /> : (
+      {online ? <span className="h-10 w-10 animate-spin rounded-full border-2 border-stone-200 border-t-[var(--kiosk-accent)]" /> : (
         <>
           <WifiOff className="h-10 w-10 text-stone-600" />
           <p className="mt-4 text-xl text-stone-700">Can't reach the server.</p>
