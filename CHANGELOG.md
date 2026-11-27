@@ -6,7 +6,7 @@ Settings → About, next to the matching update.
 Add an entry with every pull request: a `## YYYY-MM-DD · Title (#PR)` heading and a
 few short bullets written for the people who use the app, not for developers.
 
-## 2026-11-28 · Small fixes to face data, backups and sign-in (#99)
+## 2026-11-27 · Small fixes to face data, backups and sign-in (#53)
 - The face consent notice now says what is protected: face templates are encrypted, photos are stored on your server with restricted file access, and none of it is in backups.
 - Recording consent or adding reference photos for someone whose face data can't be read is now refused until you delete their face data, instead of overwriting it.
 - Deleting face data together with punch photos now clears the photo marker on those punches, so Live no longer asks for photos that are gone. The photo gallery now shows at most the number of photos asked for per page.
