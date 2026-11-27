@@ -41,12 +41,17 @@ test("face check: too many waiting answers busy, a slow check answers unavailabl
   }
 });
 
-test("face check: 20 photo punches at the same moment all get checked", async () => {
+test("face check: a crowd of photo punches gets checked, or told busy at once, never left to time out", async () => {
   await loadFaceModel();
   assert.ok(faceLimits.maxWaiting >= 30, "room for a crowd at the start of a shift");
-  const all = await Promise.all(Array.from({ length: 20 }, () => checkFaceJpeg(fixture("face.jpg"))));
-  assert.equal(all.filter((v) => !v.ok && v.reason === "busy").length, 0);
-  assert.equal(all.filter((v) => v.ok).length, 20);
+  const t0 = Date.now();
+  const all = await Promise.all(Array.from({ length: 50 }, async () => { const v = await checkFaceJpeg(fixture("face.jpg")); return { v, ms: Date.now() - t0 }; }));
+  assert.equal(all.filter((x) => !x.v.ok && x.v.reason === "unavailable").length, 0, "none fail from waiting in the queue");
+  const ok = all.filter((x) => x.v.ok).length;
+  assert.ok(ok >= 12, `at least the first dozen are checked (${ok})`);
+  const busy = all.filter((x) => !x.v.ok && x.v.reason === "busy");
+  assert.equal(ok + busy.length, 50);
+  assert.ok(busy.every((x) => x.ms < 200), "busy is answered at once, so the kiosk can send it again");
 });
 
 test("face check: the time limit counts from when the punch arrived, queue wait included", async () => {

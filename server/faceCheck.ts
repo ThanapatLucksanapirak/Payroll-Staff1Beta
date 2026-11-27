@@ -115,6 +115,8 @@ export async function loadFaceModel(): Promise<void> {
 let queue: Promise<unknown> = Promise.resolve();
 
 let waiting = 0;
+/** How long a check has been taking lately (a moving average), to tell how long the queue will take. */
+let checkMs = 400;
 
 async function detect(bytes: Buffer, opts: FaceCheckOptions): Promise<FaceVerdict> {
   const w = await getWorker();
@@ -139,14 +141,19 @@ export function checkFaceJpeg(bytes: Buffer, opts: FaceCheckOptions = {}, starte
   if (waiting >= faceLimits.maxWaiting) return Promise.resolve({ ok: false, reason: "busy" });
   const deadline = startedAt + faceLimits.timeoutMs;
   const left = deadline - Date.now();
-  if (left <= 0) return Promise.resolve({ ok: false, reason: "busy" });
+  // Refuse at once when the photos ahead of this one (at the recent pace) would
+  // use up its time: "busy" comes back in a moment and the kiosk sends it again,
+  // instead of the punch waiting out the limit and failing as "unavailable".
+  if (left <= 0 || (waiting + 1) * checkMs > left) return Promise.resolve({ ok: false, reason: "busy" });
   waiting++;
   let started = false;
   // Skip a check whose request has already timed out.
   const next = async (): Promise<FaceVerdict> => {
     if (Date.now() > deadline) return { ok: false, reason: "busy" };
     started = true;
-    return detect(bytes, opts);
+    const t0 = Date.now();
+    try { return await detect(bytes, opts); }
+    finally { checkMs = Math.min(faceLimits.timeoutMs, Math.max(50, checkMs * 0.8 + (Date.now() - t0) * 0.2)); }
   };
   const run = queue.then(next, next).finally(() => { waiting--; });
   queue = run.catch(() => undefined);
