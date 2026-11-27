@@ -492,6 +492,26 @@ export async function purgeExpiredFaceData(nowMs = Date.now()): Promise<number> 
   return removed;
 }
 
+/**
+ * A location was deleted: remove all its face data (consents, reference photos
+ * and face match alerts with their photos). The daily clean-up never does this,
+ * because a location missing from the database in use usually means a database
+ * switch or an older backup, not a deletion.
+ */
+export async function deleteSiteFaceData(siteId: string): Promise<{ people: number; alerts: number }> {
+  if (!SAFE_ID.test(siteId)) return { people: 0, alerts: 0 };
+  const people = peopleWithData(siteId);
+  for (const employeeId of people) await deleteFaceData(siteId, employeeId);
+  fs.rmSync(path.join(faceRoot(), siteId), { recursive: true, force: true });
+  let alerts = 0;
+  await withAlerts(siteId, async (list) => {
+    for (const a of list) { deletePhoto(siteId, alertPhotoId(a.id)); alerts++; }
+    return { list: [], result: undefined };
+  });
+  await (await db()).deleteSetting(ALERTS_PREFIX + siteId).catch(() => undefined);
+  return { people: people.length, alerts };
+}
+
 let started = false;
 export function startFaceHousekeeping() {
   if (started) return;
