@@ -6,7 +6,7 @@ Settings → About, next to the matching update.
 Add an entry with every pull request: a `## YYYY-MM-DD · Title (#PR)` heading and a
 few short bullets written for the people who use the app, not for developers.
 
-## 2026-11-27 · Bigger logo in the desktop sidebar (#PRNUM)
+## 2026-11-27 · Bigger logo in the desktop sidebar (#57)
 - The logo at the top of the desktop sidebar is about half as big again, so "By SHIJIRI GROUP" is easier to read, with more room before the collapse button.
 
 ## 2026-11-27 · Faster photo punches, and small faces are found (#50)
