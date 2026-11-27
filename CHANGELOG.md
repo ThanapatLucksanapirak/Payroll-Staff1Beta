@@ -9,6 +9,7 @@ few short bullets written for the people who use the app, not for developers.
 ## 2026-11-27 · Easier-to-read sign-in button and time clock location name (#55)
 - A main button that can't be pressed yet (like Sign in before you type a password) is now solid grey with readable text instead of faded orange.
 - On a phone, the time clock shows a long location name on up to two lines instead of cutting it off.
+- The colour choices for a location no longer include orange, so a location dot is never mistaken for the new orange highlight. Locations that already use orange keep it.
 
 ## 2026-11-27 · New look around the Payroll by Shijiri Group logo (#49)
 - The new logo is on the sign-in screen, the sidebar, the time clock and the staff portal.
