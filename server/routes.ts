@@ -21,6 +21,7 @@ import { registerUpdateRoutes } from "./updates";
 import { registerAboutRoutes } from "./about";
 import { USERS_KEY, canAccessSite, toPublic } from "./users";
 import { NEVER_BACKED_UP, backupPath, listBackups, readBackup, runBackup } from "./backup";
+import { gzipSize, restoreMemoryProblem } from "./memoryGuard";
 import { listLocations, pullTimecards } from "./square";
 import { extractPdfText } from "./pdf";
 import { invalidateEmployeeCache } from "./employees";
@@ -592,7 +593,13 @@ export function registerRoutes(app: Express) {
       punches,
     });
   }));
-  app.post("/api/backup/restore", express.json({ limit: "100mb" }), h(async (req, res) => {
+  // Refuse a restore that won't fit in memory before reading it (a big one could otherwise get the app stopped).
+  const restoreFits = (req: Request, res: Response, next: NextFunction) => {
+    const problem = restoreMemoryProblem(Number(req.headers["content-length"]));
+    if (problem) { res.setHeader("Connection", "close"); return res.status(413).json({ error: problem, code: "memory" }); }
+    next();
+  };
+  app.post("/api/backup/restore", restoreFits, express.json({ limit: "100mb" }), h(async (req, res) => {
     res.json(await restoreFrom(req.body, { allowEmpty: req.query.allowEmpty === "1" }));
   }));
 
@@ -609,6 +616,9 @@ export function registerRoutes(app: Express) {
     res.download(p);
   }));
   app.post("/api/backups/:name/restore", h(async (req, res) => {
+    const file = backupPath(String(req.params.name));
+    const problem = file && file.endsWith(".json.gz") ? restoreMemoryProblem(gzipSize(file)) : null;
+    if (problem) return res.status(413).json({ error: problem, code: "memory" });
     res.json(await restoreFrom(readBackup(String(req.params.name)), { allowEmpty: req.query.allowEmpty === "1" }));
   }));
 

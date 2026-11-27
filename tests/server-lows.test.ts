@@ -148,3 +148,28 @@ test("an owner can clear a user's sign-in lock", async () => {
   await flushAudit();
   assert.ok((await queryAudit({ action: "user.clear-lock" })).entries.length >= 1);
 });
+
+test("a restore too big for the free memory is refused with a clear message, nothing restored", async () => {
+  const { restoreMemory, gzipSize, restoreMemoryProblem } = await import("../server/memoryGuard");
+  const { runBackup, listBackups, BACKUP_DIR } = await import("../server/backup");
+  const backup = (await call("GET", "/api/backup")).body;
+  const before = JSON.stringify((await call("GET", "/api/backup")).body.settings);
+  restoreMemory.available = { system: 1024 * 1024, heap: 512 * 1024 * 1024 }; // 1 MB "free"
+  try {
+    const r = await call("POST", "/api/backup/restore", { ...backup, settings: [...backup.settings, { key: "pad", value: "x".repeat(200_000) }] });
+    assert.equal(r.status, 413, JSON.stringify(r.body));
+    assert.equal(r.body.code, "memory");
+    assert.match(r.body.error, /too big to restore on this server right now.*Nothing was restored/);
+    assert.equal(JSON.stringify((await call("GET", "/api/backup")).body.settings), before, "nothing changed");
+    // A saved backup is checked by its uncompressed size
+    await runBackup("manual");
+    const saved = listBackups().find((b) => b.name.endsWith(".json.gz"))!;
+    assert.ok(gzipSize(path.join(BACKUP_DIR, saved.name)) > 100);
+    restoreMemory.available = { system: 10, heap: 10 };
+    const r2 = await call("POST", `/api/backups/${saved.name}/restore`);
+    assert.equal(r2.status, 413);
+    assert.equal(r2.body.code, "memory");
+  } finally { restoreMemory.available = null; }
+  assert.equal(restoreMemoryProblem(1024), null, "small restores fit with the real measurement");
+  assert.equal((await call("POST", "/api/backup/restore", backup)).status, 200);
+});
