@@ -15,6 +15,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Field, ToggleRow } from "@/components/workspace/fields";
 import { cn } from "@/lib/utils";
 import { UnsavedDot, usePendingChange } from "./pendingChanges";
+import { LoadError } from "@/components/LoadError";
 
 const LOGIN_LABELS: Record<DeviceLoginMode, string> = { site: "Same as location", pin: "PIN only", name_pin: "Name list, then PIN" };
 
@@ -138,6 +139,7 @@ export function KioskLocationExtras({ site }: { site: Site }) {
     try { await save(); toast({ title: "Saved" }); } catch (e) { toast({ title: "Couldn't save", description: errorMessage(e), variant: "destructive" }); } finally { setBusy(false); }
   };
 
+  if (q.isError && !q.data) return <LoadError what="the time clock extras" error={q.error} onRetry={() => void q.refetch()} retrying={q.isFetching} testid="kiosk-extras-error" />;
   if (q.isLoading || !cfg) return <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />;
 
   const addStation = () => {
