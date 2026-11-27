@@ -227,7 +227,7 @@ async function restoreChecked(body: z.infer<typeof restoreSchema>, punches: Punc
     const partial = store.kind === "supabase";
     console.error(`[restore] ${partial ? "stopped part-way" : "failed"}:`, err?.message ?? err);
     throw Object.assign(new Error(partial
-      ? `The restore stopped part-way (${err?.message ?? "database error"}), so some of your data may be from the backup and some from before. Run the same restore again to finish it.${preName ? ` Your data from just before is saved as ${preName}.` : ""}`
+      ? `The restore is incomplete: it stopped part-way (${err?.message ?? "database error"}), so some of your data is from the backup and some from before. Run the same restore again to finish it.${preName ? ` Your data from just before is saved as ${preName}.` : ""}`
       : `Nothing was restored: the database refused the change (${err?.message ?? "database error"}). Your current data is unchanged.`), { status: partial ? 502 : 500, code: partial ? "partial_restore" : undefined });
   }
   settings.invalidateSettingsCache();
