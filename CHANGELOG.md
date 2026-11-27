@@ -6,7 +6,7 @@ Settings → About, next to the matching update.
 Add an entry with every pull request: a `## YYYY-MM-DD · Title (#PR)` heading and a
 few short bullets written for the people who use the app, not for developers.
 
-## 2026-11-27 · Safer backups, real dates only (#47)
+## 2026-11-27 · Safer backups, real dates only (#52)
 - Only an owner can include sign-in details (password hashes and two-factor secrets) in a downloaded backup. Administrators can still download a backup without them, and the option is hidden for them.
 - Dates that don't exist, like 2026-13-45 or 30 February, are now refused with a clear message on pay rates, advances, time off, sales, the schedule and timesheets, instead of being saved or causing an error.
 - A new timesheet must be for a location that exists.
