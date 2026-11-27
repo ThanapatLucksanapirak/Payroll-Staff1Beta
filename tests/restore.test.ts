@@ -261,6 +261,7 @@ test("a large backup download streams as valid JSON with every row", async () =>
   assert.equal(res.status, 200);
   assert.equal(res.body.app, "payroll-admin");
   assert.equal(res.body.punches.length, before1 + 3000);
+  assert.deepEqual(res.body.punches.map((p: any) => p.id), (await store.allPunches()).map((p) => p.id), "same rows, same order, once each");
   assert.ok(Array.isArray(res.body.settings) && res.body.settings.length > 0);
   assert.ok(Array.isArray(res.body.timesheets));
 });

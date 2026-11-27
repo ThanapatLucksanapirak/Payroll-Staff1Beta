@@ -233,6 +233,21 @@ export class SupabaseStore implements DataStore {
       throw err;
     }
   }
+  async *punchPages() {
+    let offset = 0;
+    for (;;) {
+      let page: any[];
+      try {
+        page = (await this.punchReq("GET", `/punches?select=*&order=at.asc,id.asc&limit=${PAGE}&offset=${offset}`)) ?? [];
+      } catch (err: any) {
+        if (err instanceof StoreError && err.status === 503 && /punches table/.test(err.message)) return;
+        throw err;
+      }
+      if (!Array.isArray(page) || !page.length) return;
+      yield page.map(rowToPunch);
+      offset += page.length;
+    }
+  }
 
   /**
    * PostgREST runs each request in one transaction, so every table is written

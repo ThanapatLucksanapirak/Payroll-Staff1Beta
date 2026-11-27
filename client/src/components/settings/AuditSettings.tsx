@@ -17,7 +17,7 @@ const GROUPS: Record<string, string> = { auth: "Sign-ins", user: "Users", timesh
 
 const ACTION_LABELS: Record<string, string> = {
   "auth.login": "Signed in", "auth.login-failed": "Failed sign-in", "auth.logout": "Signed out", "auth.logout-all": "Signed out everywhere",
-  "user.create": "Added user", "user.update": "Changed user", "user.delete": "Deleted user", "user.password": "Password changed",
+  "user.create": "Added user", "user.update": "Changed user", "user.delete": "Deleted user", "user.password": "Password changed", "user.clear-lock": "Cleared sign-in lock",
   "timesheet.create": "Created timesheet", "timesheet.update": "Edited timesheet", "timesheet.finalize": "Finalized timesheet", "timesheet.reopen": "Reopened timesheet",
   "timesheet.rename": "Renamed timesheet", "timesheet.move": "Moved timesheet", "timesheet.duplicate": "Duplicated timesheet", "timesheet.trash": "Moved to Trash",
   "timesheet.restore": "Restored from Trash", "timesheet.delete": "Deleted forever", "timesheet.empty-trash": "Emptied Trash",
