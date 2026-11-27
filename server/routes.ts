@@ -25,7 +25,7 @@ import { NEVER_BACKED_UP, backupPath, listBackups, readBackup, runBackup } from 
 import { gzipSize, restoreMemoryProblem } from "./memoryGuard";
 import { listLocations, pullTimecards } from "./square";
 import { extractPdfText } from "./pdf";
-import { invalidateEmployeeCache } from "./employees";
+import { invalidateEmployeeCache, isEmployeeDirectoryKey, restoreWithheldPins, withholdPins } from "./employees";
 import { type Punch, punchSchema } from "@shared/punches";
 import { invalidateDeviceCache, kioskHostGuard, registerKioskRoutes, registerTimeClockAdminRoutes } from "./kiosk";
 import { registerScheduleRoutes } from "./schedule";
@@ -197,10 +197,13 @@ async function restoreChecked(body: z.infer<typeof restoreSchema>, punches: Punc
   const fileHasSquare = body.settings.some((x) => isSquareToken(x.key));
   // Paired kiosk devices always stay as they are now, so a restore can't bring back a removed device.
   const keepSetting = (k: string) => k === "password_hash" || k === USERS_KEY || k === "revoked_sessions" || k === "kiosk_devices" || k.startsWith(AUDIT_PREFIX) || k.startsWith("kiosk_manager_pin:") || k.startsWith("email:") || (isSquareToken(k) && !fileHasSquare) || NEVER_BACKED_UP(k);
+  // A file downloaded by an admin has its employee PINs withheld: keep today's.
+  const restoredSettings = await Promise.all(body.settings.filter((x) => !NEVER_BACKED_UP(x.key)).map(async (x) =>
+    isEmployeeDirectoryKey(x.key) && x.value.includes('"pinWithheld"') ? { ...x, value: restoreWithheldPins(x.value, await store.getSetting(x.key)) } : x));
   let result: Awaited<ReturnType<typeof store.importAll>>;
   try {
     result = await store.importAll({
-      settings: body.settings.filter((x) => !NEVER_BACKED_UP(x.key)),
+      settings: restoredSettings,
       timesheets: body.timesheets.map(({ updated_at: _u, ...rest }: any) => rest),
       // Backups from before the time clock have no punches: leave today's alone.
       punches: hasPunches ? punches : undefined,
@@ -614,8 +617,12 @@ export function registerRoutes(app: Express) {
     const punches = store.punchPages ? store.punchPages() : await store.allPunches();
     // Serialized row by row: one JSON.stringify of the whole database added a
     // full-size string (and its copies) on top of the loaded rows.
+    // Employee PIN hashes are only for an owner's copy (a short PIN hash is quick to crack).
+    const isOwner = currentUser(res)?.role === "owner";
     await streamJson(res, { app: "payroll-admin", version: 2, exportedAt: new Date().toISOString() }, {
-      settings: all.filter((s) => !NEVER_BACKED_UP(s.key) && (includeSecrets || !secret(s.key))),
+      settings: all
+        .filter((s) => !NEVER_BACKED_UP(s.key) && (includeSecrets || !secret(s.key)))
+        .map((s) => (!isOwner && isEmployeeDirectoryKey(s.key) ? { ...s, value: withholdPins(s.value) } : s)),
       timesheets,
       punches,
     });
@@ -637,7 +644,10 @@ export function registerRoutes(app: Express) {
   app.post("/api/backups", h(async (_req, res) => {
     res.json(await runBackup("manual"));
   }));
+  // The saved files are full copies: password hashes, the owner's two-factor
+  // secret, email and Google secrets and PIN hashes. Only an owner may take one away.
   app.get("/api/backups/:name", h(async (req, res) => {
+    if (currentUser(res)?.role !== "owner") return res.status(403).json({ error: "Only an owner can download a saved server backup, because it includes sign-in details. Use Download backup above for a copy without them." });
     const p = backupPath(String(req.params.name));
     if (!p) return res.status(404).json({ error: "Backup not found." });
     res.download(p);

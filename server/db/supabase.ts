@@ -15,6 +15,11 @@ const ROW_COLS = [
 const PAGE = 1000;
 /** How long one database request may take, headers and body together (tests shorten it). */
 export const supabaseTimeout = { ms: 15_000 };
+/** Rows per request when restoring or copying, and the longer limit for each such request. */
+export const IMPORT_BATCH = { timesheets: 200, settings: 500, punches: 2000, timeoutMs: 60_000 };
+function* batches<T>(list: T[], size: number): Generator<T[]> {
+  for (let i = 0; i < list.length; i += size) yield list.slice(i, i + size);
+}
 const SUMMARY_COLS = "id,filename,custom_label,period_start,period_end,employee_count,total_pay,created_at,updated_at";
 
 export class SupabaseStore implements DataStore {
@@ -40,11 +45,11 @@ export class SupabaseStore implements DataStore {
     return h;
   }
 
-  private async req(method: string, path: string, body?: unknown, extra: Record<string, string> = {}): Promise<any> {
+  private async req(method: string, path: string, body?: unknown, extra: Record<string, string> = {}, timeoutMs = supabaseTimeout.ms): Promise<any> {
     // One timer covers the headers AND the body: a reply that stalls after its
     // headers would otherwise hang the request (and whoever waits on it) forever.
     const ctl = new AbortController();
-    const timer = setTimeout(() => ctl.abort(), supabaseTimeout.ms);
+    const timer = setTimeout(() => ctl.abort(), timeoutMs);
     try {
       let res: Response;
       try {
@@ -165,13 +170,13 @@ export class SupabaseStore implements DataStore {
     return rows.map((r: any) => this.decode(r));
   }
 
-  private async write(method: "POST" | "PATCH", path: string, row: any, prefer: string): Promise<any[]> {
+  private async write(method: "POST" | "PATCH", path: string, row: any, prefer: string, timeoutMs?: number): Promise<any[]> {
     try {
-      return await this.req(method, path, row, { Prefer: prefer });
+      return await this.req(method, path, row, { Prefer: prefer }, timeoutMs);
     } catch (err: any) {
       if (this.extended && this.isMissingColumn(err)) {
         this.extended = false; // database lacks v2 columns: store metadata inside result_json instead
-        return await this.req(method, path, this.encode(row), { Prefer: prefer });
+        return await this.req(method, path, this.encode(row), { Prefer: prefer }, timeoutMs);
       }
       throw err;
     }
@@ -205,9 +210,9 @@ export class SupabaseStore implements DataStore {
   }
 
   // ── Punches ────────────────────────────────────────────────────────────────
-  private async punchReq(method: string, path: string, body?: unknown, extra: Record<string, string> = {}): Promise<any> {
+  private async punchReq(method: string, path: string, body?: unknown, extra: Record<string, string> = {}, timeoutMs?: number): Promise<any> {
     try {
-      return await this.req(method, path, body, extra);
+      return await this.req(method, path, body, extra, timeoutMs);
     } catch (err: any) {
       if (err?.code === "42P01" || err?.code === "PGRST205" || /Could not find the table|relation .*punches.* does not exist/i.test(err?.raw ?? "")) {
         throw new StoreError("The time clock needs the punches table. Open Settings → Database, copy the setup SQL and run it in Supabase.", 503);
@@ -260,16 +265,17 @@ export class SupabaseStore implements DataStore {
         if (err instanceof StoreError && err.status === 503 && /punches table/.test(err.message)) return;
         throw err;
       }
-      if (!Array.isArray(page) || !page.length) return;
+      if (!Array.isArray(page)) throw new StoreError("Database error: a page of punches couldn't be read. Please try again.", 502);
+      if (!page.length) return;
       yield page.map(rowToPunch);
       offset += page.length;
     }
   }
 
   /**
-   * PostgREST runs each request in one transaction, so every table is written
-   * with a single request: a bad row fails the whole batch. Timesheets go
-   * first so a failure never leaves settings pointing at missing data.
+   * PostgREST runs each request in one transaction; each table is written in
+   * batches (IMPORT_BATCH), so a bad row fails its batch and stops the import.
+   * Timesheets go first so a failure never leaves settings pointing at missing data.
    */
   async importAll(data: ImportData, opts: ImportOptions = {}) {
     const now = new Date().toISOString();
@@ -282,16 +288,21 @@ export class SupabaseStore implements DataStore {
     });
     // Upsert first, then delete what the import doesn't contain: if a request
     // fails part-way, nothing from the backup is missing.
-    if (rows.length) await this.write("POST", `/recent_uploads?on_conflict=id`, rows, "resolution=merge-duplicates,return=minimal");
-    if (settings.length) {
-      await this.req("POST", `/app_settings?on_conflict=key`, settings.map((s) => ({ key: s.key, value: s.value, updated_at: now })), {
-        Prefer: "resolution=merge-duplicates,return=minimal",
-      });
+    // Sent in batches, each with a longer limit than a normal request: one
+    // request with every punch could take past the limit on a slow link.
+    // Upserts are safe to repeat, so a restore that stops part-way can simply be run again.
+    for (const part of batches(rows, IMPORT_BATCH.timesheets)) {
+      await this.write("POST", `/recent_uploads?on_conflict=id`, part, "resolution=merge-duplicates,return=minimal", IMPORT_BATCH.timeoutMs);
     }
-    if (data.punches?.length) {
-      await this.punchReq("POST", `/punches?on_conflict=id`, data.punches.map(punchToRow), {
+    for (const part of batches(settings, IMPORT_BATCH.settings)) {
+      await this.req("POST", `/app_settings?on_conflict=key`, part.map((s) => ({ key: s.key, value: s.value, updated_at: now })), {
+        Prefer: "resolution=merge-duplicates,return=minimal",
+      }, IMPORT_BATCH.timeoutMs);
+    }
+    for (const part of batches(data.punches ?? [], IMPORT_BATCH.punches)) {
+      await this.punchReq("POST", `/punches?on_conflict=id`, part.map(punchToRow), {
         Prefer: `resolution=${opts.replace ? "merge" : "ignore"}-duplicates,return=minimal`,
-      });
+      }, IMPORT_BATCH.timeoutMs);
     }
     if (opts.replace) {
       const ids = new Set(rows.map((r: any) => String(r.id)));

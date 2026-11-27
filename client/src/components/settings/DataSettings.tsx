@@ -97,6 +97,9 @@ export function DataSettings() {
 interface BackupFile { name: string; size: number; createdAt: string; kind: "export" | "database"; reason: string }
 
 function ServerBackups() {
+  const app = useApp();
+  // Saved server backups include sign-in details, so only an owner can download one.
+  const canDownload = app.user.role === "owner";
   const { toast } = useToast();
   const confirm = useConfirm();
   const [busy, setBusy] = useState<string | null>(null);
@@ -150,12 +153,13 @@ function ServerBackups() {
                   <p className="font-medium tabular">{new Date(b.createdAt).toLocaleString([], { dateStyle: "medium", timeStyle: "short" })}</p>
                   <p className="text-xs text-muted-foreground tabular">{label(b.reason)} · {size(b.size)} · {timeAgo(b.createdAt)}</p>
                 </div>
-                <Button size="icon" variant="ghost" className="h-8 w-8" aria-label="Download backup" disabled={!!busy} onClick={() => download(b)}>{busy === b.name ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}</Button>
+                {canDownload && <Button size="icon" variant="ghost" className="h-8 w-8" aria-label="Download backup" disabled={!!busy} onClick={() => download(b)}>{busy === b.name ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}</Button>}
                 <Button size="sm" variant="outline" disabled={!!busy} onClick={() => restore(b)}><RotateCcw className="h-3.5 w-3.5" />Restore</Button>
               </li>
             ))}
           </ul>
         )}
+        {!canDownload && exports.length > 0 && <p className="text-xs text-muted-foreground">Only an owner can download these, because they include sign-in details. Use Download backup above for your own copy.</p>}
       </div>
     </Section>
   );
