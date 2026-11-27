@@ -4,7 +4,7 @@ import { AlertTriangle, Menu, PanelLeftClose, PanelLeftOpen, Search } from "luci
 import { useApp } from "@/context/AppData";
 import { AccountMenu } from "@/components/AccountMenu";
 import { safeStorage } from "@/lib/storage";
-import { Mark } from "@/components/Logo";
+import { ProductWordmark } from "@/components/Logo";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -117,13 +117,12 @@ function Shell({ children }: { children: ReactNode }) {
   );
 }
 
-/** Brand row: plum mark, serif "Shijiri", muted product label. */
+/** Brand row: the "Payroll" wordmark from the logo, with "by Shijiri" as a quiet label. */
 function Brand({ compact = false }: { compact?: boolean }) {
   return (
     <>
-      <Mark aria-hidden role="presentation" aria-label={undefined} className="h-6 w-auto shrink-0 text-primary" />
-      <span className="font-display text-[17px] font-normal leading-none tracking-[-0.01em] text-foreground">Shijiri</span>
-      {!compact && <span className="truncate pt-0.5 text-[12.5px] text-muted-foreground">Payroll</span>}
+      <ProductWordmark className="h-[22px] w-auto shrink-0" />
+      {!compact && <span className="truncate pt-1.5 text-[12px] text-muted-foreground">by Shijiri</span>}
     </>
   );
 }
