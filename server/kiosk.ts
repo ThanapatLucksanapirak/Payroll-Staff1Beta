@@ -252,6 +252,9 @@ export function acquireArrival(key: string): { ready: Promise<void>; done: () =>
   return { ready: prev, done: () => { clearTimeout(timer); done(); } };
 }
 
+/** Tests: whether a punch for `key` is queued or being handled. */
+export const arrivalPending = (key: string) => arrivals.has(key);
+
 // ── Kiosk API ─────────────────────────────────────────────────────────────────
 type Handler = (req: Request, res: Response) => Promise<unknown>;
 export const h = (fn: Handler) => (req: Request, res: Response, next: NextFunction) => {

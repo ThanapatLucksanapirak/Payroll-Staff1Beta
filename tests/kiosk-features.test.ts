@@ -405,7 +405,10 @@ test("two devices punching the same employee moments apart are handled in arriva
     assert.equal(id.body.status, "out");
     // Device 1: clock in with the PIN (slow: hashing). Device 2, right after: clock out with a ticket (fast).
     const a = K("POST", "/api/kiosk/punch", { id: randomUUID(), type: "in", pin: "5678", employeeId: ben });
-    await new Promise((r) => setTimeout(r, 2));
+    // Send device 2's punch once device 1's has reached the server and joined Ben's queue
+    // (a fixed delay let device 2 overtake it on the way in when the machine was busy).
+    const { arrivalPending } = await import("../server/kiosk");
+    for (let t = 0; !arrivalPending(`${siteId}|${ben}`); t++) { assert.ok(t < 2000, "device 1's punch arrived"); await new Promise((r) => setTimeout(r, 1)); }
     const b = K("POST", "/api/kiosk/punch", { id: randomUUID(), type: "out", ticket: id.body.ticket, employeeId: ben }, other);
     const [ra, rb] = await Promise.all([a, b]);
     assert.equal(ra.status, 200, JSON.stringify(ra.body));
@@ -466,6 +469,8 @@ test("shift notes: posted by managers, shown once at clock-in, acknowledged", as
   assert.equal(seen.active, true);
   assert.equal((await M("DELETE", `/api/sites/${siteId}/kiosk-notes/${forBen.body.id}`)).status, 200);
   assert.equal((await M("DELETE", `/api/sites/${siteId}/kiosk-notes/${forBen.body.id}`)).status, 404);
+  // Audit entries are written in the background: wait for them before reading the log.
+  await (await import("../server/audit")).flushAudit();
   const audit = await A("GET", "/api/audit?action=kiosk");
   assert.equal(audit.status, 200);
   assert.ok(audit.body.entries.some((e: any) => e.action === "kiosk.note.create" && e.userName.includes("manny")), JSON.stringify(audit.body).slice(0, 300));

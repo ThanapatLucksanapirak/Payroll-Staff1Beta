@@ -97,3 +97,34 @@ test("two finalizes at once and a repeat finalize log one entry", async () => {
   const list: any[] = Array.isArray(all) ? all : all.entries ?? all.items ?? [];
   assert.ok(list.some((e) => e.action === "timesheet.rename" && e.target === `timesheet:${id}`));
 });
+
+test("finalize and reopen entries name the timesheet; reopen keeps the owner's reason", async () => {
+  const id = (await call("POST", "/api/timesheets", { doc: { ...doc(), label: "Week of Nov 2" } })).body.id;
+  assert.equal((await call("PATCH", `/api/timesheets/${id}`, { status: "final" })).status, 200);
+  const fin = await finalizeEntries(id);
+  assert.equal(fin.length, 1);
+  assert.equal(fin[0].detail, "Week of Nov 2");
+  const re = await call("POST", `/api/timesheets/${id}/reopen`, { reason: "fix a rate" });
+  assert.equal(re.status, 200, JSON.stringify(re.body));
+  const { flushAudit } = await import("../server/audit");
+  await new Promise((r) => setTimeout(r, 50));
+  await flushAudit();
+  const all = (await call("GET", "/api/audit?limit=500")).body;
+  const list: any[] = (Array.isArray(all) ? all : all.entries ?? all.items ?? []).filter((e: any) => e.action === "timesheet.reopen" && e.target === `timesheet:${id}`);
+  assert.equal(list.length, 1, "one reopen entry");
+  assert.equal(list[0].detail, "Week of Nov 2 · reason: fix a rate");
+  assert.equal(list[0].userName, "admin", "logged as the owner who reopened it");
+});
+
+test("a move names the new location, not its id", async () => {
+  const site2 = await call("POST", "/api/sites", { name: "Downtown" });
+  assert.equal(site2.status, 200, JSON.stringify(site2.body));
+  const id = (await call("POST", "/api/timesheets", { doc: { ...doc(), label: "Week B" } })).body.id;
+  assert.equal((await call("PATCH", `/api/timesheets/${id}`, { siteId: site2.body.id })).status, 200);
+  const { flushAudit } = await import("../server/audit");
+  await new Promise((r) => setTimeout(r, 50));
+  await flushAudit();
+  const all = (await call("GET", "/api/audit?limit=500")).body;
+  const e = (Array.isArray(all) ? all : all.entries ?? all.items ?? []).find((x: any) => x.action === "timesheet.move" && x.target === `timesheet:${id}`);
+  assert.equal(e?.detail, "Week B · moved to Downtown");
+});

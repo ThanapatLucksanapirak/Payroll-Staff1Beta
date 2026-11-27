@@ -6,6 +6,9 @@ Settings → About, next to the matching update.
 Add an entry with every pull request: a `## YYYY-MM-DD · Title (#PR)` heading and a
 few short bullets written for the people who use the app, not for developers.
 
+## 2026-11-27 · Clearer activity log for finalize and reopen (#58)
+- Finalizing, reopening, renaming or moving a timesheet now names the timesheet in the activity log, a rename shows the old name, and a move names the new location.
+
 ## 2026-11-27 · Bigger logo in the desktop sidebar (#57)
 - The logo at the top of the desktop sidebar is about half as big again, so "By SHIJIRI GROUP" is easier to read, with more room before the collapse button.
 
