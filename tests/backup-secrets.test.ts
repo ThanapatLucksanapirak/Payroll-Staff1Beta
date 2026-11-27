@@ -99,6 +99,7 @@ test("an admin's backup withholds PIN hashes, and restoring it keeps today's PIN
   // Restoring the admin's copy must not wipe Ana's PIN.
   const r = await call("POST", "/api/backup/restore", adminCopy.body, admin);
   assert.equal(r.status, 200, JSON.stringify(r.body));
+  assert.equal(r.body.pinsCleared, undefined, "nobody lost a PIN");
   invalidateEmployeeCache();
   assert.equal((await findByPin(siteId, "4821"))?.name, "Ana");
   const after = await call("GET", `/api/sites/${siteId}/employees`);
@@ -113,14 +114,53 @@ test("an admin's backup withholds PIN hashes, and restoring it keeps today's PIN
 test("a withheld PIN for someone no longer here comes back without a PIN", async () => {
   const { restoreWithheldPins } = await import("../server/employees");
   const file = JSON.stringify({ salt: "s1", employees: [{ id: "x", name: "X", pinHash: null, pinEnc: null, pinWithheld: true }] });
-  const gone = JSON.parse(restoreWithheldPins(file, JSON.stringify({ salt: "s1", employees: [] })));
+  const goneR = restoreWithheldPins(file, JSON.stringify({ salt: "s1", employees: [] }));
+  assert.deepEqual(goneR.lost, ["X"]);
+  const gone = JSON.parse(goneR.value);
   assert.equal(gone.employees[0].pinHash, null);
   assert.ok(!("pinWithheld" in gone.employees[0]));
   // A different salt means today's hash wouldn't match: don't carry it.
-  const otherSalt = JSON.parse(restoreWithheldPins(file, JSON.stringify({ salt: "s2", employees: [{ id: "x", pinHash: "h", pinEnc: "e" }] })));
+  const otherR = restoreWithheldPins(file, JSON.stringify({ salt: "s2", employees: [{ id: "x", pinHash: "h", pinEnc: "e" }] }));
+  assert.deepEqual(otherR.lost, ["X"]);
+  const otherSalt = JSON.parse(otherR.value);
   assert.equal(otherSalt.employees[0].pinHash, null);
-  const same = JSON.parse(restoreWithheldPins(file, JSON.stringify({ salt: "s1", employees: [{ id: "x", pinHash: "h", pinEnc: "e" }] })));
+  const sameR = restoreWithheldPins(file, JSON.stringify({ salt: "s1", employees: [{ id: "x", pinHash: "h", pinEnc: "e" }] }));
+  assert.deepEqual(sameR.lost, []);
+  const same = JSON.parse(sameR.value);
   assert.equal(same.employees[0].pinHash, "h");
   assert.equal(same.employees[0].pinEnc, "e");
-  assert.equal(restoreWithheldPins("not json", null), "not json");
+  assert.deepEqual(restoreWithheldPins("not json", null), { value: "not json", lost: [] });
+});
+
+test("restoring an admin copy after the PIN salt changed names who lost their PIN", async () => {
+  const { invalidateEmployeeCache } = await import("../server/employees");
+  const { db } = await import("../server/db");
+  const copy = (await call("GET", "/api/backup", undefined, admin)).body;
+  const k = `employees:${siteId}`;
+  const store = await db();
+  const dir = JSON.parse((await store.getSetting(k))!);
+  await store.setSetting(k, JSON.stringify({ ...dir, salt: "a-different-salt" }));
+  invalidateEmployeeCache();
+  const r = await call("POST", "/api/backup/restore", copy, admin);
+  assert.equal(r.status, 200, JSON.stringify(r.body));
+  assert.deepEqual(r.body.pinsCleared, ["Ana"]);
+});
+
+test("Give everyone a PIN pressed twice at once hands out one working set", async () => {
+  const { findByPin, invalidateEmployeeCache } = await import("../server/employees");
+  for (const name of ["Cy", "Di", "Ed"]) assert.equal((await call("POST", `/api/sites/${siteId}/employees`, { name })).status, 200);
+  const [a, b] = await Promise.all([
+    call("POST", `/api/sites/${siteId}/employee-pins/generate`, {}),
+    call("POST", `/api/sites/${siteId}/employee-pins/generate`, {}, admin),
+  ]);
+  assert.equal(a.status, 200);
+  assert.equal(b.status, 200);
+  const handed = [...a.body.pins, ...b.body.pins];
+  const ids = handed.map((p: any) => p.id);
+  assert.equal(new Set(ids).size, ids.length, "nobody got two PINs");
+  assert.equal(a.body.skipped + b.body.skipped, 0);
+  invalidateEmployeeCache();
+  for (const p of handed) assert.equal((await findByPin(siteId, p.pin))?.id, p.id, `${p.name}'s handed-out PIN works`);
+  const again = await call("POST", `/api/sites/${siteId}/employee-pins/generate`, {});
+  assert.deepEqual(again.body, { pins: [], skipped: 0 });
 });
