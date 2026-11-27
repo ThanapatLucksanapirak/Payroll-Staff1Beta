@@ -11,6 +11,11 @@ few short bullets written for the people who use the app, not for developers.
 - A punch that can't work anyway (like clocking out when not clocked in) is refused right away, without checking the face.
 - Someone standing a bit far from the time clock is no longer told "Face not detected". When no face is found, the time clock now says to move closer and look straight at the camera.
 
+## 2026-11-27 · New look around the Payroll by Shijiri Group logo (#49)
+- The new logo is on the sign-in screen, the sidebar, the time clock and the staff portal.
+- New browser tab icon and home-screen and Android app icons: the logo's gold and orange blocks with the red dot. Installed apps may take a restart to show the new icon.
+- Buttons, selection and focus are now Payroll orange instead of plum, in light and dark mode. Emails use the logo blocks and an orange button.
+
 ## 2026-11-27 · No punches lost during a restore or database switch (#48)
 - While a backup restore or a database switch runs, the time clock's punches (and other changes) wait a few seconds instead of being saved into data that's about to be replaced. The tablet keeps each punch and sends it again on its own, so it's never lost.
 - A restore or switch first waits for anything already being saved to finish, and a second one can't start while one is running.

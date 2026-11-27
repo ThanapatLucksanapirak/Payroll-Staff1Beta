@@ -83,7 +83,7 @@ function SignIn({ onSignedIn }: { onSignedIn: () => Promise<void> }) {
       <BrandPanel />
       <main className="flex flex-col px-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] pt-7 min-[861px]:px-12 min-[861px]:py-8">
         <div className="mx-auto w-full max-w-[380px] min-[861px]:my-auto">
-          <h1 className="font-display text-[30px] font-normal leading-[1.1] tracking-[-0.012em] min-[861px]:text-[36px]">Hi there</h1>
+          <h1 className="font-display text-[30px] font-semibold leading-[1.1] tracking-[-0.02em] min-[861px]:text-[36px]">Hi there</h1>
           <p className="mb-6 mt-2.5 text-[15px] leading-[22px] text-muted-foreground min-[861px]:mb-8">Sign in to see your shifts and pay.</p>
 
           {sites.loading && !sites.data ? (
@@ -184,7 +184,7 @@ function Home({ me, onSignOut }: { me: Me; onSignOut: () => void }) {
           <div className="flex min-w-0 items-center gap-3">
             <Mark aria-hidden aria-label={undefined} role="presentation" className="h-6 w-auto shrink-0 text-primary" />
             <div className="min-w-0">
-              <p className="truncate font-display text-[22px] font-normal leading-tight" data-testid="portal-greeting">Hi, {firstName(me.employee.name)}</p>
+              <p className="truncate font-display text-[22px] font-semibold leading-tight" data-testid="portal-greeting">Hi, {firstName(me.employee.name)}</p>
               <p className="truncate text-[13px] text-muted-foreground"><span className="mr-1.5 inline-block h-2 w-2 rounded-full align-middle" style={{ background: me.site.color }} aria-hidden />{me.employee.name} · {me.site.name}</p>
             </div>
           </div>
