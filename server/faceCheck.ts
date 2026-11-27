@@ -19,7 +19,9 @@ import type { WorkerMessage, WorkerReply } from "./faceWorker";
 export { FACE_MIN_SCORE, type FaceCheckOptions, type FaceVerdict } from "./faceDetect";
 
 /** A check that takes longer than this (waiting included) answers "unavailable"; more than this many waiting answer "busy". */
-export const faceLimits = { timeoutMs: 10_000, maxWaiting: 10 };
+// About 0.3 s per photo, so 40 waiting clears in well under the 10 s limit;
+// with 10, a crowd of 20 at the start of a shift had half told "busy".
+export const faceLimits = { timeoutMs: 10_000, maxWaiting: 40 };
 
 const req = createRequire(typeof __filename !== "undefined" ? __filename : path.join(process.cwd(), "index.js"));
 const UNAVAILABLE: FaceVerdict = { ok: false, reason: "unavailable" };
@@ -93,8 +95,9 @@ function getWorker(): Promise<Worker | null> {
 function callWorker(w: Worker, msg: WorkerMessage, transfer: ArrayBuffer[] = []): Promise<FaceVerdict> {
   return new Promise((resolve) => {
     const id = nextId++;
-    // A check stuck far past its limit: stop the worker (a new one starts on the next check).
-    const stuck = setTimeout(() => { if (pending.delete(id)) { resolve(UNAVAILABLE); void w.terminate(); } }, faceLimits.timeoutMs * 2);
+    // A check stuck past its limit: stop the worker at once (a new one starts on the
+    // next check), so a hang costs one check, not 20 s of failed punches.
+    const stuck = setTimeout(() => { if (pending.delete(id)) { resolve(UNAVAILABLE); void w.terminate(); } }, faceLimits.timeoutMs);
     pending.set(id, (v) => { clearTimeout(stuck); resolve(v); });
     w.postMessage({ ...msg, id }, transfer);
   });
@@ -112,6 +115,8 @@ export async function loadFaceModel(): Promise<void> {
 let queue: Promise<unknown> = Promise.resolve();
 
 let waiting = 0;
+/** How long a check has been taking lately (a moving average), to tell how long the queue will take. */
+let checkMs = 400;
 
 async function detect(bytes: Buffer, opts: FaceCheckOptions): Promise<FaceVerdict> {
   const w = await getWorker();
@@ -125,24 +130,39 @@ async function detect(bytes: Buffer, opts: FaceCheckOptions): Promise<FaceVerdic
   return detectFace(bytes, opts);
 }
 
-/** Is there a face in this JPEG? With `descriptor`, also describe it for face recognition. */
-export function checkFaceJpeg(bytes: Buffer, opts: FaceCheckOptions = {}): Promise<FaceVerdict> {
+/**
+ * Is there a face in this JPEG? With `descriptor`, also describe it for face recognition.
+ * The time limit counts from `startedAt` (when the punch arrived; default now), so
+ * waiting behind other photos, and anything the request did first, is included.
+ * A check that never got its turn in time answers "busy"; one that started but
+ * didn't finish answers "unavailable".
+ */
+export function checkFaceJpeg(bytes: Buffer, opts: FaceCheckOptions = {}, startedAt = Date.now()): Promise<FaceVerdict> {
   if (waiting >= faceLimits.maxWaiting) return Promise.resolve({ ok: false, reason: "busy" });
+  const deadline = startedAt + faceLimits.timeoutMs;
+  const left = deadline - Date.now();
+  // Refuse at once when the photos ahead of this one (at the recent pace) would
+  // use up its time: "busy" comes back in a moment and the kiosk sends it again,
+  // instead of the punch waiting out the limit and failing as "unavailable".
+  if (left <= 0 || (waiting + 1) * checkMs > left) return Promise.resolve({ ok: false, reason: "busy" });
   waiting++;
-  const deadline = Date.now() + faceLimits.timeoutMs;
+  let started = false;
   // Skip a check whose request has already timed out.
   const next = async (): Promise<FaceVerdict> => {
-    if (Date.now() > deadline) return UNAVAILABLE;
-    return detect(bytes, opts);
+    if (Date.now() > deadline) return { ok: false, reason: "busy" };
+    started = true;
+    const t0 = Date.now();
+    try { return await detect(bytes, opts); }
+    finally { checkMs = Math.min(faceLimits.timeoutMs, Math.max(50, checkMs * 0.8 + (Date.now() - t0) * 0.2)); }
   };
   const run = queue.then(next, next).finally(() => { waiting--; });
   queue = run.catch(() => undefined);
   let timer: NodeJS.Timeout | undefined;
   const timeout = new Promise<FaceVerdict>((resolve) => {
     timer = setTimeout(() => {
-      console.error(`[face] face check took over ${faceLimits.timeoutMs} ms`);
-      resolve(UNAVAILABLE);
-    }, faceLimits.timeoutMs);
+      console.error(`[face] face check ${started ? "took" : "waited"} over ${faceLimits.timeoutMs} ms`);
+      resolve(started ? UNAVAILABLE : { ok: false, reason: "busy" });
+    }, left);
   });
   return Promise.race([run.catch((): FaceVerdict => UNAVAILABLE), timeout]).finally(() => clearTimeout(timer));
 }

@@ -561,7 +561,8 @@ export function registerKioskRoutes(app: Express) {
       }
     }
     if (takesPhoto && photoBytes) {
-      const face = await checkFaceJpeg(photoBytes, { descriptor: Array.isArray(templates) });
+      // The 10 s limit counts from when the punch arrived, so the kiosk hears back well before it gives up (15 s).
+      const face = await checkFaceJpeg(photoBytes, { descriptor: Array.isArray(templates) }, now);
       if (face.ok && Array.isArray(templates)) {
         const m = matchFace(face.descriptor, templates);
         if (m.distance != null) meta.faceMatch = m.distance;

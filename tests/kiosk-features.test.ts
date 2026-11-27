@@ -333,7 +333,7 @@ test("punch with station and photo; photo served only to editors; not in backups
   try {
     const live503 = await K("POST", "/api/kiosk/punch", { id: randomUUID(), type: "break_start", pin: "1234", photo: JPEG });
     assert.equal(live503.status, 503);
-    assert.equal(live503.body.reason, "unavailable");
+    assert.equal(live503.body.reason, "busy", "no time left for a check: busy, so the kiosk can send it again");
     const late = await K("POST", "/api/kiosk/punch", { id: randomUUID(), type: "break_start", pin: "1234", photo: JPEG, at: new Date(Date.now() - 4 * 60_000).toISOString() });
     assert.equal(late.status, 200, JSON.stringify(late.body));
     const lateMeta = (await recentPunches()).find((x: any) => x.id === late.body.punch.id).meta;

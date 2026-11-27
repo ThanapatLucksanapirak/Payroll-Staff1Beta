@@ -31,13 +31,46 @@ test("face check: too many waiting answers busy, a slow check answers unavailabl
     faceLimits.timeoutMs = Math.round((Date.now() - t0) * 1.5);
     const slow = await Promise.all(Array.from({ length: 4 }, () => checkFaceJpeg(fixture("face.jpg"))));
     assert.equal(slow[0].ok, true);
-    assert.deepEqual(slow.slice(2), [{ ok: false, reason: "unavailable" }, { ok: false, reason: "unavailable" }]);
+    // The ones that never got their turn answer "busy" (the kiosk may try again); none hang past the limit.
+    assert.deepEqual(slow.slice(2), [{ ok: false, reason: "busy" }, { ok: false, reason: "busy" }]);
     Object.assign(faceLimits, saved);
     // The queue recovers: the next check works normally
     assert.equal((await checkFaceJpeg(fixture("face.jpg"))).ok, true);
   } finally {
     Object.assign(faceLimits, saved);
   }
+});
+
+test("face check: a crowd of photo punches gets checked, or told busy at once, never left to time out", async () => {
+  await loadFaceModel();
+  assert.ok(faceLimits.maxWaiting >= 30, "room for a crowd at the start of a shift");
+  const t0 = Date.now();
+  const all = await Promise.all(Array.from({ length: 50 }, async () => { const v = await checkFaceJpeg(fixture("face.jpg")); return { v, ms: Date.now() - t0 }; }));
+  assert.equal(all.filter((x) => !x.v.ok && x.v.reason === "unavailable").length, 0, "none fail from waiting in the queue");
+  const ok = all.filter((x) => x.v.ok).length;
+  assert.ok(ok >= 12, `at least the first dozen are checked (${ok})`);
+  const busy = all.filter((x) => !x.v.ok && x.v.reason === "busy");
+  assert.equal(ok + busy.length, 50);
+  assert.ok(busy.every((x) => x.ms < 200), "busy is answered at once, so the kiosk can send it again");
+});
+
+test("face check: the time limit counts from when the punch arrived, queue wait included", async () => {
+  await loadFaceModel();
+  const saved = { ...faceLimits };
+  try {
+    faceLimits.timeoutMs = 1500;
+    const arrived = Date.now();
+    const all = await Promise.all(Array.from({ length: 30 }, async () => { await checkFaceJpeg(fixture("face.jpg"), {}, arrived); return Date.now() - arrived; }));
+    assert.ok(Math.max(...all) < 2200, `slowest answered after ${Math.max(...all)} ms`);
+    // A punch that already spent its time elsewhere (e.g. the PIN check) answers at once.
+    const t = Date.now();
+    assert.deepEqual(await checkFaceJpeg(fixture("face.jpg"), {}, Date.now() - 1600), { ok: false, reason: "busy" });
+    assert.ok(Date.now() - t < 100);
+  } finally {
+    Object.assign(faceLimits, saved);
+  }
+  // Drain whatever is still queued before the next test.
+  assert.equal((await checkFaceJpeg(fixture("face.jpg"))).ok, true);
 });
 
 /** A fixture face of `face` px square, centred in a blank `w` x `h` frame (like a kiosk photo of someone far from the camera). */
