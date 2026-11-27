@@ -6,16 +6,16 @@ Settings → About, next to the matching update.
 Add an entry with every pull request: a `## YYYY-MM-DD · Title (#PR)` heading and a
 few short bullets written for the people who use the app, not for developers.
 
+## 2026-11-27 · Faster photo punches, and small faces are found (#50)
+- The face check now runs in the background, so the rest of the app stays quick while time clocks send photos. Large photos are shrunk first.
+- A punch that can't work anyway (like clocking out when not clocked in) is refused right away, without checking the face.
+- Someone standing a bit far from the time clock is no longer told "Face not detected". When no face is found, the time clock now says to move closer and look straight at the camera.
+
 ## 2026-11-27 · No punches lost during a restore or database switch (#48)
 - While a backup restore or a database switch runs, the time clock's punches (and other changes) wait a few seconds instead of being saved into data that's about to be replaced. The tablet keeps each punch and sends it again on its own, so it's never lost.
 - A restore or switch first waits for anything already being saved to finish, and a second one can't start while one is running.
 - Automatic clock-out skips a run while a restore or switch is under way.
 - If a restore to a Supabase database stops part-way, it now says so and asks you to run the same restore again, instead of a general database error.
-
-## 2026-11-27 · Faster photo punches, and small faces are found (#50)
-- The face check now runs in the background, so the rest of the app stays quick while time clocks send photos. Large photos are shrunk first.
-- A punch that can't work anyway (like clocking out when not clocked in) is refused right away, without checking the face.
-- Someone standing a bit far from the time clock is no longer told "Face not detected". When no face is found, the time clock now says to move closer and look straight at the camera.
 
 ## 2026-11-27 · Face data is kept through a database switch or restore (#47)
 - Switching to another database, or restoring an older backup, no longer lets the daily clean-up delete saved face data. Face data isn't in backups, so before this it couldn't be got back after switching back.
