@@ -289,3 +289,19 @@ test("deleting face data with punch photos removes the alerts and their photos t
   // And with no face data, Ana's punches are no longer checked
   assert.equal((await punch("out", "other-face.jpg")).status, 200);
 });
+
+test("a punch for the wrong action answers 409 without running the face check", async () => {
+  const st = await K("POST", "/api/kiosk/identify", { pin: "5678" });
+  assert.equal(st.status, 200, JSON.stringify(st.body));
+  // Whatever state Ben is in, one action is wrong for him: clock out when out, clock in when in.
+  const wrong = st.body.status === "out" ? "out" : "in";
+  // A photo with no face would be refused 422 if the face check ran first
+  const r = await punch(wrong, "no-face.jpg", {}, "5678");
+  assert.equal(r.status, 409, JSON.stringify(r.body));
+  assert.equal(r.body.code, "state");
+  assert.ok(r.body.suggest);
+  // The right action with that photo still reaches the face check
+  const right = await punch(wrong === "out" ? "in" : "out", "no-face.jpg", {}, "5678");
+  assert.equal(right.status, 422);
+  assert.equal(right.body.reason, "no_face");
+});

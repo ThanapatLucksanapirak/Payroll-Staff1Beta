@@ -4,60 +4,108 @@
 //
 // It runs face-api's SSD MobileNet v1 face detector (about 5.6 MB of weights,
 // shipped in the npm package) on TensorFlow.js's WebAssembly backend: CPU only,
-// no native build, nothing sent anywhere. A 320 px kiosk photo takes about
-// 0.3 s. The model loads once, in the background at start-up and on first use.
+// no native build, nothing sent anywhere. A kiosk photo takes about 0.3 s, so
+// the detector runs in a worker thread (server/faceWorker.ts, built next to
+// dist/index.cjs as dist/faceWorker.cjs) and the rest of the server keeps
+// answering meanwhile. If the worker can't start, the check runs in-process
+// as before. The model loads once, in the background at start-up and on first use.
 import fs from "node:fs";
 import path from "node:path";
 import { createRequire } from "node:module";
+import { Worker } from "node:worker_threads";
+import { detectFace, loadDetector, type FaceCheckOptions, type FaceVerdict } from "./faceDetect";
+import type { WorkerMessage, WorkerReply } from "./faceWorker";
 
-/** How sure the detector must be. Real faces from kiosk photos score 0.9 to 1.0; objects and hands about 0.2 to 0.4. */
-export const FACE_MIN_SCORE = 0.6;
-
-export type FaceVerdict =
-  | { ok: true; score: number; /** Faces found above the threshold. */ faces?: number; /** 128 numbers describing the clearest face (face recognition), when asked for. */ descriptor?: number[] }
-  | { ok: false; reason: "no_face" | "bad_image" | "unavailable" | "busy"; score?: number };
-
-export interface FaceCheckOptions {
-  /** Also work out the face's descriptor for face recognition (about 0.1 s more). */
-  descriptor?: boolean;
-}
+export { FACE_MIN_SCORE, type FaceCheckOptions, type FaceVerdict } from "./faceDetect";
 
 /** A check that takes longer than this (waiting included) answers "unavailable"; more than this many waiting answer "busy". */
 export const faceLimits = { timeoutMs: 10_000, maxWaiting: 10 };
 
-type FaceApi = typeof import("@vladmandic/face-api");
-type Tf = typeof import("@tensorflow/tfjs");
-let tf: Tf;
-let loading: Promise<FaceApi> | null = null;
-let failedAt = 0;
-
 const req = createRequire(typeof __filename !== "undefined" ? __filename : path.join(process.cwd(), "index.js"));
+const UNAVAILABLE: FaceVerdict = { ok: false, reason: "unavailable" };
 
-/** Load the detector once. Rejects when it can't run (tried again after a minute). */
-export function loadFaceModel(): Promise<FaceApi> {
-  if (loading) return loading;
-  if (failedAt && Date.now() - failedAt < 60_000) return Promise.reject(new Error("face model failed to load recently"));
-  loading = (async () => {
-    tf = req("@tensorflow/tfjs");
-    req("@tensorflow/tfjs-backend-wasm");
-    const faceapi: FaceApi = req("@vladmandic/face-api/dist/face-api.node-wasm.js");
-    await tf.setBackend("wasm");
-    await tf.ready();
-    const dir = path.join(path.dirname(req.resolve("@vladmandic/face-api/package.json")), "model");
-    if (!fs.existsSync(path.join(dir, "ssd_mobilenetv1_model.bin"))) throw new Error(`face model not found in ${dir}`);
-    await faceapi.nets.ssdMobilenetv1.loadFromDisk(dir);
-    // Face recognition: 68-point landmarks to line the face up, then the
-    // recognition network's 128-number descriptor (about 6.5 MB more).
-    await faceapi.nets.faceLandmark68Net.loadFromDisk(dir);
-    await faceapi.nets.faceRecognitionNet.loadFromDisk(dir);
-    return faceapi;
-  })().catch((err) => {
-    loading = null;
-    failedAt = Date.now();
-    console.error("[face] face detector failed to load:", err);
-    throw err;
+// ── The worker ───────────────────────────────────────────────────────────────
+let worker: Promise<Worker | null> | null = null;
+/** Set when the worker can't start: checks then run in this thread. */
+let inProcess = process.env.FACE_WORKER === "off";
+let crashes = 0;
+let nextId = 1;
+const pending = new Map<number, (v: FaceVerdict) => void>();
+
+/** How to start the worker: the built file next to dist/index.cjs, or the TypeScript source in development. */
+function workerSource(): { code: string } | null {
+  const dirs = [typeof __dirname !== "undefined" ? __dirname : "", path.join(process.cwd(), "dist"), path.join(process.cwd(), "server")].filter(Boolean);
+  for (const d of dirs) {
+    const built = path.join(d, "faceWorker.cjs");
+    if (fs.existsSync(built)) return { code: `require(${JSON.stringify(built)});` };
+  }
+  for (const d of dirs) {
+    const src = path.join(d, "faceWorker.ts");
+    if (fs.existsSync(src)) return { code: `require(${JSON.stringify(req.resolve("tsx/cjs"))}); require(${JSON.stringify(src)});` };
+  }
+  return null;
+}
+
+function failPending() {
+  for (const [id, resolve] of pending) { pending.delete(id); resolve(UNAVAILABLE); }
+}
+
+function getWorker(): Promise<Worker | null> {
+  if (inProcess) return Promise.resolve(null);
+  if (worker) return worker;
+  const p: Promise<Worker | null> = new Promise((resolve) => {
+    let w: Worker;
+    let started = false;
+    const giveUp = (why: string) => {
+      if (worker === p) worker = null;
+      if (!started) {
+        started = true;
+        if (++crashes >= 3) inProcess = true;
+        console.error(`[face] face worker could not start (${why}); ${inProcess ? "checking in the main thread instead" : "will try again"}`);
+        resolve(null);
+      } else {
+        console.error(`[face] face worker stopped (${why})`);
+      }
+      failPending();
+    };
+    try {
+      const src = workerSource();
+      if (!src) { inProcess = true; started = true; console.error("[face] face worker file not found; checking in the main thread"); return resolve(null); }
+      w = new Worker(src.code, { eval: true, execArgv: [] });
+    } catch (err) { return giveUp(String(err)); }
+    const timer = setTimeout(() => { if (!started) { void w.terminate(); giveUp("timed out"); } }, 15_000);
+    w.on("message", (m: WorkerReply) => {
+      if ("type" in m) {
+        if (!started) { started = true; clearTimeout(timer); crashes = 0; resolve(w); }
+        return;
+      }
+      const done = pending.get(m.id);
+      if (done) { pending.delete(m.id); done(m.verdict); }
+    });
+    w.on("error", (err) => { clearTimeout(timer); giveUp(err instanceof Error ? err.message : String(err)); });
+    w.on("exit", (code) => { clearTimeout(timer); giveUp(`exit ${code}`); });
+    w.unref();
   });
-  return loading;
+  worker = p;
+  return p;
+}
+
+function callWorker(w: Worker, msg: WorkerMessage, transfer: ArrayBuffer[] = []): Promise<FaceVerdict> {
+  return new Promise((resolve) => {
+    const id = nextId++;
+    // A check stuck far past its limit: stop the worker (a new one starts on the next check).
+    const stuck = setTimeout(() => { if (pending.delete(id)) { resolve(UNAVAILABLE); void w.terminate(); } }, faceLimits.timeoutMs * 2);
+    pending.set(id, (v) => { clearTimeout(stuck); resolve(v); });
+    w.postMessage({ ...msg, id }, transfer);
+  });
+}
+
+/** Start loading the detector (in the worker, or here when there is none). Rejects when it can't run. */
+export async function loadFaceModel(): Promise<void> {
+  const w = await getWorker();
+  if (!w) { await loadDetector(); return; }
+  const v = await callWorker(w, { type: "load" });
+  if (!v.ok) throw new Error("face detector failed to load");
 }
 
 /** One check at a time: the WebAssembly backend is single-threaded anyway. */
@@ -65,16 +113,26 @@ let queue: Promise<unknown> = Promise.resolve();
 
 let waiting = 0;
 
+async function detect(bytes: Buffer, opts: FaceCheckOptions): Promise<FaceVerdict> {
+  const w = await getWorker();
+  if (w) {
+    // Copy the photo for the worker (a Buffer may share a pooled ArrayBuffer).
+    const copy = new Uint8Array(bytes);
+    return callWorker(w, { type: "detect", bytes: copy, opts }, [copy.buffer]);
+  }
+  // No worker: detection blocks the event loop (about 0.3 s each), so let the server breathe first.
+  await new Promise((r) => setImmediate(r));
+  return detectFace(bytes, opts);
+}
+
 /** Is there a face in this JPEG? With `descriptor`, also describe it for face recognition. */
 export function checkFaceJpeg(bytes: Buffer, opts: FaceCheckOptions = {}): Promise<FaceVerdict> {
   if (waiting >= faceLimits.maxWaiting) return Promise.resolve({ ok: false, reason: "busy" });
   waiting++;
   const deadline = Date.now() + faceLimits.timeoutMs;
-  // Detection blocks the event loop (about 0.3 s each), so let the server breathe
-  // between checks, and skip a check whose request has already timed out.
+  // Skip a check whose request has already timed out.
   const next = async (): Promise<FaceVerdict> => {
-    await new Promise((r) => setImmediate(r));
-    if (Date.now() > deadline) return { ok: false, reason: "unavailable" };
+    if (Date.now() > deadline) return UNAVAILABLE;
     return detect(bytes, opts);
   };
   const run = queue.then(next, next).finally(() => { waiting--; });
@@ -83,40 +141,8 @@ export function checkFaceJpeg(bytes: Buffer, opts: FaceCheckOptions = {}): Promi
   const timeout = new Promise<FaceVerdict>((resolve) => {
     timer = setTimeout(() => {
       console.error(`[face] face check took over ${faceLimits.timeoutMs} ms`);
-      resolve({ ok: false, reason: "unavailable" });
+      resolve(UNAVAILABLE);
     }, faceLimits.timeoutMs);
   });
-  return Promise.race([run.catch((): FaceVerdict => ({ ok: false, reason: "unavailable" })), timeout]).finally(() => clearTimeout(timer));
-}
-
-async function detect(bytes: Buffer, opts: FaceCheckOptions): Promise<FaceVerdict> {
-  let faceapi: FaceApi;
-  try { faceapi = await loadFaceModel(); } catch { return { ok: false, reason: "unavailable" }; }
-  const jpeg: typeof import("jpeg-js") = req("jpeg-js");
-  let img: { width: number; height: number; data: Uint8Array };
-  try {
-    img = jpeg.decode(bytes, { useTArray: true, maxResolutionInMP: 4, maxMemoryUsageInMB: 64 });
-  } catch {
-    return { ok: false, reason: "bad_image" };
-  }
-  if (!img.width || !img.height) return { ok: false, reason: "bad_image" };
-  const rgba = tf.tensor3d(img.data, [img.height, img.width, 4], "int32");
-  const rgb = tf.slice(rgba, [0, 0, 0], [-1, -1, 3]) as unknown as Parameters<typeof faceapi.detectAllFaces>[0];
-  try {
-    const options = new faceapi.SsdMobilenetv1Options({ minConfidence: 0.3, maxResults: 3 });
-    if (!opts.descriptor) {
-      const found = await faceapi.detectAllFaces(rgb, options);
-      const score = Math.max(0, ...found.map((d) => d.score));
-      const faces = found.filter((d) => d.score >= FACE_MIN_SCORE).length;
-      return score >= FACE_MIN_SCORE ? { ok: true, score, faces } : { ok: false, reason: "no_face", score };
-    }
-    const found = await faceapi.detectAllFaces(rgb, options).withFaceLandmarks().withFaceDescriptors();
-    const best = found.reduce<(typeof found)[number] | null>((b, f) => (!b || f.detection.score > b.detection.score ? f : b), null);
-    const score = best?.detection.score ?? 0;
-    if (!best || score < FACE_MIN_SCORE) return { ok: false, reason: "no_face", score };
-    const faces = found.filter((f) => f.detection.score >= FACE_MIN_SCORE).length;
-    return { ok: true, score, faces, descriptor: Array.from(best.descriptor, (x) => Math.round(x * 1e6) / 1e6) };
-  } finally {
-    tf.dispose([rgba, rgb as unknown as import("@tensorflow/tfjs").Tensor]);
-  }
+  return Promise.race([run.catch((): FaceVerdict => UNAVAILABLE), timeout]).finally(() => clearTimeout(timer));
 }

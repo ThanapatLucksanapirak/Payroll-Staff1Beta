@@ -6,6 +6,11 @@ Settings → About, next to the matching update.
 Add an entry with every pull request: a `## YYYY-MM-DD · Title (#PR)` heading and a
 few short bullets written for the people who use the app, not for developers.
 
+## 2026-11-27 · Faster photo punches, and small faces are found (#50)
+- The face check now runs in the background, so the rest of the app stays quick while time clocks send photos. Large photos are shrunk first.
+- A punch that can't work anyway (like clocking out when not clocked in) is refused right away, without checking the face.
+- Someone standing a bit far from the time clock is no longer told "Face not detected". When no face is found, the time clock now says to move closer and look straight at the camera.
+
 ## 2026-11-27 · Full logo in the app header (#56)
 - The sidebar and the phone top bar now show the whole "Payroll by SHIJIRI Group" logo, with "By SHIJIRI GROUP" in black (white in dark mode), instead of just "Payroll".
 
