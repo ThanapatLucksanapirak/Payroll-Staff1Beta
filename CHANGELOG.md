@@ -11,7 +11,7 @@ few short bullets written for the people who use the app, not for developers.
 - If the time clock is still told the face check is busy, it sends the same punch again by itself a couple of times, so nobody has to tap again.
 - Punches for one person are still handled one at a time, in the order they arrive, so two time clocks can't record them out of order. Only a rush of different people gets the quick "busy" answer.
 - A face check that gets stuck is stopped after 10 seconds instead of 20, so the next punches work sooner.
-- A photo punch now always gets an answer within about 10 seconds of arriving, even in a big rush, so the time clock never gives up and saves it for later.
+- In a big rush of different people, each photo punch now gets an answer within about 10 seconds, so the time clock doesn't give up and save it for later.
 
 ## 2026-11-27 · Finalizing from the app shows as "Finalized" in Activity (#65)
 - Finalizing a timesheet from its page now appears in Settings → Activity as "Finalized" with the timesheet's name, the same as from the list. Before, it showed as an ordinary save.
