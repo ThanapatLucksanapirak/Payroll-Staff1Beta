@@ -10,6 +10,7 @@
 import type { Express, NextFunction, Request, Response } from "express";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
+import { isISODate } from "@shared/dates";
 import { type AnalysisResult, type EmployeeConfig, type TimesheetDoc, employeeConfigSchema, timesheetDocSchema } from "@shared/schema";
 import { computePayroll, employeeKey, normalizeName } from "@shared/engine";
 import { docToMeta, rowToDoc } from "@shared/legacy";
@@ -28,7 +29,7 @@ import { clearPublished, getPublishedMap } from "./publish";
 
 type Next = NextFunction;
 const g = (fn: (req: Request, res: Response, next: Next) => Promise<unknown>) => (req: Request, res: Response, next: Next) => { fn(req, res, next).catch(next); };
-const iso = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
+const iso = z.string().refine(isISODate, "Use a real date (YYYY-MM-DD).");
 
 export const PAY_KEYS = {
   settings: (siteId: string) => `pay:settings:${siteId}`,
