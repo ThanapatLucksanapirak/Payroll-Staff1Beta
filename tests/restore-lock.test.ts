@@ -156,7 +156,7 @@ test("a failed SQLite restore says nothing changed; a Supabase one says run it a
     const supa = await A("POST", "/api/backup/restore", backup);
     assert.equal(supa.status, 502);
     assert.equal(supa.body.code, "partial_restore");
-    assert.match(supa.body.error, /stopped part-way.*Run the same restore again/);
+    assert.match(supa.body.error, /restore is incomplete.*stopped part-way.*Run the same restore again/);
   } finally {
     Object.defineProperty(store, "kind", { value: "sqlite", configurable: true });
   }
