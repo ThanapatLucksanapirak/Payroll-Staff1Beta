@@ -178,7 +178,7 @@ function AddShiftDialog({ open, onOpenChange, names, defaultDate, onAdd }: { ope
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-sm" onOpenAutoFocus={() => { setDate(defaultDate); }}>
-        <DialogHeader><DialogTitle>Add shift</DialogTitle></DialogHeader>
+        <DialogHeader><DialogTitle>Add shift</DialogTitle><DialogDescription className="sr-only">Pick the person, date and times for the new shift.</DialogDescription></DialogHeader>
         <div className="space-y-3">
           <Field label="Employee"><Input list="ws-add-names" value={name} onChange={(e) => setName(e.target.value)} placeholder="Name" data-testid="input-add-shift-name" /></Field>
           <datalist id="ws-add-names">{names.map((n) => <option key={n} value={n} />)}</datalist>

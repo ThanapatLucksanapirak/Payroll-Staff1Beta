@@ -31,13 +31,15 @@ export type ReportKind = keyof typeof REPORTS;
 const MAX_FILE = 10 * 1024 * 1024;
 const MAX_RECIPIENTS = 10;
 const MAX_TOTAL = 18 * 1024 * 1024;
+// Generous cap on the encoded text: oversize PDFs get the friendly message below, not a schema error.
+const MAX_BODY_DATA = 24 * 1024 * 1024;
 
 const bodySchema = z.object({
   /** Accountants picked from the list. */
   recipientIds: z.array(z.string().max(100)).max(50).default([]),
   /** Any other addresses, typed in. */
   emails: z.array(notificationEmailSchema.refine((v) => v !== "", "Enter a valid email address.")).max(MAX_RECIPIENTS).default([]),
-  files: z.array(z.object({ kind: z.enum(Object.keys(REPORTS) as [ReportKind, ...ReportKind[]]), data: z.string().max(Math.ceil(MAX_FILE * 1.4)) })).min(1, "Pick at least one report.").max(4),
+  files: z.array(z.object({ kind: z.enum(Object.keys(REPORTS) as [ReportKind, ...ReportKind[]]), data: z.string().max(MAX_BODY_DATA) })).min(1, "Pick at least one report.").max(4),
   message: z.string().trim().max(1000).default(""),
   copyMe: z.boolean().default(false),
   /** false: only build the preview. */
@@ -92,7 +94,7 @@ export function registerShareRoutes(app: Express) {
       kinds.add(f.kind);
       const content = Buffer.from(f.data, "base64");
       if (content.length < 5 || content.subarray(0, 5).toString("latin1") !== "%PDF-") return res.status(400).json({ error: `The ${REPORTS[f.kind].toLowerCase()} isn't a PDF.` });
-      if (content.length > MAX_FILE) return res.status(413).json({ error: `The ${REPORTS[f.kind].toLowerCase()} is too big to email.` });
+      if (content.length > MAX_FILE) return res.status(413).json({ error: `The ${REPORTS[f.kind].toLowerCase()} is too big to email (the limit is 10 MB).` });
       total += content.length;
       attachments.push({ filename: `${fileSafe(`${site?.name ? `${site.name} ` : ""}${label}`)} - ${REPORTS[f.kind]}.pdf`, content, contentType: "application/pdf" });
     }
@@ -149,6 +151,8 @@ export function registerShareRoutes(app: Express) {
     sends.set(user.id, [...recent, now]);
 
     const result = await sendEmail(msg);
+    // Only emails that actually went out count toward the hourly limit.
+    if (!result.ok) { const list = sends.get(user.id); const i = list ? list.indexOf(now) : -1; if (list && i >= 0) list.splice(i, 1); }
     const names = toList.map((r) => (r.name ? `${r.name} <${r.email}>` : r.email)).join(", ");
     audit({ ...actorOf(req, res), action: "timesheet.share", target: `timesheet:${id}`, detail: `${label} · ${[...kinds].map((k) => REPORTS[k as ReportKind]).join(", ")} → ${names}: ${result.ok ? "sent" : "skipped" in result && result.skipped ? result.reason : `failed: ${(result as any).error}`}` });
     if (!result.ok) return res.status(502).json({ error: "skipped" in result && result.skipped ? result.reason : `The email couldn't be sent: ${(result as any).error}` });

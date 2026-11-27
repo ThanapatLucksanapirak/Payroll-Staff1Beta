@@ -6,6 +6,13 @@ Settings → About, next to the matching update.
 Add an entry with every pull request: a `## YYYY-MM-DD · Title (#PR)` heading and a
 few short bullets written for the people who use the app, not for developers.
 
+## 2026-11-27 · Portal sign-out, publishing and small screen fixes (#54)
+- Turning the staff portal off now signs everyone out for good: turning it back on doesn't bring old sign-ins back.
+- Publishing a timesheet no longer waits on a slow email server, and pressing Publish several times sends one email, not several. If the email fails, the result is shown on the timesheet and in the activity log. If the server restarts while the email is sending, the timesheet says so and Publish sends it again.
+- Sending a PDF that is too big now says so plainly ("the limit is 10 MB"), and emails that fail to send no longer use up your 10 per hour.
+- Finalizing a timesheet twice at the same moment is logged once. A tab left open on a timesheet that was finalized elsewhere stops trying to save it.
+- Viewers no longer see the Trash button, Home shows no change figure without an earlier pay period, "Leave out of totals" can be clicked, and the page shows "Loading your data…" while it retries.
+
 ## 2026-11-27 · Safer imports and Square pulls (#51)
 - Tapping Create timesheet twice (New timesheet, Start blank, or the CSV review) no longer makes two sheets.
 - CSV imports now skip exact duplicate rows (same person, clock-in, clock-out and break), skip dates more than 3 years back or more than a year ahead (like 1926 or 2099), and say so in the review warnings. A shift that runs past midnight at the end of its third day is cut there, as before, and now a warning names it with its real and saved hours.

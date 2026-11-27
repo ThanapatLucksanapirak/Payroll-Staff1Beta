@@ -39,7 +39,8 @@ export function HomePage() {
   const siteRows = useMemo(() => (list.data ?? []).filter((t) => t.siteId === site.id), [list.data, site.id]);
   const byPeriod = useMemo(() => [...siteRows].filter((t) => t.periodEnd).sort((a, b) => (b.periodEnd ?? "").localeCompare(a.periodEnd ?? "")), [siteRows]);
   const latest = byPeriod[0];
-  const previous = byPeriod[1];
+  // The one before it: a different pay period (a copy of the same period is not a "previous" one).
+  const previous = byPeriod.find((t) => t !== latest && (t.periodStart !== latest?.periodStart || t.periodEnd !== latest?.periodEnd));
   const recent = useMemo(() => [...siteRows].sort((a, b) => (b.updatedAt ?? b.createdAt).localeCompare(a.updatedAt ?? a.createdAt)).slice(0, 5), [siteRows]);
   const drafts = siteRows.filter((t) => (t.status || "draft") === "draft").length;
 
