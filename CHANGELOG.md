@@ -6,7 +6,7 @@ Settings → About, next to the matching update.
 Add an entry with every pull request: a `## YYYY-MM-DD · Title (#PR)` heading and a
 few short bullets written for the people who use the app, not for developers.
 
-## 2026-11-27 · Finalizing from the app shows as "Finalized" in Activity (#PRNUM)
+## 2026-11-27 · Finalizing from the app shows as "Finalized" in Activity (#65)
 - Finalizing a timesheet from its page now appears in Settings → Activity as "Finalized" with the timesheet's name, the same as from the list. Before, it showed as an ordinary save.
 
 ## 2026-11-27 · Saved backups stay with the owner (#59)
