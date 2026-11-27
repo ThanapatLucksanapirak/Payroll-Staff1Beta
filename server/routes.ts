@@ -476,7 +476,18 @@ export function registerRoutes(app: Express) {
     res.json({ ...summary, removedByRetention: removed });
   }));
 
-  app.put("/api/timesheets/:id", h(async (req, res) => {
+  // One change to a timesheet at a time, so two simultaneous finalizes are one change (and one log entry).
+  const patchChains = new Map<string, Promise<unknown>>();
+  /** Run changes to one timesheet one at a time (saves and finalizes from any tab or route). */
+  const oneAtATime = (handler: (req: Request, res: Response) => Promise<unknown>) => (req: Request, res: Response, next: NextFunction) => {
+    const id = String(req.params.id);
+    const run = (patchChains.get(id) ?? Promise.resolve()).then(() => handler(req, res));
+    const tail = run.catch(() => undefined);
+    patchChains.set(id, tail);
+    void tail.then(() => { if (patchChains.get(id) === tail) patchChains.delete(id); });
+    run.catch(next);
+  };
+  app.put("/api/timesheets/:id", oneAtATime(async (req, res) => {
     const body = z.object({ doc: timesheetDocSchema, baseUpdatedAt: z.string().nullable().optional(), force: z.boolean().optional() }).parse(req.body);
     const store = await db();
     const id = String(req.params.id);
@@ -486,21 +497,20 @@ export function registerRoutes(app: Express) {
     if (!body.force && body.baseUpdatedAt && cur.updated_at && Date.parse(cur.updated_at) !== Date.parse(body.baseUpdatedAt)) {
       return res.status(409).json({ error: "This timesheet was changed somewhere else (another tab or device).", updatedAt: cur.updated_at });
     }
+    // The app finalizes by saving the whole timesheet with status "final": log that
+    // as a finalize (like PATCH does), not as an ordinary save.
+    const was = cur.meta_json?.status ?? "draft";
+    const now = body.doc.status ?? "draft";
+    if (now !== was) {
+      res.locals.auditAction = now === "final" ? "timesheet.finalize" : "timesheet.reopen";
+      res.locals.auditDetail = body.doc.label || cur.custom_label || body.doc.filename || cur.filename || "Timesheet";
+    }
     // Only reachable while the stored timesheet is a draft (finalized ones are locked), so it has no paid totals yet.
     const summary = await store.updateTimesheet(id, await rowFromDoc({ ...body.doc, paidResult: undefined }));
     res.json(summary);
   }));
 
-  // One change to a timesheet at a time, so two simultaneous finalizes are one change (and one log entry).
-  const patchChains = new Map<string, Promise<unknown>>();
-  app.patch("/api/timesheets/:id", (req, res, next) => {
-    const id = String(req.params.id);
-    const run = (patchChains.get(id) ?? Promise.resolve()).then(() => timesheetPatch(req, res));
-    const tail = run.catch(() => undefined);
-    patchChains.set(id, tail);
-    void tail.then(() => { if (patchChains.get(id) === tail) patchChains.delete(id); });
-    run.catch(next);
-  });
+  app.patch("/api/timesheets/:id", oneAtATime((req, res) => timesheetPatch(req, res)));
   const timesheetPatch = async (req: Request, res: Response) => {
     const patch = z.object({ label: z.string().max(120).optional(), siteId: z.string().optional(), status: z.enum(["draft", "final"]).optional() }).parse(req.body);
     const store = await db();
