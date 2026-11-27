@@ -13,6 +13,9 @@ few short bullets written for the people who use the app, not for developers.
 - Finalizing a timesheet twice at the same moment is logged once. A tab left open on a timesheet that was finalized elsewhere stops trying to save it.
 - Viewers no longer see the Trash button, Home shows no change figure without an earlier pay period, "Leave out of totals" can be clicked, and the page shows "Loading your data…" while it retries.
 
+## 2026-11-27 · Full logo in the app header (#56)
+- The sidebar and the phone top bar now show the whole "Payroll by SHIJIRI Group" logo, with "By SHIJIRI GROUP" in black (white in dark mode), instead of just "Payroll".
+
 ## 2026-11-27 · Easier-to-read sign-in button and time clock location name (#55)
 - A main button that can't be pressed yet (like Sign in before you type a password) is now solid grey with readable text instead of faded orange.
 - On a phone, the time clock shows a long location name on up to two lines instead of cutting it off.
