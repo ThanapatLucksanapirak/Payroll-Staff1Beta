@@ -19,7 +19,8 @@ import { TimeClockSection } from "./TimeClockSettings";
 import { cn } from "@/lib/utils";
 import { PendingChangesProvider, usePendingRegistry } from "./pendingChanges";
 
-const COLORS = ["#0f766e", "#2563eb", "#7c3aed", "#db2777", "#ea580c", "#ca8a04", "#16a34a", "#475569"];
+// Location colours. Orange is left out: it is the Payroll brand accent, so a location dot in it would read as a selection.
+const COLORS = ["#0f766e", "#2563eb", "#7c3aed", "#db2777", "#0891b2", "#ca8a04", "#16a34a", "#475569"];
 
 export function LocationsSettings() {
   const app = useApp();
