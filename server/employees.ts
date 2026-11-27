@@ -124,25 +124,26 @@ export function withholdPins(value: string): string {
 /**
  * The directory from a backup, with each withheld PIN filled back in from
  * `current` (the directory as it is now) when the same employee is there under
- * the same salt. Otherwise that employee comes back without a PIN.
+ * the same salt. Otherwise that employee comes back without a PIN, and their
+ * name is in `lost` so the restore can say so.
  */
-export function restoreWithheldPins(value: string, current: string | null): string {
+export function restoreWithheldPins(value: string, current: string | null): { value: string; lost: string[] } {
   let dir: any;
-  try { dir = JSON.parse(value); } catch { return value; }
-  if (!dir || !Array.isArray(dir.employees) || !dir.employees.some((e: any) => e?.pinWithheld)) return value;
+  try { dir = JSON.parse(value); } catch { return { value, lost: [] }; }
+  if (!dir || !Array.isArray(dir.employees) || !dir.employees.some((e: any) => e?.pinWithheld)) return { value, lost: [] };
   let now: any = null;
   try { now = current ? JSON.parse(current) : null; } catch { now = null; }
   const sameSalt = !!now && typeof now.salt === "string" && now.salt === dir.salt && Array.isArray(now.employees);
   const byId = new Map<string, any>(sameSalt ? now.employees.filter((e: any) => e && typeof e.id === "string").map((e: any) => [e.id, e]) : []);
-  return JSON.stringify({
-    ...dir,
-    employees: dir.employees.map((e: any) => {
-      if (!e?.pinWithheld) return e;
-      const { pinWithheld: _w, ...rest } = e;
-      const was = byId.get(e.id);
-      return { ...rest, pinHash: was?.pinHash ?? null, pinEnc: was?.pinHash ? was.pinEnc ?? null : null };
-    }),
+  const lost: string[] = [];
+  const employees = dir.employees.map((e: any) => {
+    if (!e?.pinWithheld) return e;
+    const { pinWithheld: _w, ...rest } = e;
+    const was = byId.get(e.id);
+    if (!was?.pinHash) lost.push(String(e.name ?? e.id));
+    return { ...rest, pinHash: was?.pinHash ?? null, pinEnc: was?.pinHash ? was.pinEnc ?? null : null };
   });
+  return { value: JSON.stringify({ ...dir, employees }), lost };
 }
 
 /** PINs are hashed with scrypt and a per-location salt, so a PIN can be looked up (PIN-only sign-in) and kept unique. */
@@ -236,6 +237,30 @@ export async function updateEmployee(siteId: string, id: string, patch: Partial<
     await save(siteId, { ...dir, employees: dir.employees.map((e) => (e.id === id ? next : e)) });
     return next;
   });
+}
+
+/** Give an active employee this PIN unless they already have one (or are gone or inactive): true when it was set. */
+async function setPinIfNone(siteId: string, id: string, pin: string): Promise<boolean> {
+  return withLock(siteId, async () => {
+    const dir = await load(siteId);
+    const cur = dir.employees.find((e) => e.id === id);
+    if (!cur || !cur.active || cur.pinHash) return false;
+    const pinHash = await hashPin(pin, dir.salt);
+    await checkUnique(dir, id, cur.name, pinHash);
+    if (await isManagerPin(siteId, pin)) throw err(409, MANAGER_CLASH);
+    const next: StoredEmployee = { ...cur, pinHash, pinEnc: encryptPin(pin, siteId, id), updatedAt: new Date().toISOString() };
+    await save(siteId, { ...dir, employees: dir.employees.map((e) => (e.id === id ? next : e)) });
+    return true;
+  });
+}
+
+/** Serialise "Give everyone a PIN" per location (separate from the directory lock it uses inside). */
+const generateLocks = new Map<string, Promise<unknown>>();
+function withGenerateLock<T>(siteId: string, fn: () => Promise<T>): Promise<T> {
+  const prev = generateLocks.get(siteId) ?? Promise.resolve();
+  const next = prev.catch(() => undefined).then(fn);
+  generateLocks.set(siteId, next.catch(() => undefined));
+  return next;
 }
 
 /** Called after an employee is removed (face data is deleted with them). */
@@ -372,21 +397,32 @@ export function registerEmployeeRoutes(app: Express) {
   }));
   // A 4-digit PIN for every active employee without one, shown once in the reply (the same as
   // typing one in each person's edit form). Skips easy guesses like 1234 or 1111.
+  // One run per location at a time: a double press (or two admins) used to hand out two
+  // sets of PINs for the same people, and only the second set worked at the time clock.
   app.post("/api/sites/:siteId/employee-pins/generate", h(async (req, res) => {
     const site = await siteOr404(req, res); if (!site) return;
-    const todo = (await listEmployees(site.id)).filter((e) => e.active && !e.pinHash);
-    const out: { id: string; name: string; pin: string }[] = [];
-    for (const e of todo) {
-      for (let tries = 0; tries < 40; tries++) {
-        const pin = String(randomInt(0, 10_000)).padStart(4, "0");
-        if (weakPin(pin)) continue;
-        try { await updateEmployee(site.id, e.id, { pin }); out.push({ id: e.id, name: e.name, pin }); break; }
-        catch (err: any) { if (err?.status !== 409) throw err; }
+    const { out, skipped } = await withGenerateLock(site.id, async () => {
+      const todo = (await listEmployees(site.id)).filter((e) => e.active && !e.pinHash);
+      const out: { id: string; name: string; pin: string }[] = [];
+      let skipped = 0;
+      for (const e of todo) {
+        let done = false;
+        for (let tries = 0; tries < 40 && !done; tries++) {
+          const pin = String(randomInt(0, 10_000)).padStart(4, "0");
+          if (weakPin(pin)) continue;
+          try {
+            // Re-checked inside the directory lock: someone may have set a PIN by hand meanwhile.
+            if (await setPinIfNone(site.id, e.id, pin)) out.push({ id: e.id, name: e.name, pin });
+            done = true;
+          } catch (err: any) { if (err?.status !== 409) throw err; }
+        }
+        if (!done) skipped++;
       }
-    }
+      return { out, skipped };
+    });
     if (out.length) audit({ ...actorOf(req, res), action: "employee.pins-generated", target: `site:${site.id}`, detail: `${out.length} PIN(s) at ${site.name}` });
     res.setHeader("Cache-Control", "no-store");
-    res.json({ pins: out, skipped: todo.length - out.length });
+    res.json({ pins: out, skipped });
   }));
   app.get("/api/sites/:siteId/employee-suggestions", h(async (req, res) => {
     const site = await siteOr404(req, res); if (!site) return;

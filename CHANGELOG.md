@@ -9,6 +9,11 @@ few short bullets written for the people who use the app, not for developers.
 ## 2026-11-27 · Finalizing from the app shows as "Finalized" in Activity (#65)
 - Finalizing a timesheet from its page now appears in Settings → Activity as "Finalized" with the timesheet's name, the same as from the list. Before, it showed as an ordinary save.
 
+## 2026-11-27 · "Give everyone a PIN" pressed twice hands out PINs that work (#62)
+- Pressing "Give everyone a PIN" twice, or two admins pressing it at the same moment, now makes one set of PINs. Before, the first set shown could already be replaced and fail at the time clock.
+- If someone else has just given everyone a PIN, the app says "Everyone already has a PIN" instead of showing an empty list.
+- Restoring a backup that was downloaded without PINs now names anyone whose PIN couldn't be kept, so you know who needs a new one.
+
 ## 2026-11-27 · Saved backups stay with the owner (#59)
 - Only an owner can download the backups the server saves each day, because they include sign-in details. Admins can still see the list, back up now and restore.
 - A backup downloaded by an admin leaves out employee PINs. Restoring it keeps everyone's current PIN instead of removing it.

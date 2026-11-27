@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { AlertTriangle, Camera, Dices, Download, Eye, EyeOff, Images, KeyRound, Loader2, Pencil, Plus, Search, Trash2, UserRound } from "lucide-react";
@@ -80,15 +80,21 @@ export function EmployeesPage() {
 
   const [generating, setGenerating] = useState(false);
   const [newPins, setNewPins] = useState<{ id: string; name: string; pin: string }[] | null>(null);
+  const generatingRef = useRef(false);
   const generatePins = async () => {
-    if (!(await confirm({ title: `Give ${noPin} ${noPin === 1 ? "person" : "people"} a PIN?`, description: "Each active employee without a PIN gets a random 4-digit one. You'll see them once, to hand out.", confirmLabel: "Make PINs" }))) return;
+    if (generatingRef.current) return;
+    generatingRef.current = true; // a second tap while the question or the request is open does nothing
+    const ok = await confirm({ title: `Give ${noPin} ${noPin === 1 ? "person" : "people"} a PIN?`, description: "Each active employee without a PIN gets a random 4-digit one. You'll see them once, to hand out.", confirmLabel: "Make PINs" });
+    if (!ok) { generatingRef.current = false; return; }
     setGenerating(true);
     try {
       const r = await api<{ pins: { id: string; name: string; pin: string }[]; skipped: number }>("POST", `/api/sites/${site.id}/employee-pins/generate`, {});
       await queryClient.invalidateQueries({ queryKey: key });
-      setNewPins(r.pins);
+      // Someone else may have just given them PINs: nothing new to hand out.
+      if (r.pins.length) setNewPins(r.pins);
+      else if (!r.skipped) toast({ title: "Everyone already has a PIN", description: "No new PINs were made." });
       if (r.skipped) toast({ title: `${r.skipped} couldn't get a PIN`, description: "Edit them to set one by hand.", variant: "destructive" });
-    } catch (err) { toast({ title: "Couldn't make PINs", description: errorMessage(err), variant: "destructive" }); } finally { setGenerating(false); }
+    } catch (err) { toast({ title: "Couldn't make PINs", description: errorMessage(err), variant: "destructive" }); } finally { generatingRef.current = false; setGenerating(false); }
   };
 
   const remove = async (e: EmployeeRow) => {
