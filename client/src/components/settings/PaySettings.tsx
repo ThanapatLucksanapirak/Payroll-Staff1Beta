@@ -19,6 +19,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Field, NumberInput, Section, ToggleRow } from "@/components/workspace/fields";
 import { AdvanceDialog } from "@/components/pay/AdvanceDialog";
+import { LoadError } from "@/components/LoadError";
 
 const PRESETS: { label: string; values: number[] }[] = [
   { label: "US dollar", values: DEFAULT_DENOMINATIONS },
@@ -33,6 +34,8 @@ export function PaySettings() {
   const site = app.site;
   const pay = usePaySettings(site.id);
   if (pay.isLoading) return <div className="space-y-4"><Skeleton className="h-40 rounded-xl" /><Skeleton className="h-40 rounded-xl" /></div>;
+  // Without the real settings, the forms below would show defaults that could be saved over them.
+  if (pay.isError && !pay.data) return <LoadError what="the pay extras settings" error={pay.error} onRetry={() => void pay.refetch()} retrying={pay.isFetching} testid="pay-settings-error" />;
   return (
     <div className="space-y-5" key={site.id}>
       <p className="flex items-start gap-2 px-1 text-[13px] text-muted-foreground"><SiteDot color={site.color} className="mt-[5px]" /><span className="min-w-0">Settings for <b className="font-medium text-foreground [overflow-wrap:anywhere]">{site.name}</b>. Switch location in the sidebar to change another.</span></p>
@@ -258,7 +261,7 @@ function AdvancesSection({ siteId }: { siteId: string }) {
       description="Money paid ahead of payday. It comes off the person's next timesheets here until repaid (never more than they earn). Repayments are recorded when a timesheet is finalized and put back if it is reopened."
       actions={<Button variant="outline" size="sm" onClick={() => setAdding(true)} data-testid="button-settings-add-advance"><HandCoins />Record advance</Button>}
     >
-      {q.isLoading ? <Skeleton className="h-16 rounded-xl" /> : list.length === 0 ? <p className="rounded-lg border border-dashed border-border px-4 py-6 text-center text-[13px] text-muted-foreground">No advances recorded. Use Record advance when someone is paid ahead of payday.</p> : (
+      {q.isLoading ? <Skeleton className="h-16 rounded-xl" /> : q.isError && !q.data ? <LoadError what="advances" error={q.error} onRetry={() => void q.refetch()} retrying={q.isFetching} testid="advances-error" /> : list.length === 0 ? <p className="rounded-lg border border-dashed border-border px-4 py-6 text-center text-[13px] text-muted-foreground">No advances recorded. Use Record advance when someone is paid ahead of payday.</p> : (
         <div className="space-y-3">
           {open.length > 0 && <p className="text-[13px]"><b className="font-semibold">{app.money(outstanding)}</b> <span className="text-muted-foreground">still owed by {open.length} {open.length === 1 ? "person" : "people"}</span></p>}
           {open.length > 0 && <ul className="divide-y divide-border/70 rounded-xl border border-border/80" data-testid="list-advances">{open.map(row)}</ul>}

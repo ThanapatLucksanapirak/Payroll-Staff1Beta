@@ -12,6 +12,9 @@ few short bullets written for the people who use the app, not for developers.
 - A face check that gets stuck is stopped after 10 seconds instead of 20, so the next punches work sooner.
 - A photo punch now always gets an answer within about 10 seconds of arriving, even in a big rush, so the time clock never gives up and saves it for later.
 
+## 2026-11-27 · Settings say when they couldn't load (#63)
+- If the server has a problem, Pay extras, Advances, the list of server backups, time clock devices, the manager PIN and time clock extras now say they couldn't load, with a Try again button. Before, they could show default values or "No server backups yet", and saving would have put the defaults over your real settings.
+
 ## 2026-11-27 · A slow Supabase can't freeze the app (#60)
 - When Supabase starts answering and then stops part-way, the app now gives up after 15 seconds and says the database took too long, instead of waiting forever.
 - A reply from Supabase that is cut off or garbled now shows a database error. Before, a setting could read as empty or a list (like a backup) could come back short without a word.

@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Skeleton } from "@/components/ui/skeleton";
 import { OffsiteBackupSettings } from "@/components/settings/OffsiteBackupSettings";
+import { LoadError } from "@/components/LoadError";
 import { Field, NumberInput, Section } from "@/components/workspace/fields";
 
 interface RestoreResult { settings: number; timesheets: number; punches: number | null; punchesKept?: boolean; pinsCleared?: string[] }
@@ -148,7 +149,7 @@ function ServerBackups() {
     <Section title="Automatic backups" description="The server saves a full backup every day and keeps the last 30. They are stored in the app's data folder on the server.">
       <div className="space-y-3">
         <Button variant="outline" onClick={runNow} disabled={!!busy} data-testid="button-backup-now">{busy === "run" ? <Loader2 className="animate-spin" /> : <Archive />} Back up now</Button>
-        {list.isLoading ? <Skeleton className="h-14 rounded-xl" /> : exports.length === 0 ? (
+        {list.isLoading ? <Skeleton className="h-14 rounded-xl" /> : list.isError && !list.data ? <LoadError what="the list of server backups" error={list.error} onRetry={() => void list.refetch()} retrying={list.isFetching} testid="backups-error" /> : exports.length === 0 ? (
           <p className="rounded-lg border border-dashed border-border px-4 py-6 text-center text-[13px] text-muted-foreground">No server backups yet. The first one is made a minute after the app starts.</p>
         ) : (
           <ul className="max-h-72 divide-y divide-border/70 overflow-y-auto rounded-xl border border-border/80" data-testid="list-backups">
