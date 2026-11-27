@@ -13,6 +13,8 @@ const ROW_COLS = [
 ];
 /** Rows asked for per request (Supabase's default reply cap). */
 const PAGE = 1000;
+/** How long one database request may take, headers and body together (tests shorten it). */
+export const supabaseTimeout = { ms: 15_000 };
 const SUMMARY_COLS = "id,filename,custom_label,period_start,period_end,employee_count,total_pay,created_at,updated_at";
 
 export class SupabaseStore implements DataStore {
@@ -39,23 +41,37 @@ export class SupabaseStore implements DataStore {
   }
 
   private async req(method: string, path: string, body?: unknown, extra: Record<string, string> = {}): Promise<any> {
-    let res: Response;
+    // One timer covers the headers AND the body: a reply that stalls after its
+    // headers would otherwise hang the request (and whoever waits on it) forever.
+    const ctl = new AbortController();
+    const timer = setTimeout(() => ctl.abort(), supabaseTimeout.ms);
     try {
-      res = await fetchWithTimeout(`${this.base}${path}`, { method, headers: this.headers(extra), body: body === undefined ? undefined : JSON.stringify(body) }, 15000);
-    } catch (err: any) {
-      throw new StoreError(`Database unreachable: ${err.message}`, 503);
-    }
-    const text = await res.text();
-    let json: any = null;
-    try { json = text ? JSON.parse(text) : null; } catch { json = text; }
-    if (!res.ok) {
-      const msg = json?.message || json?.error || res.statusText;
-      const err: any = new StoreError(`Database error: ${msg}`, res.status === 401 || res.status === 403 ? 502 : res.status >= 500 ? 503 : 400);
-      err.code = json?.code;
-      err.raw = msg;
-      throw err;
-    }
-    return json;
+      let res: Response;
+      try {
+        res = await fetch(`${this.base}${path}`, { method, headers: this.headers(extra), body: body === undefined ? undefined : JSON.stringify(body), signal: ctl.signal });
+      } catch (err: any) {
+        throw new StoreError(`Database unreachable: ${ctl.signal.aborted ? "The database took too long to answer. Please try again." : err.message}`, 503);
+      }
+      let text: string;
+      try { text = await res.text(); } catch {
+        throw new StoreError(`Database error: ${ctl.signal.aborted ? "the database took too long to send its reply" : "the reply was cut off"} (status ${res.status}). Please try again.`, 503);
+      }
+      let json: any = null;
+      let readable = true;
+      try { json = text ? JSON.parse(text) : null; } catch { json = text; readable = false; }
+      if (!res.ok) {
+        const msg = (readable && (json?.message || json?.error)) || res.statusText || `status ${res.status}`;
+        const err: any = new StoreError(`Database error: ${msg}`, res.status === 401 || res.status === 403 ? 502 : res.status >= 500 ? 503 : 400);
+        err.code = readable ? json?.code : undefined;
+        err.raw = msg;
+        throw err;
+      }
+      // A proxy error page or a garbled reply must never read as "no rows" or an empty setting.
+      if (!readable || (method === "GET" && !Array.isArray(json))) {
+        throw new StoreError(`Database error: the database sent a reply that couldn't be read (status ${res.status}). Please try again.`, 502);
+      }
+      return json;
+    } finally { clearTimeout(timer); }
   }
 
   /**
@@ -70,8 +86,9 @@ export class SupabaseStore implements DataStore {
     for (let guard = 0; out.length < max && guard < 10_000; guard++) {
       const want = Math.min(PAGE, max - out.length);
       const path = `/${table}?${query}&limit=${want}&offset=${out.length}`;
-      const page = (opts.punches ? await this.punchReq("GET", path) : await this.req("GET", path)) ?? [];
-      if (!Array.isArray(page) || !page.length) break;
+      const page = opts.punches ? await this.punchReq("GET", path) : await this.req("GET", path);
+      if (!Array.isArray(page)) throw new StoreError("Database error: a page of rows couldn't be read. Please try again.", 502);
+      if (!page.length) break;
       out.push(...page);
     }
     return out;
@@ -317,6 +334,7 @@ export class SupabaseStore implements DataStore {
         const res = await fetchWithTimeout(`${this.base}/recent_uploads?select=id&limit=1`, { headers: this.headers({ Prefer: "count=exact" }) }, 10000);
         const range = res.headers.get("content-range");
         h.timesheetCount = range ? Number(range.split("/")[1]) || 0 : null;
+        await res.body?.cancel().catch(() => undefined);
       } catch { /* ignore */ }
     }
     this.extended = !h.missingColumns.length;
