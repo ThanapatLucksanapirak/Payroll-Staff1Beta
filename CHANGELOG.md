@@ -11,6 +11,9 @@ few short bullets written for the people who use the app, not for developers.
 - CSV imports now skip exact duplicate rows, skip dates more than a year from today (like 1926 or 2099), and say so in the review warnings. A shift cut to 72 hours is named in a warning too.
 - A Square pull whose reply is cut off or stalls now shows an error instead of "0 shifts", and "1 timecard is still open" reads correctly.
 
+## 2026-11-27 · Full logo in the app header (#56)
+- The sidebar and the phone top bar now show the whole "Payroll by SHIJIRI Group" logo, with "By SHIJIRI GROUP" in black (white in dark mode), instead of just "Payroll".
+
 ## 2026-11-27 · Easier-to-read sign-in button and time clock location name (#55)
 - A main button that can't be pressed yet (like Sign in before you type a password) is now solid grey with readable text instead of faded orange.
 - On a phone, the time clock shows a long location name on up to two lines instead of cutting it off.
