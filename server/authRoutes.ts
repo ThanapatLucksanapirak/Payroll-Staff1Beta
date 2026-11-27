@@ -1,6 +1,7 @@
 // Sign-in, first-run setup, own account, user management and the activity log.
 import type { Express, NextFunction, Request, Response } from "express";
 import { z } from "zod";
+import { isISODate } from "@shared/dates";
 import { siteRulesSchema } from "@shared/schema";
 import { dbStatus } from "./db";
 import * as settings from "./settings";
@@ -15,7 +16,7 @@ import { loginStep } from "./twofactor";
 
 type Handler = (req: Request, res: Response) => Promise<unknown>;
 const h = (fn: Handler) => (req: Request, res: Response, next: NextFunction) => { fn(req, res).catch(next); };
-const iso = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
+const iso = z.string().refine(isISODate, "Use a real date (YYYY-MM-DD).");
 
 async function sessionDays() {
   try { return (await settings.getPrefs()).sessionDays; } catch { return 30; }

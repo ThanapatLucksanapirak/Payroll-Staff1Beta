@@ -72,7 +72,7 @@ export function DataSettings() {
       <Section title="Backup" description="Download everything as one JSON file — timesheets, locations, categories, rates and preferences.">
         <div className="flex flex-wrap items-center gap-4">
           <Button onClick={backup} disabled={!!busy} data-testid="button-backup">{busy === "backup" ? <Loader2 className="animate-spin" /> : <Download />} Download backup</Button>
-          <label className="flex items-center gap-2 text-[13px]"><Checkbox checked={secrets} onCheckedChange={(v) => setSecrets(!!v)} />Include password and Square tokens</label>
+          {app.user.role === "owner" && <label className="flex items-center gap-2 text-[13px]"><Checkbox checked={secrets} onCheckedChange={(v) => setSecrets(!!v)} />Include password and Square tokens</label>}
         </div>
       </Section>
       <Section title="Restore" description="Load a backup file into the current database.">
