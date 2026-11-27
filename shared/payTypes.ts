@@ -2,8 +2,9 @@
 // advances, tips, cash and accounting settings). Pure zod, no imports from the
 // engine, so shared/schema.ts can use these without an import cycle.
 import { z } from "zod";
+import { isISODate } from "./dates";
 
-const iso = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
+const iso = z.string().refine(isISODate, "Use a real date (YYYY-MM-DD).");
 const money = z.coerce.number().finite().min(0).max(10_000_000).catch(0);
 const id = z.string().min(1).max(64);
 

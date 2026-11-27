@@ -711,12 +711,16 @@ const DEV_PREFIXES = ["/@vite/", "/@fs/", "/@id/", "/@react-refresh", "/node_mod
  * served; "/" redirects to /kiosk. Read on every request so it can be changed
  * without code changes (and tested).
  */
+/** A Host header or KIOSK_HOST entry in one form: lowercase, no port, no trailing dot ("kiosk.example.com." is the same host). */
+function normalizeHost(h: unknown): string {
+  return String(h ?? "").trim().toLowerCase().replace(/:\d+$/, "").replace(/\.+$/, "");
+}
+
 export function kioskHostGuard() {
   return (req: Request, res: Response, next: NextFunction) => {
-    const hosts = (process.env.KIOSK_HOST ?? "").split(",").map((s) => s.trim().toLowerCase()).filter(Boolean);
+    const hosts = (process.env.KIOSK_HOST ?? "").split(",").map(normalizeHost).filter(Boolean);
     if (!hosts.length) return next();
-    const host = String(req.headers.host ?? "").toLowerCase().replace(/:\d+$/, "");
-    if (!hosts.includes(host)) return next();
+    if (!hosts.includes(normalizeHost(req.headers.host))) return next();
     const p = req.path;
     if (p === "/" && (req.method === "GET" || req.method === "HEAD")) return res.redirect(302, "/kiosk");
     if (p === "/api/health" || p.startsWith("/api/kiosk/") || p === "/kiosk" || p === "/kiosk/" || p === "/favicon.svg") return next();
