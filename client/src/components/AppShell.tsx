@@ -120,7 +120,8 @@ function Shell({ children }: { children: ReactNode }) {
 /** Brand row: the full "Payroll by SHIJIRI Group" logo. "By SHIJIRI GROUP" follows the
  *  text colour, so it is black on the light chrome and white in dark mode. */
 function Brand({ compact = false }: { compact?: boolean }) {
-  return <Wordmark className={cn("w-auto shrink-0 text-black dark:text-white", compact ? "h-9" : "h-10")} />;
+  // Desktop sidebar: 62px tall (about 140px wide), so the "GROUP" line is still legible.
+  return <Wordmark className={cn("w-auto shrink-0 text-black dark:text-white", compact ? "h-9" : "h-[62px]")} />;
 }
 
 /** `touch` is the phone slide-over: taller rows (40px+ targets), no keyboard hint. */
@@ -135,7 +136,7 @@ function SidebarBody({ collapsed, touch = false, onToggleCollapsed, onSearch }: 
   return (
     <div className="flex h-full min-h-0 flex-col">
       {/* Brand + collapse */}
-      <div className={cn("flex h-14 shrink-0 items-center gap-2 px-3", touch && "pr-12", collapsed && "justify-center px-0")}>
+      <div className={cn("flex shrink-0 items-center gap-3 px-3", collapsed ? "h-14 justify-center px-0" : "h-[84px] pl-4", touch && "pr-12")}>
         <Link href="/" className={cn("flex min-w-0 items-center gap-2.5 rounded-md focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/35", collapsed && "hidden")} data-testid="link-home">
           <Brand />
         </Link>
