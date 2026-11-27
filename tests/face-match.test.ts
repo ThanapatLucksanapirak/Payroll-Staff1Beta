@@ -263,6 +263,14 @@ test("face data that can't be read fails closed: refused live with an alert, fla
   assert.equal(alert?.reason, "unreadable");
   assert.equal(alert?.photo, true);
 
+  // Recording consent or adding photos must not overwrite what can't be read
+  const unreadableMsg = /can't be read\. Delete their face data first/;
+  const c1 = await A("POST", `/api/sites/${siteId}/employees/${cara}/face/consent`, { confirm: true });
+  assert.equal(c1.status, 409);
+  assert.match(c1.body.error, unreadableMsg);
+  assert.equal((await A("POST", `/api/sites/${siteId}/employees/${cara}/face/refs`, { punchId: off.body.punch.id })).status, 409);
+  assert.equal(fs.readFileSync(path.join(folder, "profile.enc"), "utf8"), "v1.AAAA.BBBB.CCCC", "left as it was");
+
   // Deleting the face data lets her punch normally again
   assert.equal((await A("DELETE", `/api/sites/${siteId}/employees/${cara}/face`)).status, 200);
   assert.equal((await punch("out", "other-face.jpg", {}, "8642")).status, 200);

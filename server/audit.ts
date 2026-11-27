@@ -129,8 +129,19 @@ async function appendToFile(store: DataStore, key: string, entries: AuditEntry[]
   }
   if (tail.length > TAIL) tail.splice(0, tail.length - TAIL);
   tails.set(tk, tail);
-  await fs.promises.mkdir(path.dirname(auditFile(key)), { recursive: true });
-  await fs.promises.appendFile(auditFile(key), `${lines.join("\n")}\n`, "utf8");
+  await fs.promises.mkdir(path.dirname(auditFile(key)), { recursive: true, mode: 0o700 });
+  await fs.promises.appendFile(auditFile(key), `${lines.join("\n")}\n`, { encoding: "utf8", mode: 0o600 });
+}
+
+/** Audit files from before the mode was tightened are 0644: make the folder and its files private (best effort). */
+export function hardenAuditFiles() {
+  const dir = path.dirname(auditFile(AUDIT_PREFIX));
+  try {
+    fs.chmodSync(dir, 0o700);
+    for (const name of fs.readdirSync(dir)) {
+      try { fs.chmodSync(path.join(dir, name), 0o600); } catch { /* ignore */ }
+    }
+  } catch { /* no audit folder yet, or a file system without modes */ }
 }
 
 /** Write everything queued so far. Resolves when it is stored (or dropped after an error). */

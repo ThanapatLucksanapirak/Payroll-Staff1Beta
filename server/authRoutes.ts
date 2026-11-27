@@ -5,7 +5,7 @@ import { isISODate } from "@shared/dates";
 import { siteRulesSchema } from "@shared/schema";
 import { dbStatus } from "./db";
 import * as settings from "./settings";
-import { clearSessionCookie, passwordKey, clearSetupCode, currentUser, loginThrottle, recordLogin, requestToken, revokeToken, setSessionCookie, setupCodeMatches } from "./auth";
+import { clearSessionCookie, passwordKey, clearSetupCode, currentUser, loginThrottle, recordLogin, requestToken, revokeToken, setSessionCookie, setupCodeMatches, clearAccountLock } from "./auth";
 import { actorOf, audit, queryAudit } from "./audit";
 import { loginTargetId,
   type UserRecord, ROLE_LABELS, bumpSessionVersion, createUser, createUserSchema, deleteUser, displayNameSchema, getUser, listUsers,
@@ -231,6 +231,17 @@ export function registerAuthRoutes(app: Express) {
     if (target.role === "owner" && actor.role !== "owner") return res.status(403).json({ error: "Only an owner can change an owner's account." });
     await bumpSessionVersion(target.id);
     audit({ ...actorOf(req, res), action: "auth.logout-all", target: `user:${target.id}`, detail: `${target.username}: signed out by an administrator` });
+    res.json({ ok: true });
+  }));
+
+  // Anyone who knows a username can lock that account for 15 minutes by guessing; this lets an owner (or an admin, for accounts that aren't the owner's) lift it.
+  app.post("/api/users/:id/clear-lock", h(async (req, res) => {
+    const actor = me(res);
+    const target = await getUser(String(req.params.id), { fresh: true });
+    if (!target) return res.status(404).json({ error: "That user no longer exists." });
+    if (target.role === "owner" && actor.role !== "owner") return res.status(403).json({ error: "Only an owner can change an owner's account." });
+    clearAccountLock(target.id);
+    audit({ ...actorOf(req, res), action: "user.clear-lock", target: `user:${target.id}`, detail: `${target.username}: sign-in lock cleared` });
     res.json({ ok: true });
   }));
 
