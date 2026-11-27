@@ -12,6 +12,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Field, Section, ToggleRow } from "@/components/workspace/fields";
 import { EnrollStep, RecoveryCodes } from "@/components/TwoFactor";
+import { LoadError } from "@/components/LoadError";
 
 export interface TwoFactorStatus {
   enabled: boolean; enabledAt: string | null; recoveryCodesLeft: number; required: boolean; policy: { requireForAdmins: boolean };
@@ -93,7 +94,7 @@ export function TwoFactorSettings() {
 
   return (
     <Section title="Two-step verification" description="After your password, also enter a 6-digit code from an authenticator app or from an email. Stops anyone who learns your password.">
-      {q.isLoading || !st ? <Skeleton className="h-16" /> : (
+      {q.isError && !q.data ? <LoadError what="your two-step verification status" error={q.error} onRetry={() => void q.refetch()} retrying={q.isFetching} testid="two-factor-error" /> : q.isLoading || !st ? <Skeleton className="h-16" /> : (
         <div className="space-y-4">
           <div className="flex flex-wrap items-center gap-3">
             {st.enabled ? <ShieldCheck className="h-5 w-5 text-success" /> : <ShieldAlert className="h-5 w-5 text-warning" />}

@@ -17,6 +17,7 @@ import { cn } from "@/lib/utils";
 import { type KioskDeviceOptions, type KioskSiteConfig, weakPinReason } from "@shared/kiosk";
 import { DeviceOptionsPanel, KioskLocationExtras } from "./KioskExtrasSettings";
 import { PortalSettingsCard } from "./PortalSettings";
+import { LoadError } from "@/components/LoadError";
 
 interface Device { id: string; name: string; createdAt: string; lastSeenAt: string | null; pairCodeExpiresAt: string | null; options?: KioskDeviceOptions }
 interface Created { device: Device; token: string; pairCode: string; pairPath: string }
@@ -112,7 +113,7 @@ function Devices({ site, enabled }: { site: Site; enabled: boolean }) {
         <p className="text-xs font-medium text-muted-foreground">Kiosk devices</p>
         {!enabled && <span className="text-xs text-muted-foreground">Save with “Time clock” or “Both” selected to start using them.</span>}
       </div>
-      {q.isLoading ? <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" /> : (q.data ?? []).length === 0 ? (
+      {q.isLoading ? <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" /> : q.isError && !q.data ? <LoadError what="the time clock devices" error={q.error} onRetry={() => void q.refetch()} retrying={q.isFetching} testid="devices-error" /> : (q.data ?? []).length === 0 ? (
         <p className="rounded-xl border border-dashed border-border px-4 py-5 text-center text-[13px] text-muted-foreground">No devices yet. Add one, then open its pairing link on the tablet or PC at the door.</p>
       ) : (
         <ul className="divide-y divide-border/70 overflow-hidden rounded-xl border border-border/80">
@@ -230,12 +231,13 @@ function ManagerPin({ site }: { site: Site }) {
       <div className="flex items-start gap-3">
         <KeyRound className="mt-0.5 h-4 w-4 text-muted-foreground" />
         <div className="min-w-0 flex-1">
-          <p className="flex items-center gap-2 text-[13px] font-semibold">Manager PIN {q.isLoading ? null : isSet ? <Badge variant="success">On</Badge> : <Badge variant="warning">Not set</Badge>}</p>
+          <p className="flex items-center gap-2 text-[13px] font-semibold">Manager PIN {q.isLoading || (q.isError && !q.data) ? null : isSet ? <Badge variant="success">On</Badge> : <Badge variant="warning">Not set</Badge>}</p>
           <p className="mt-0.5 text-xs text-muted-foreground">
             Asked for on the kiosk before anyone can open its settings, unpair it, or leave full screen. It must differ from every employee PIN, and easy ones (1234, 0000, 1212) aren't allowed.{" "}
             <button type="button" onClick={() => setGuide(true)} className="font-medium text-primary hover:underline" data-testid="button-lock-guide">How to lock the tablet itself</button>
           </p>
-          {!q.isLoading && !isSet && (
+          {q.isError && !q.data && <div className="mt-2"><LoadError what="whether a manager PIN is set" error={q.error} onRetry={() => void q.refetch()} retrying={q.isFetching} testid="manager-pin-error" /></div>}
+          {!q.isLoading && q.data && !isSet && (
             <p className="mt-2 rounded-lg bg-warning-soft px-2.5 py-1.5 text-xs font-medium text-warning" role="status" data-testid="text-no-manager-pin">
               No manager PIN set: anyone at a tablet can open its settings and leave full screen. Unpairing from the tablet is off until you set one.
             </p>
