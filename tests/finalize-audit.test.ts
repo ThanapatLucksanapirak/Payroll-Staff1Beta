@@ -128,3 +128,22 @@ test("a move names the new location, not its id", async () => {
   const e = (Array.isArray(all) ? all : all.entries ?? all.items ?? []).find((x: any) => x.action === "timesheet.move" && x.target === `timesheet:${id}`);
   assert.equal(e?.detail, "Week B · moved to Downtown");
 });
+
+test("finalizing from the app (a PUT of the whole timesheet) is logged as Finalized, once", async () => {
+  const made = await call("POST", "/api/timesheets", { doc: { ...doc(), label: "Week of Nov 9" } });
+  const id = made.body.id;
+  // An ordinary save stays an ordinary update.
+  const saved = await call("PUT", `/api/timesheets/${id}`, { doc: { ...doc(), label: "Week of Nov 9", notes: "x" } });
+  assert.equal(saved.status, 200, JSON.stringify(saved.body));
+  assert.equal((await finalizeEntries(id)).length, 0);
+  // Two finalizing saves at the same moment: one change, one entry.
+  const fin = { doc: { ...doc(), label: "Week of Nov 9", status: "final" }, force: true };
+  const both = await Promise.all([call("PUT", `/api/timesheets/${id}`, fin), call("PUT", `/api/timesheets/${id}`, fin)]);
+  assert.ok(both.some((r) => r.status === 200), JSON.stringify(both.map((r) => [r.status, r.body])));
+  const entries = await finalizeEntries(id);
+  assert.equal(entries.length, 1);
+  assert.equal(entries[0].detail, "Week of Nov 9");
+  const all = (await call("GET", "/api/audit?limit=500")).body;
+  const updates = (Array.isArray(all) ? all : all.entries ?? all.items ?? []).filter((e: any) => e.action === "timesheet.update" && e.target === `timesheet:${id}`);
+  assert.equal(updates.length, 1, "only the ordinary save is an update");
+});
