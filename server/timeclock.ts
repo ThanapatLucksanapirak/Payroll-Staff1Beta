@@ -7,6 +7,7 @@
 // `timeclock_approvals:<siteId>` holds approved days (date → employee → who,
 // when, and a fingerprint of that day's punches, so any later change to the
 // punches voids the approval automatically).
+import { asChange } from "./maintenance";
 import { createHash } from "node:crypto";
 import type { Express, NextFunction, Request, Response } from "express";
 import { z } from "zod";
@@ -183,7 +184,9 @@ let first: NodeJS.Timeout | null = null;
 export function startAutoCloseJob() {
   if (timer || process.env.TIMECLOCK_AUTO_CLOSE_MS === "off") return;
   const every = Math.max(30_000, Number.parseInt(process.env.TIMECLOCK_AUTO_CLOSE_MS || "", 10) || 5 * 60_000);
-  const tick = () => { runAutoClose().catch((err) => console.error("[timeclock] auto clock-out failed:", err?.message ?? err)); };
+  // Skipped while a restore or database switch runs (its clock-outs would be lost); the next tick
+  // catches up. A run already going when one starts is waited for, like any change under way.
+  const tick = () => { asChange("automatic clock-out", () => runAutoClose()).catch((err) => console.error("[timeclock] auto clock-out failed:", err?.message ?? err)); };
   first = setTimeout(tick, 20_000);
   first.unref?.();
   timer = setInterval(tick, every);
